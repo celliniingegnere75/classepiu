@@ -1,0 +1,21 @@
+name: Test connessione ClasseViva
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - .github/workflows/test-connessione.yml
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Homepage ClasseViva
+        run: |
+          curl -sS -o /dev/null -w "homepage -> HTTP %{http_code}\n" https://web.spaggiari.eu/home/app/default/login.php || true
+      - name: API ClasseViva (senza credenziali)
+        run: |
+          curl -sS -o body.txt -w "api login -> HTTP %{http_code}\n" -X POST https://web.spaggiari.eu/rest/v1/auth/login \
+            -H "User-Agent: CVVS/std/4.2.3 Android/12" -H "Z-Dev-Apikey: Tg1NWEwNGIgIC0K" \
+            -H "Content-Type: application/json" -d '{"ident":null,"pass":"x","uid":"x"}' || true
+          head -c 300 body.txt; echo
