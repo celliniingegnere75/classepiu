@@ -28,5 +28,8 @@ termux-wake-lock || true
 pgrep crond >/dev/null || crond
 
 echo
-echo "== Installazione completata. Ora il test di accesso a ClasseViva =="
-python "$DIR/cv.py" test < /dev/tty
+echo "== Installazione completata =="
+echo "Ora inserisci le credenziali ClasseViva con:"
+echo "  python ~/classeviva/cv.py credenziali"
+echo "e prova l'accesso con:"
+echo "  python ~/classeviva/cv.py test"

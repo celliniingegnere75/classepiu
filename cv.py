@@ -9,6 +9,7 @@ Comandi:
   python cv.py run       controlla e invia le circolari nuove (usato dalla pianificazione)
   python cv.py invio     imposta indirizzo e codice del ricevitore Apps Script
   python cv.py credenziali  reimposta utente e password ClasseViva
+  python cv.py ultima    invia subito l'ultima circolare (prova completa)
 """
 import base64
 import getpass
@@ -178,6 +179,26 @@ def cmd_run(conf):
         else "Controllo fatto. Circolari nuove: %d" % nuove)
 
 
+def cmd_ultima(conf):
+    """Invia subito l'ultima circolare pubblicata, per provare tutta la catena."""
+    if not conf.get("endpoint"):
+        raise SystemExit("Manca il ricevitore: esegui prima  python cv.py invio")
+    s = login(conf)
+    items = bacheca(s)
+    if not items:
+        raise SystemExit("Bacheca vuota.")
+    it = items[0]
+    circ = {
+        "titolo": it.get("cntTitle", "Circolare"),
+        "data": it.get("cntValidFrom", ""),
+        "categoria": it.get("cntCategory", ""),
+        "testo": it.get("cntText", "") or "",
+        "allegati": allegati(s, it),
+    }
+    invia(conf, circ)
+    log("Inviata di prova: %s (allegati: %d)" % (circ["titolo"], len(circ["allegati"])))
+
+
 def main():
     conf = carica(CONF, {})
     cmd = sys.argv[1] if len(sys.argv) > 1 else "test"
@@ -190,10 +211,15 @@ def main():
     elif cmd == "run":
         cmd_run(conf)
     elif cmd == "invio":
-        conf["endpoint"] = input("Indirizzo del ricevitore (URL): ").strip()
-        conf["token"] = input("Codice segreto: ").strip()
+        if len(sys.argv) >= 4:
+            conf["endpoint"], conf["token"] = sys.argv[2].strip(), sys.argv[3].strip()
+        else:
+            conf["endpoint"] = input("Indirizzo del ricevitore (URL): ").strip()
+            conf["token"] = input("Codice segreto: ").strip()
         salva(CONF, conf)
         print("Ricevitore salvato.")
+    elif cmd == "ultima":
+        cmd_ultima(conf)
     else:
         print(__doc__)
 
