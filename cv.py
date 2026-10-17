@@ -10,6 +10,8 @@ Comandi:
   python cv.py invio     imposta indirizzo e codice del ricevitore Apps Script
   python cv.py credenziali  reimposta utente e password ClasseViva
   python cv.py ultima    invia subito l'ultima circolare (prova completa)
+  python cv.py sms NUMERO   attiva l'SMS per ogni circolare nuova (sms off per disattivarlo)
+  python cv.py prova-avviso manda una notifica (e un SMS se attivo) di prova
 """
 import base64
 import getpass
@@ -125,6 +127,21 @@ def invia(conf, circolare):
         raise RuntimeError("Ricevitore: " + risposta[:200])
 
 
+# ---------------- Avvisi sul telefono ----------------
+
+def avvisa(conf, titolo):
+    """Notifica sul telefono e, se impostato, SMS. Richiede l'app Termux:API e il pacchetto termux-api."""
+    import shutil
+    import subprocess
+    testo = "Nuova circolare ClasseViva: " + titolo
+    if shutil.which("termux-notification"):
+        subprocess.run(["termux-notification", "--title", "Nuova circolare ClasseViva",
+                        "--content", titolo, "--id", "classeviva"], timeout=30)
+    numero = conf.get("sms")
+    if numero and shutil.which("termux-sms-send"):
+        subprocess.run(["termux-sms-send", "-n", numero, testo[:300]], timeout=60)
+
+
 # ---------------- Comandi ----------------
 
 def chiedi_credenziali(conf):
@@ -174,6 +191,10 @@ def cmd_run(conf):
         salva(STATO, viste)
         nuove += 1
         log("Inviata: " + circ["titolo"])
+        try:
+            avvisa(conf, circ["titolo"])
+        except Exception as e:
+            log("Avviso non riuscito: %s" % e)
     salva(STATO, viste)
     log("Primo avvio: segnate come già viste %d circolari." % len(items) if primo
         else "Controllo fatto. Circolari nuove: %d" % nuove)
@@ -220,6 +241,17 @@ def main():
         print("Ricevitore salvato.")
     elif cmd == "ultima":
         cmd_ultima(conf)
+    elif cmd == "sms":
+        if len(sys.argv) >= 3 and sys.argv[2].strip().lower() != "off":
+            conf["sms"] = sys.argv[2].strip()
+            print("SMS attivo verso " + conf["sms"])
+        else:
+            conf.pop("sms", None)
+            print("SMS disattivato.")
+        salva(CONF, conf)
+    elif cmd == "prova-avviso":
+        avvisa(conf, "Prova avviso circolari")
+        print("Avviso di prova inviato.")
     else:
         print(__doc__)
 
