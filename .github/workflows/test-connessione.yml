@@ -12,10 +12,10 @@ jobs:
     steps:
       - name: Homepage ClasseViva
         run: |
-          curl -sS -o /dev/null -w "homepage -> HTTP %{http_code}\n" https://web.spaggiari.eu/home/app/default/login.php || true
+          r=$(curl -sS -o /dev/null -w "homepage HTTP %{http_code}" https://web.spaggiari.eu/home/app/default/login.php || true); echo "::notice::$r"
       - name: API ClasseViva (senza credenziali)
         run: |
           curl -sS -o body.txt -w "api login -> HTTP %{http_code}\n" -X POST https://web.spaggiari.eu/rest/v1/auth/login \
             -H "User-Agent: CVVS/std/4.2.3 Android/12" -H "Z-Dev-Apikey: Tg1NWEwNGIgIC0K" \
             -H "Content-Type: application/json" -d '{"ident":null,"pass":"x","uid":"x"}' || true
-          head -c 300 body.txt; echo
+          echo "::notice::api login $(head -c 250 body.txt | tr -d '\n\r')"
