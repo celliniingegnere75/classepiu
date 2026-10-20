@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 # Installazione su Termux (Android) dello script circolari ClasseViva
 set -e
-REPO="https://raw.githubusercontent.com/famcellini/classeviva-circolari/main"
+REPO="https://raw.githubusercontent.com/postagenerale/classeviva-circolari/main"
 DIR="$HOME/classeviva"
 
 echo "== Installo i programmi necessari (può volerci qualche minuto) =="
