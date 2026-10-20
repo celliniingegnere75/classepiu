@@ -2,21 +2,19 @@
 """
 ClasseViva -> postagenerale
 Gira sul telefono (Termux). Legge la bacheca ClasseViva, scarica le circolari nuove
-con gli allegati e le invia al progetto Apps Script, che le manda per mail.
+con gli allegati e le invia al progetto sulla relativa Apps Script, che le manda per mail.
 
 Comandi:
-  python cv.py test      prova l'accesso e mostra le ultime circolari (non invia nulla)
-  python cv.py run       controlla e invia le circolari nuove (usato dalla pianificazione)
-  python cv.py invio     imposta indirizzo e codice del ricevitore Apps Script
-  python cv.py credenziali  reimposta utente e password ClasseViva
-  python cv.py ultima    invia subito l'ultima circolare (prova completa)
-  python cv.py diagnosi  mostra le ultime circolari con firma richiesta e stato di invio
-  python cv.py recupera [NUMERI]  invia le circolari indicate (es. 251 252), o quelle
-                         degli ultimi 3 giorni non ancora inviate se non indichi numeri
-  python cv.py sms NUMERO   attiva l'SMS per ogni circolare nuova (sms off per disattivarlo)
-  python cv.py prova-avviso manda una notifica (e un SMS se attivo) di prova
-  python cv.py allegati NUMERO  prova a scaricare gli allegati di una circolare e mostra
-                         cosa risponde ClasseViva (non invia nulla)
+  python cv.py test              (prova l'accesso e mostra le ultime circolari, non invia nulla)
+  python cv.py run               (controlla e invia le circolari nuove, usato dalla pianificazione)
+  python cv.py invio             (imposta indirizzo e codice del ricevitore Apps Script)
+  python cv.py credenziali       (reimposta utente e password ClasseViva
+  python cv.py ultima            (invia subito l'ultima circolare (prova completa)
+  python cv.py diagnosi          (mostra le ultime circolari con firma richiesta e stato di invio
+  python cv.py recupera [NUMERI] (invia le circolari indicate, es. 251 252, o quelle degli ultimi 3 giorni non ancora inviate, se non presenti i numeri)
+  python cv.py sms NUMERO        (attiva l'SMS per ogni circolare nuova, sms off per disattivarlo)
+  python cv.py prova-avviso      (manda una notifica, e un SMS se attivo, di prova)
+  python cv.py allegati NUMERO  (prova a scaricare gli allegati di una circolare e mostra cosa risponde ClasseViva, non invia nulla)
 """
 import base64
 import getpass
@@ -27,20 +25,20 @@ import time
 import urllib.error
 import urllib.request
 
-VERSIONE = "1.1.1"  # aggiornarla a ogni modifica: si vede all'avvio di ogni comando
+VERSIONE = "1.1.1"  # da incrementare a ogni modifica: si vede all'avvio di ogni comando
 RIGA = "*************"
 AIUTO = """programma per Termux su Android. Legge la bacheca ClasseViva, scarica le circolari nuove ed invia gli allegati per mail.
 %s
 Comandi:
 run (controlla e invia le circolari nuove),
-test (prova l'accesso e mostra le ultime circolari, non invia nulla),
-invio (imposta indirizzo e codice del ricevitore Apps Script),
+test (test accesso e mostra le ultime circolari, no invio),
+invio (imposta indirizzo e codice del ricevitore),
 credenziali (reimposta utente e password ClasseViva),
 ultima (invia subito l'ultima circolare)
-diagnosi (mostra le ultime circolari con firma richiesta e stato di invio)
-recupera [NUMERI] (invia le circolari indicate - es. 251 252 - o quelle degli ultimi 3 giorni non ancora inviate se non indichi numeri),
-sms NUMERO (attiva l'SMS per ogni circolare nuova - sms off per disattivarlo)
-prova-avviso (manda una notifica - e un SMS se attivo - di prova)
+diagnosi (mostra le ultime circolari con firma e stato)
+recupera [NUMERI] (invia le circolari indicate),
+sms NUMERO (attiva SMS avviso,  off per disattivarlo)
+prova-avviso (manda una notifica -di prova)
 allegati NUMERO (prova a scaricare gli allegati di una circolare e mostra cosa risponde ClasseViva, non invia nulla)""" % RIGA
 DIR = os.path.expanduser("~/.classeviva")
 CONF = os.path.join(DIR, "config.json")
