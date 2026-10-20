@@ -10,7 +10,7 @@ Questo repository contiene solo codice.
 ## Installazione (in Termux)
 
 ```
-curl -fsSL https://raw.githubusercontent.com/famcellini/classeviva-circolari/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/postagenerale/classeviva-circolari/main/install.sh | bash
 ```
 
 ## Comandi
@@ -26,5 +26,5 @@ curl -fsSL https://raw.githubusercontent.com/famcellini/classeviva-circolari/mai
 ## Aggiornare lo script sul telefono
 
 ```
-curl -fsSL https://raw.githubusercontent.com/famcellini/classeviva-circolari/main/cv.py -o ~/classeviva/cv.py
+curl -fsSL https://raw.githubusercontent.com/postagenerale/classeviva-circolari/main/cv.py -o ~/classeviva/cv.py
 ```
