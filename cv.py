@@ -112,23 +112,35 @@ def bacheca(s):
     raise SystemExit("Bacheca non leggibile. " + " | ".join(errori))
 
 
-def allegati(s, it):
-    out = []
-    for i, a in enumerate(it.get("attachments") or []):
-        num = a.get("attachNum") or (i + 1)
-        url = "%s/%s/%s/noticeboard/attach/%s/%s/%s" % (BASE, s["percorso"], s["id"], it["evtCode"], it["pubId"], num)
-        code, data = http("GET", url, s["h"], binary=True)
-        if code == 200 and isinstance(data, bytes):
-            out.append({"nome": a.get("fileName") or "allegato_%d.pdf" % (i + 1),
-                        "base64": base64.b64encode(data).decode()})
-        else:
-            log("Allegato non scaricato (%s): %s" % (code, a.get("fileName", "")))
-    return out
+def allegati(s, it, tentativi=1):
+    """Scarica gli allegati. Con più tentativi, quelli non ancora disponibili si riprovano
+    a distanza di PAUSA_ALLEGATI secondi (ClasseViva a volte li pubblica poco dopo la circolare)."""
+    elenco = list(enumerate(it.get("attachments") or []))
+    presi = {}
+    for t in range(tentativi):
+        if t:
+            time.sleep(PAUSA_ALLEGATI)
+        for i, a in elenco:
+            if i in presi:
+                continue
+            num = a.get("attachNum") or (i + 1)
+            url = "%s/%s/%s/noticeboard/attach/%s/%s/%s" % (BASE, s["percorso"], s["id"], it["evtCode"], it["pubId"], num)
+            code, data = http("GET", url, s["h"], binary=True)
+            if code == 200 and isinstance(data, bytes):
+                presi[i] = {"nome": a.get("fileName") or "allegato_%d.pdf" % (i + 1),
+                            "base64": base64.b64encode(data).decode()}
+            elif t == tentativi - 1:
+                log("Allegato non scaricato (%s): %s" % (code, a.get("fileName", "")))
+        if len(presi) == len(elenco):
+            break
+    return [presi[i] for i, _ in elenco if i in presi]
 
 
 AZIONI = (("needSign", "conferma e firma"), ("needReply", "risposta"),
           ("needFile", "caricamento di un file"))
 ATTESA_ALLEGATI = 48 * 3600  # per quanto si riprova a scaricare un allegato non ancora disponibile
+TENTATIVI_ALLEGATI = 3  # alla prima lettura: 3 tentativi nell'arco di 20 secondi...
+PAUSA_ALLEGATI = 10     # ...a 0, 10 e 20 secondi, prima di inviare la circolare senza allegato
 
 
 def azioni(it):
@@ -148,7 +160,7 @@ def numero(it):
 
 def prepara(s, it):
     testo = it.get("cntText", "") or ""
-    allegati_ok = allegati(s, it)
+    allegati_ok = allegati(s, it, TENTATIVI_ALLEGATI)
     note = []
     richieste = azioni(it)
     if richieste:
