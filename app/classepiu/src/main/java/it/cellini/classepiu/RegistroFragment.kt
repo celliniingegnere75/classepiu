@@ -89,10 +89,7 @@ class RegistroFragment : Fragment() {
         fun p(s: String, f: () -> Unit) = pulsanti.addView(ctx.bottone(s, pieno = false) { f() }.apply {
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = ctx.dp(6) }
         })
-        p("Home") { w.loadUrl(HOME) }
         p("Compila accesso") { compilaAccesso() }
-        p("Indietro") { if (w.canGoBack()) w.goBack() }
-        p("Ricarica") { w.reload() }
         p("Apri nel browser") { w.url?.let { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } } }
 
         if (savedInstanceState != null) w.restoreState(savedInstanceState) else w.loadUrl(HOME)
