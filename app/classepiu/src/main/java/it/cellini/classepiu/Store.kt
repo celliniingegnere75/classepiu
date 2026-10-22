@@ -53,12 +53,20 @@ class Impostazioni(ctx: Context) {
     var usaRicevitore: Boolean
         get() = p.getBoolean("usa_ricevitore", true)
         set(v) = p.edit().putBoolean("usa_ricevitore", v).apply()
+    // Ricevitore Apps Script "ClasseViva circolari" (account della scuola), già inserito nell'app:
+    // dopo l'accesso con mail e password non serve impostare altro. Si può cambiare dalle Impostazioni.
     var ricevitoreUrl: String
-        get() = p.getString("ricevitore_url", "") ?: ""
+        get() = (p.getString("ricevitore_url", "") ?: "").ifBlank { RICEVITORE_URL }
         set(v) = p.edit().putString("ricevitore_url", v.trim()).apply()
     var ricevitoreCodice: String
-        get() = p.getString("ricevitore_codice", "") ?: ""
+        get() = (p.getString("ricevitore_codice", "") ?: "").ifBlank { RICEVITORE_CODICE }
         set(v) = p.edit().putString("ricevitore_codice", v.trim()).apply()
+
+    companion object {
+        const val RICEVITORE_URL =
+            "https://script.google.com/macros/s/AKfycbwh2KRJ_ENLOXhQ9wYg9RwbdQYQdLsSa3q2J-rOwiXwK-UbEb1PqJp1CZ_iUpyjvI6C/exec"
+        const val RICEVITORE_CODICE = "AG02tT3ANujKXTo69vbC-XB9oup3YJY4"
+    }
 
     var invioMail: Boolean
         get() = p.getBoolean("invio_mail", true)
