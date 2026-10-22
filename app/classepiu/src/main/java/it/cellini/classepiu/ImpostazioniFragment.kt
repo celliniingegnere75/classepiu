@@ -161,7 +161,7 @@ class ImpostazioniFragment : Fragment() {
     /** Campo con scritta grande in grassetto e linea sotto, come "ricevitore" e "token" nella bozza. */
     private fun campoSottolineato(ctx: android.content.Context, etichetta: String, password: Boolean) = EditText(ctx).apply {
         hint = etichetta
-        setHintTextColor(nero)
+        setHintTextColor(0xFF585858.toInt()) // scritte ricevitore/token schiarite del 30%
         setTextColor(nero)
         textSize = 15f
         setSingleLine(true)
@@ -170,8 +170,8 @@ class ImpostazioniFragment : Fragment() {
         backgroundTintList = ColorStateList.valueOf(nero)
         setPadding(ctx.dp(0), ctx.dp(8), ctx.dp(0), ctx.dp(8))
         inputType = if (password) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
-        // scritta del campo vuoto grande e in grassetto, testo inserito più piccolo
-        val aggiorna = { textSize = if (text.isNullOrEmpty()) 25f else 15f; setTypeface(null, if (text.isNullOrEmpty()) Typeface.BOLD else Typeface.NORMAL) }
+        // scritta del campo vuoto grande (senza grassetto), testo inserito più piccolo
+        val aggiorna = { textSize = if (text.isNullOrEmpty()) 25f else 15f; setTypeface(null, Typeface.NORMAL) }
         addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}

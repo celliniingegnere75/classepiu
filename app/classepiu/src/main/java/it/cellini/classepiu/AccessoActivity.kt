@@ -126,7 +126,7 @@ class AccessoActivity : AppCompatActivity() {
                     startActivity(Intent(this@AccessoActivity, MainActivity::class.java))
                     finish()
                 }.onFailure {
-                    esito.text = "Accesso non riuscito: controlla username e password.\n${it.message ?: ""}"
+                    esito.text = "errore nelle credenziali!"
                 }
             }
         }
@@ -146,7 +146,7 @@ class AccessoActivity : AppCompatActivity() {
             boxStrokeWidthFocused = 0
             val r = dp(18).toFloat()
             setBoxCornerRadii(r, r, r, r)
-            defaultHintTextColor = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+            defaultHintTextColor = android.content.res.ColorStateList.valueOf(0xFF777777.toInt()) // schiarito del 20%
             if (password) {
                 endIconMode = TextInputLayout.END_ICON_PASSWORD_TOGGLE
                 setEndIconTintList(android.content.res.ColorStateList.valueOf(0xFF444444.toInt()))
@@ -155,7 +155,7 @@ class AccessoActivity : AppCompatActivity() {
         val edit = TextInputEditText(box.context).apply {
             setSingleLine(true)
             textSize = 18f
-            setTextColor(0xFF222222.toInt())
+            setTextColor(0xFF4E4E4E.toInt()) // schiarito del 20%
             minHeight = dp(64)
             inputType = if (password) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
             else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
