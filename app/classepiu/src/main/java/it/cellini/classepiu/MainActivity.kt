@@ -61,27 +61,32 @@ class MainActivity : AppCompatActivity() {
             }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         }
 
-        // --- contenitore grigio arrotondato con il pannello bianco
+        // --- pannello bianco con angoli superiori arrotondati, da bordo a bordo (come la bozza);
+        //     sotto, fascia grigia con la barra flottante
         val pannello = FrameLayout(this).apply { id = contenitoreId; setBackgroundColor(Color.WHITE) }
         val barra = barraInBasso()
+        val fondo = FrameLayout(this).apply {
+            setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.grigio_contenitore))
+            setPadding(dp(18), dp(12), dp(18), dp(4))
+            addView(barra, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66)))
+        }
         val contenitore = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
-                setColor(ContextCompat.getColor(this@MainActivity, R.color.grigio_contenitore))
-                val r = dp(26).toFloat()
+                setColor(Color.WHITE)
+                val r = dp(30).toFloat()
                 cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
             }
-            setPadding(dp(7), dp(17), dp(7), dp(10))
+            clipToOutline = true
+            setPadding(0, dp(14), 0, 0)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-            addView(barra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66)).apply {
-                setMargins(dp(10), dp(12), dp(10), dp(4))
-            })
+            addView(fondo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(azzurro)
             addView(testa, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(contenitore, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = -dp(12) })
+            addView(contenitore, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = -dp(12); leftMargin = dp(1); rightMargin = dp(1) })
         })
 
         if (savedInstanceState == null) {
@@ -131,7 +136,7 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) chiediBatteria()
     }
 
-    /** Barra flottante grigio chiaro con le tre voci; la voce attiva ha il riquadro azzurro. */
+    /** Barra flottante grigio chiaro con le tre voci; la voce attiva ha l'etichetta più scura. */
     private fun barraInBasso(): LinearLayout {
         val barra = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -149,7 +154,7 @@ class MainActivity : AppCompatActivity() {
         ).forEach { (tab, nome, icona) ->
             val img = ImageView(this).apply { setImageResource(icona) }
             val riquadro = FrameLayout(this).apply {
-                addView(img, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+                addView(img, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
             }
             val etichetta = TextView(this).apply {
                 text = nome
@@ -172,17 +177,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun aggiornaBarra() {
-        val azzurro = ContextCompat.getColor(this, R.color.logo_sfondo)
         voci.forEach { (tab, v) ->
-            val (riquadro, etichetta) = v
+            val (_, etichetta) = v
             val attiva = tab == schedaAttiva
-            riquadro.background = if (attiva) GradientDrawable().apply {
-                setColor(azzurro)
-                cornerRadius = dp(9).toFloat()
-                setStroke(dp(2), 0xFF333333.toInt())
-            } else null
-            icone[tab]?.imageTintList = ColorStateList.valueOf(if (attiva) Color.WHITE else 0xFF444444.toInt())
-            etichetta.setTextColor(if (attiva) 0xFF222222.toInt() else 0xFF555555.toInt())
+            icone[tab]?.imageTintList = ColorStateList.valueOf(0xFF3F3F3F.toInt())
+            etichetta.setTextColor(if (attiva) 0xFF111111.toInt() else 0xFF4A4A4A.toInt())
         }
     }
 
