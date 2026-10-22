@@ -1,20 +1,31 @@
 package it.cellini.classepiu
 
 import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.text.InputType
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
+import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.button.MaterialButton
+import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Unica schermata da compilare: mail e password ClasseViva.
+ * Schermata di accesso con la disposizione di quella di ClasseViva: logo, Username/Email, Password,
+ * pulsante Accedi e "Password dimenticata?". Niente SPID/CIE e niente testi su scuola, privacy o nazionalità.
  * Dopo l'accesso l'app imposta da sola tutto il resto (come cv.py dopo "credenziali").
  */
 class AccessoActivity : AppCompatActivity() {
@@ -22,29 +33,84 @@ class AccessoActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val imp = Impostazioni(this)
-        val col = colonna(24).apply { gravity = Gravity.CENTER_HORIZONTAL }
+        val grigio = 0xFFF0F0F0.toInt()
+        val primario = ContextCompat.getColor(this, R.color.primario)
+        window.statusBarColor = grigio
+        androidx.core.view.WindowCompat.getInsetsController(window, window.decorView).isAppearanceLightStatusBars = true
 
-        col.addView(android.widget.ImageView(this).apply {
-            setImageResource(R.drawable.logo)
+        val col = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setBackgroundColor(grigio)
+            setPadding(dp(20), dp(64), dp(20), dp(24))
+        }
+
+        // logo (scritta classePiù) in alto, come il marchio sulla schermata di ClasseViva
+        col.addView(ImageView(this).apply {
+            setImageResource(R.drawable.logo_scritta)
             contentDescription = "ClassePiù"
-            layoutParams = android.widget.LinearLayout.LayoutParams(dp(160), dp(160)).apply { topMargin = dp(40); bottomMargin = dp(12) }
-        })
-        col.addView(testo("Accedi con l'account ClasseViva", 15f, alpha = .7f).apply { setPadding(0, 0, 0, dp(24)) })
-        val utente = Campo(this, "Mail o codice utente", email = true).apply { valore = imp.utente }
-        val password = Campo(this, "Password", password = true)
-        val esito = TextView(this).apply { setPadding(0, dp(12), 0, 0); textSize = 14f }
-        val attesa = ProgressBar(this).apply { visibility = View.GONE }
-        col.aggiungi(utente.layout, password.layout)
+            adjustViewBounds = true
+        }, LinearLayout.LayoutParams(dp(250), ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(48) })
 
-        val accedi = bottone("Accedi") {}
-        accedi.layoutParams = piena().apply { topMargin = dp(16) }
-        accedi.setOnClickListener {
-            val u = utente.valore.trim()
-            val p = password.valore
-            if (u.isEmpty() || p.isEmpty()) { esito.text = "Inserisci mail e password."; return@setOnClickListener }
+        val (boxUtente, campoUtente) = campo("USERNAME/EMAIL", password = false)
+        campoUtente.setText(imp.utente)
+        val (boxPass, campoPass) = campo("PASSWORD", password = true)
+        col.addView(boxUtente)
+        col.addView(boxPass, piena().apply { topMargin = dp(12) })
+
+        col.addView(TextView(this).apply {
+            text = "Password dimenticata?"
+            setTextColor(0xFF555555.toInt())
+            textSize = 17f
+            gravity = Gravity.CENTER
+            setPadding(dp(8), dp(22), dp(8), dp(22))
+            setOnClickListener { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://web.spaggiari.eu/"))) } }
+        }, piena())
+
+        val accedi = MaterialButton(this).apply {
+            text = "ACCEDI"
+            textSize = 18f
+            letterSpacing = 0.02f
+            cornerRadius = dp(30)
+            minHeight = dp(60)
+            insetTop = 0
+            insetBottom = 0
+        }
+        col.addView(accedi, piena().apply { topMargin = dp(8) })
+        val attesa = ProgressBar(this).apply { visibility = View.GONE }
+        col.addView(attesa, LinearLayout.LayoutParams(dp(36), dp(36)).apply { topMargin = dp(16) })
+        val esito = TextView(this).apply {
+            textSize = 15f; gravity = Gravity.CENTER
+            setTextColor(ContextCompat.getColor(this@AccessoActivity, R.color.azione))
+            setPadding(dp(8), dp(12), dp(8), 0)
+        }
+        col.addView(esito, piena())
+
+        // pulsante grigio finché i campi sono vuoti, azzurro quando si può accedere
+        fun aggiornaPulsante() {
+            val pronto = !campoUtente.text.isNullOrBlank() && !campoPass.text.isNullOrEmpty()
+            accedi.isEnabled = pronto
+            accedi.backgroundTintList = android.content.res.ColorStateList.valueOf(if (pronto) primario else 0xFFD6D6D6.toInt())
+            accedi.setTextColor(if (pronto) 0xFFFFFFFF.toInt() else 0xFF8A8A8A.toInt())
+            accedi.strokeWidth = if (pronto) 0 else dp(1)
+            accedi.strokeColor = android.content.res.ColorStateList.valueOf(0xFFBDBDBD.toInt())
+        }
+        val osserva = object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { aggiornaPulsante() }
+        }
+        campoUtente.addTextChangedListener(osserva)
+        campoPass.addTextChangedListener(osserva)
+        aggiornaPulsante()
+
+        fun entra() {
+            val u = campoUtente.text?.toString()?.trim().orEmpty()
+            val p = campoPass.text?.toString().orEmpty()
+            if (u.isEmpty() || p.isEmpty()) return
             accedi.isEnabled = false
             attesa.visibility = View.VISIBLE
-            esito.text = "Accesso in corso…"
+            esito.text = ""
             lifecycleScope.launch {
                 val r = withContext(Dispatchers.IO) {
                     runCatching {
@@ -54,17 +120,50 @@ class AccessoActivity : AppCompatActivity() {
                     }
                 }
                 attesa.visibility = View.GONE
-                accedi.isEnabled = true
-                r.onSuccess { n ->
+                aggiornaPulsante()
+                r.onSuccess {
                     configura(u, p)
-                    esito.text = "Accesso riuscito: $n circolari in bacheca."
                     startActivity(Intent(this@AccessoActivity, MainActivity::class.java))
                     finish()
-                }.onFailure { esito.text = "Accesso non riuscito.\n${it.message}" }
+                }.onFailure {
+                    esito.text = "Accesso non riuscito: controlla username e password.\n${it.message ?: ""}"
+                }
             }
         }
-        col.aggiungi(accedi, attesa, esito)
-        setContentView(ScrollView(this).apply { addView(col) })
+        accedi.setOnClickListener { entra() }
+        campoPass.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_DONE) { entra(); true } else false }
+
+        setContentView(ScrollView(this).apply { isFillViewport = true; setBackgroundColor(grigio); addView(col) })
+    }
+
+    /** Campo bianco arrotondato, senza bordo, con la scritta in maiuscolo (come su ClasseViva). */
+    private fun campo(etichetta: String, password: Boolean): Pair<TextInputLayout, TextInputEditText> {
+        val box = TextInputLayout(this, null, com.google.android.material.R.attr.textInputFilledStyle).apply {
+            hint = etichetta
+            boxBackgroundMode = TextInputLayout.BOX_BACKGROUND_FILLED
+            boxBackgroundColor = 0xFFFFFFFF.toInt()
+            boxStrokeWidth = 0
+            boxStrokeWidthFocused = 0
+            val r = dp(18).toFloat()
+            setBoxCornerRadii(r, r, r, r)
+            defaultHintTextColor = android.content.res.ColorStateList.valueOf(0xFF555555.toInt())
+            if (password) {
+                endIconMode = TextInputLayout.END_ICON_PASSWORD_TOGGLE
+                setEndIconTintList(android.content.res.ColorStateList.valueOf(0xFF444444.toInt()))
+            }
+        }
+        val edit = TextInputEditText(box.context).apply {
+            setSingleLine(true)
+            textSize = 18f
+            setTextColor(0xFF222222.toInt())
+            minHeight = dp(64)
+            inputType = if (password) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            imeOptions = if (password) EditorInfo.IME_ACTION_DONE else EditorInfo.IME_ACTION_NEXT
+        }
+        box.addView(edit)
+        box.layoutParams = piena()
+        return box to edit
     }
 
     /** Imposta tutto il resto in automatico. */
