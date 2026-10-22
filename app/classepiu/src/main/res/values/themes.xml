@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="primario">#1F5FAD</color>
+    <color name="logo_sfondo">#68BDE6</color>
+    <color name="primario">#1F7FBF</color>
     <color name="primario_scuro">#9CC3F5</color>
     <color name="azione">#C0392B</color>
 

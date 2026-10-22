@@ -24,7 +24,11 @@ class AccessoActivity : AppCompatActivity() {
         val imp = Impostazioni(this)
         val col = colonna(24).apply { gravity = Gravity.CENTER_HORIZONTAL }
 
-        col.addView(testo("ClassePiù", 30f, true).apply { setPadding(0, dp(48), 0, dp(4)) })
+        col.addView(android.widget.ImageView(this).apply {
+            setImageResource(R.drawable.logo)
+            contentDescription = "ClassePiù"
+            layoutParams = android.widget.LinearLayout.LayoutParams(dp(160), dp(160)).apply { topMargin = dp(40); bottomMargin = dp(12) }
+        })
         col.addView(testo("Accedi con l'account ClasseViva", 15f, alpha = .7f).apply { setPadding(0, 0, 0, dp(24)) })
         val utente = Campo(this, "Mail o codice utente", email = true).apply { valore = imp.utente }
         val password = Campo(this, "Password", password = true)
