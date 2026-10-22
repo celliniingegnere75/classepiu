@@ -105,7 +105,7 @@ class ClasseViva(private val utente: String, private val password: String) {
     fun bacheca(): List<Circolare> {
         if (token.isEmpty()) login()
         val errori = mutableListOf<String>()
-        for (p in listOf("teachers", "students")) {
+        for (p in listOf("students", "teachers")) { // stesso ordine di cv.py
             val r = http("GET", "$BASE/$p/$id/noticeboard")
             if (r.codice == 200) {
                 percorso = p

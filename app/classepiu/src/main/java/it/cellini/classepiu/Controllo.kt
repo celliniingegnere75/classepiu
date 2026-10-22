@@ -34,6 +34,9 @@ object Controllo {
         val imp = Impostazioni(ctx)
         val archivio = Viste(ctx)
         if (!imp.pronta) return Esito(0, 0, false, "Credenziali ClasseViva non impostate.")
+        // come cv.py ("Manca il ricevitore"): senza invio configurato non si tocca nulla,
+        // così nessuna circolare viene segnata come vista senza essere stata mandata
+        if (imp.invioMail && !imp.mailPronta) throw IllegalStateException("Invio mail non configurato: completa le Impostazioni.")
         val caricate = archivio.carica()
         val primo = caricate == null
         val viste = caricate ?: mutableMapOf()
@@ -85,7 +88,7 @@ object Controllo {
 
     private fun riprovaAllegati(ctx: Context, imp: Impostazioni, cv: ClasseViva, c: Circolare, viste: MutableMap<String, Long>, dal: Long) {
         val scaricati = try {
-            cv.tuttiGliAllegati(c, 1, apriSeServe = false)
+            cv.tuttiGliAllegati(c, 1, apriSeServe = true) // come cv.py: se manca, apre la circolare e riprova
         } catch (r: ClasseViva.CircolareRitirata) {
             viste[c.chiave] = 1L
             Diario.scrivi(ctx, "Ritirata dalla scuola, allegato non più disponibile: ${c.titolo}")

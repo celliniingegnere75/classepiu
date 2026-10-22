@@ -61,7 +61,8 @@ object Mailer {
      */
     fun inviaCircolare(imp: Impostazioni, titolo: String, data: String, categoria: String, testo: String, allegati: List<FileScaricato>) {
         if (imp.usaRicevitore) ricevitore(imp, titolo, data, categoria, testo, allegati)
-        else invia(imp, "[CLASSEVIVA] $titolo", testo, allegati)
+        else invia(imp, "[CLASSEVIVA] $titolo",
+            "Data: $data\n" + (if (categoria.isNotBlank()) "Categoria: $categoria\n" else "") + "\n" + testo, allegati)
     }
 
     private fun ricevitore(imp: Impostazioni, titolo: String, data: String, categoria: String, testo: String, allegati: List<FileScaricato>) {
@@ -92,15 +93,15 @@ object Mailer {
     }
 
     /** Testo della mail di una circolare, con in testa le azioni richieste. */
-    fun testoCircolare(c: Circolare, scaricati: Int): String = buildString {
-        if (c.azioni.isNotEmpty()) append("AZIONE RICHIESTA su ClasseViva: ").append(c.azioni.joinToString(", ")).append(".\n")
-        if (c.adesione) append("Sull'app è possibile aderire (pulsante Aderisci).\n")
+    // Identico a prepara() di cv.py: note in testa, una per riga, poi una riga vuota e il testo.
+    fun testoCircolare(c: Circolare, scaricati: Int): String {
+        val note = mutableListOf<String>()
+        if (c.azioni.isNotEmpty()) note += "AZIONE RICHIESTA su ClasseViva: " + c.azioni.joinToString(", ") + "."
+        if (c.adesione) note += "Sull'app è possibile aderire (pulsante Aderisci)."
         val attesi = c.allegati.size
-        if (attesi > scaricati) append("Allegati non ancora disponibili: ${attesi - scaricati} su $attesi. Arriveranno con una mail successiva appena ClasseViva li rende scaricabili.\n")
-        if (isNotEmpty()) append("\n")
-        append("Data: ").append(c.data).append('\n')
-        if (c.categoria.isNotBlank()) append("Categoria: ").append(c.categoria).append('\n')
-        append('\n').append(c.testo.ifBlank { "(nessun testo)" })
-        append("\n\n— inviata da ClassePiù")
+        if (attesi > scaricati) note += "Allegati non ancora disponibili: ${attesi - scaricati} su $attesi. " +
+            "Arriveranno con una mail successiva appena ClasseViva li rende scaricabili."
+        if (note.isEmpty()) return c.testo
+        return note.joinToString("\n") + if (c.testo.isNotEmpty()) "\n\n" + c.testo else ""
     }
 }
