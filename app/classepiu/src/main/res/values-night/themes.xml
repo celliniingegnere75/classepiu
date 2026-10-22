@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ClassePiu" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primario_scuro</item>
+        <item name="colorSecondary">@color/primario_scuro</item>
+    </style>
+</resources>

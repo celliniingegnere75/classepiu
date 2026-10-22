@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="primario">#1F5FAD</color>
+    <color name="primario_scuro">#9CC3F5</color>
+    <color name="azione">#C0392B</color>
+
+    <style name="Theme.ClassePiu" parent="Theme.Material3.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/primario</item>
+        <item name="colorSecondary">@color/primario</item>
+    </style>
+</resources>

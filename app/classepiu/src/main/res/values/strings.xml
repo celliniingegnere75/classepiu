@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClassePiù</string>
+    <string name="tab_bacheca">Bacheca</string>
+    <string name="tab_registro">Registro</string>
+    <string name="tab_impostazioni">Impostazioni</string>
+</resources>
