@@ -109,11 +109,11 @@ class DettaglioActivity : AppCompatActivity() {
 
     private fun inviaOra() {
         val imp = Impostazioni(this)
-        if (!imp.mailPronta) { avviso("Imposta prima Gmail e destinatari in Impostazioni."); return }
+        if (!imp.mailPronta) { avviso("Imposta prima l'invio delle mail in Impostazioni."); return }
         avviso("Invio in corso…")
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(applicationContext, c) } }
-            r.onSuccess { avviso("Inviata a ${imp.destinatariEffettivi.joinToString(", ")} (allegati $it/${c.allegati.size}).") }
+            r.onSuccess { avviso("Inviata (${imp.doveVanno}, allegati $it/${c.allegati.size}).") }
                 .onFailure { avviso("Invio non riuscito: ${it.message}") }
         }
     }

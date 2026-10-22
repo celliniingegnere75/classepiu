@@ -49,6 +49,17 @@ class Impostazioni(ctx: Context) {
             return if (utente.contains('@')) listOf(utente) else emptyList()
         }
 
+    /** true = invio tramite il ricevitore Apps Script (nessuna password per le app); false = Gmail diretto. */
+    var usaRicevitore: Boolean
+        get() = p.getBoolean("usa_ricevitore", true)
+        set(v) = p.edit().putBoolean("usa_ricevitore", v).apply()
+    var ricevitoreUrl: String
+        get() = p.getString("ricevitore_url", "") ?: ""
+        set(v) = p.edit().putString("ricevitore_url", v.trim()).apply()
+    var ricevitoreCodice: String
+        get() = p.getString("ricevitore_codice", "") ?: ""
+        set(v) = p.edit().putString("ricevitore_codice", v.trim()).apply()
+
     var invioMail: Boolean
         get() = p.getBoolean("invio_mail", true)
         set(v) = p.edit().putBoolean("invio_mail", v).apply()
@@ -64,7 +75,12 @@ class Impostazioni(ctx: Context) {
         set(v) = p.edit().putBoolean("segna_lette", v).apply()
 
     val pronta get() = utente.isNotBlank() && password.isNotBlank()
-    val mailPronta get() = gmail.contains('@') && passwordApp.isNotBlank() && destinatariEffettivi.isNotEmpty()
+    val mailPronta
+        get() = if (usaRicevitore) ricevitoreUrl.startsWith("https://") && ricevitoreCodice.isNotBlank()
+        else gmail.contains('@') && passwordApp.isNotBlank() && destinatariEffettivi.isNotEmpty()
+
+    /** Descrizione di dove vanno le mail, per i messaggi all'utente. */
+    val doveVanno get() = if (usaRicevitore) "ricevitore Apps Script" else destinatariEffettivi.joinToString(", ")
 
     fun client() = ClasseViva(utente, password)
 }

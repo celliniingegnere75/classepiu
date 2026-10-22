@@ -55,6 +55,42 @@ object Mailer {
         Transport.send(msg)
     }
 
+    /**
+     * Invia una circolare nel modo scelto: ricevitore Apps Script (lo stesso usato da cv.py, che la manda
+     * per mail con prefisso [CLASSEVIVA]) oppure Gmail diretto.
+     */
+    fun inviaCircolare(imp: Impostazioni, titolo: String, data: String, categoria: String, testo: String, allegati: List<FileScaricato>) {
+        if (imp.usaRicevitore) ricevitore(imp, titolo, data, categoria, testo, allegati)
+        else invia(imp, "[CLASSEVIVA] $titolo", testo, allegati)
+    }
+
+    private fun ricevitore(imp: Impostazioni, titolo: String, data: String, categoria: String, testo: String, allegati: List<FileScaricato>) {
+        if (!imp.ricevitoreUrl.startsWith("https://") || imp.ricevitoreCodice.isBlank())
+            throw IllegalStateException("Indirizzo o codice del ricevitore Apps Script non impostati.")
+        val corpo = org.json.JSONObject()
+            .put("titolo", titolo).put("data", data).put("categoria", categoria).put("testo", testo)
+            .put("token", imp.ricevitoreCodice)
+            .put("allegati", org.json.JSONArray().apply {
+                allegati.forEach {
+                    put(org.json.JSONObject().put("nome", it.nome)
+                        .put("base64", android.util.Base64.encodeToString(it.dati, android.util.Base64.NO_WRAP)))
+                }
+            })
+        val c = java.net.URL(imp.ricevitoreUrl).openConnection() as java.net.HttpURLConnection
+        c.requestMethod = "POST"
+        c.connectTimeout = 30_000
+        c.readTimeout = 180_000
+        c.instanceFollowRedirects = true // Apps Script risponde dopo un redirect
+        c.doOutput = true
+        c.setRequestProperty("Content-Type", "application/json")
+        c.outputStream.use { it.write(corpo.toString().toByteArray()) }
+        val codice = c.responseCode
+        val risposta = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes()) } ?: ""
+        c.disconnect()
+        if (!risposta.replace(" ", "").contains("\"ok\":true"))
+            throw RuntimeException("Il ricevitore ha risposto (HTTP $codice): ${risposta.take(200)}")
+    }
+
     /** Testo della mail di una circolare, con in testa le azioni richieste. */
     fun testoCircolare(c: Circolare, scaricati: Int): String = buildString {
         if (c.azioni.isNotEmpty()) append("AZIONE RICHIESTA su ClasseViva: ").append(c.azioni.joinToString(", ")).append(".\n")
