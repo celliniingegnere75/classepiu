@@ -27,6 +27,12 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (!Impostazioni(this).pronta) {
+            // unica cosa da fare al primo avvio: accedere con mail e password
+            startActivity(Intent(this, AccessoActivity::class.java))
+            finish()
+            return
+        }
         Notifiche.creaCanale(this)
 
         barra = MaterialToolbar(this).apply { title = getString(R.string.app_name) }
@@ -51,7 +57,7 @@ class MainActivity : AppCompatActivity() {
                 .add(contenitoreId, RegistroFragment(), "t$TAB_REGISTRO")
                 .add(contenitoreId, ImpostazioniFragment(), "t$TAB_IMPOSTAZIONI")
                 .commitNow()
-            mostra(if (imp.pronta) TAB_BACHECA else TAB_IMPOSTAZIONI)
+            mostra(if (imp.mailPronta || !imp.invioMail) TAB_BACHECA else TAB_IMPOSTAZIONI)
             Controllo.pianifica(this)
         } else {
             mostra(savedInstanceState.getInt("tab", TAB_BACHECA))

@@ -102,6 +102,8 @@ class Viste(ctx: Context) {
         }
     }
 
+    fun cancella() { file.delete() }
+
     fun salva(m: Map<String, Long>) {
         val j = JSONObject()
         m.forEach { (k, v) -> j.put(k, v) }

@@ -30,10 +30,20 @@ class ImpostazioniFragment : Fragment() {
 
         // --- ClasseViva
         col.addView(ctx.titoloSezione("Account ClasseViva"))
-        col.addView(ctx.testo("Le credenziali restano solo su questo telefono, cifrate.", 13f, alpha = .7f))
-        val utente = Campo(ctx, "Utente (codice o mail della scuola)", email = true).apply { valore = imp.utente }
-        val password = Campo(ctx, "Password ClasseViva", password = true).apply { valore = imp.password }
-        col.aggiungi(utente.layout, password.layout)
+        col.addView(ctx.testo("Accesso come ${imp.utente}\nLe credenziali restano solo su questo telefono, cifrate.", 13f, alpha = .7f))
+        col.addView(ctx.bottone("Esci / cambia account", pieno = false) {
+            MaterialAlertDialogBuilder(ctx)
+                .setMessage("Uscire dall'account ClasseViva? Il controllo automatico si ferma finché non accedi di nuovo.")
+                .setPositiveButton("Esci") { _, _ ->
+                    imp.password = ""
+                    imp.controlloAutomatico = false
+                    Controllo.pianifica(ctx)
+                    startActivity(Intent(ctx, AccessoActivity::class.java))
+                    requireActivity().finish()
+                }
+                .setNegativeButton("Annulla", null)
+                .show()
+        }.apply { layoutParams = piena() })
 
         // --- Mail
         col.addView(ctx.titoloSezione("Invio delle circolari per mail"))
@@ -102,8 +112,6 @@ class ImpostazioniFragment : Fragment() {
         }.apply { layoutParams = piena() })
 
         fun salva() {
-            imp.utente = utente.valore
-            imp.password = password.valore
             imp.gmail = gmail.valore
             imp.passwordApp = passApp.valore
             imp.destinatari = dest.valore
