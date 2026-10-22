@@ -87,7 +87,6 @@ class ImpostazioniFragment : Fragment() {
         }
         (if (imp.usaRicevitore) rbRic else rbGmail).isChecked = true
         aggiornaModo()
-        modo.setOnCheckedChangeListener { _, _ -> aggiornaModo() }
 
         val invioMail = MaterialSwitch(ctx).apply { text = "Invia per mail le circolari nuove"; isChecked = imp.invioMail }
         val segna = MaterialSwitch(ctx).apply { text = "Segna come lette quelle inviate (non quelle da firmare)"; isChecked = imp.segnaLette }
@@ -125,8 +124,31 @@ class ImpostazioniFragment : Fragment() {
             Controllo.pianifica(ctx)
         }
 
+        // Interruttori e scelte si salvano da soli appena li tocchi (come nelle impostazioni di Android)
+        invioMail.setOnCheckedChangeListener { _, on ->
+            imp.invioMail = on
+            messaggio(if (on) "Invio mail attivato." else "Invio mail disattivato.")
+        }
+        segna.setOnCheckedChangeListener { _, on -> imp.segnaLette = on; messaggio("Salvato.") }
+        auto.setOnCheckedChangeListener { _, on ->
+            imp.controlloAutomatico = on
+            Controllo.pianifica(ctx)
+            messaggio(if (on) "Controllo automatico attivato." else "Controllo automatico disattivato.")
+        }
+        gruppo.setOnCheckedChangeListener { g, id ->
+            imp.oreIntervallo = (g.findViewById<RadioButton>(id)?.tag as? Int) ?: 2
+            Controllo.pianifica(ctx)
+            messaggio("Controllo ogni ${imp.oreIntervallo} ${if (imp.oreIntervallo == 1) "ora" else "ore"}.")
+        }
+        modo.setOnCheckedChangeListener { _, _ ->
+            aggiornaModo()
+            imp.usaRicevitore = rbRic.isChecked
+            messaggio(if (rbRic.isChecked) "Invio tramite ricevitore Apps Script." else "Invio tramite Gmail diretto.")
+        }
+
         col.addView(ctx.titoloSezione("Salva e prova"))
-        col.addView(ctx.bottone("Salva impostazioni") { salva(); messaggio("Salvate.") }.apply { layoutParams = piena() })
+        col.addView(ctx.testo("Interruttori e scelte si salvano da soli. Il pulsante serve per i campi di testo (ricevitore, Gmail, destinatari).", 13f, alpha = .7f))
+        col.addView(ctx.bottone("Salva campi di testo") { salva(); messaggio("Salvati.") }.apply { layoutParams = piena() })
         col.addView(ctx.bottone("Prova accesso ClasseViva", pieno = false) {
             salva()
             esegui("Prova accesso") {
