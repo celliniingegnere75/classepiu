@@ -31,7 +31,7 @@ import java.io.File
 class BachecaFragment : Fragment() {
 
     private var tutte: List<Circolare> = emptyList()
-    private var filtro = 0 // 0 tutte, 1 da leggere, 2 da confermare
+    private var filtro = 0 // 0 tutte, 1 da leggere
     private var cerca = ""
     private lateinit var elenco: RecyclerView
     private lateinit var aggiorna: SwipeRefreshLayout
@@ -50,13 +50,25 @@ class BachecaFragment : Fragment() {
                 override fun afterTextChanged(s: Editable?) { cerca = s?.toString().orEmpty(); mostra() }
             })
         }
-        val layoutCerca = TextInputLayout(ctx).apply { hint = "Cerca nelle circolari"; addView(campoCerca) }
+        val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        val statoSel = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
+        val layoutCerca = TextInputLayout(ctx).apply {
+            hint = "Cerca nelle circolari"
+            boxStrokeColor = celeste
+            hintTextColor = android.content.res.ColorStateList.valueOf(celeste)
+            addView(campoCerca)
+        }
 
         val chips = ChipGroup(ctx).apply { isSingleSelection = true; isSelectionRequired = true }
-        listOf("Tutte", "Da leggere", "Da confermare").forEachIndexed { i, s ->
+        listOf("Tutte", "Da leggere").forEachIndexed { i, s ->
             chips.addView(Chip(ctx).apply {
                 text = s; isCheckable = true; isChecked = i == 0; id = View.generateViewId()
                 setOnClickListener { filtro = i; mostra() }
+                // celestino quando è selezionato, grigio chiaro altrimenti
+                chipBackgroundColor = android.content.res.ColorStateList(statoSel, intArrayOf(celeste, 0xFFF0F0F0.toInt()))
+                setTextColor(android.content.res.ColorStateList(statoSel, intArrayOf(0xFFFFFFFF.toInt(), 0xFF333333.toInt())))
+                chipStrokeWidth = 0f
+                checkedIconTint = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
             })
         }
         testa.aggiungi(layoutCerca, chips)
@@ -70,6 +82,7 @@ class BachecaFragment : Fragment() {
         aggiorna = SwipeRefreshLayout(ctx).apply {
             addView(elenco)
             setOnRefreshListener { carica() }
+            setColorSchemeColors(celeste)
         }
         vuoto = ctx.testo("", 15f, alpha = .7f).apply {
             setPadding(ctx.dp(24), ctx.dp(40), ctx.dp(24), 0)
@@ -82,6 +95,9 @@ class BachecaFragment : Fragment() {
         val fab = ExtendedFloatingActionButton(ctx).apply {
             text = "Controlla e invia"
             setIconResource(android.R.drawable.ic_dialog_email)
+            backgroundTintList = android.content.res.ColorStateList.valueOf(celeste)
+            setTextColor(0xFFFFFFFF.toInt())
+            iconTint = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
             setOnClickListener { controllaOra(this) }
         }
         val radice = FrameLayout(ctx)
@@ -160,7 +176,6 @@ class BachecaFragment : Fragment() {
         val vis = tutte.filter {
             when (filtro) {
                 1 -> !it.letta
-                2 -> it.azioni.isNotEmpty() || it.adesione
                 else -> true
             } && (q.isEmpty() || it.titolo.lowercase().contains(q) || it.testo.lowercase().contains(q) || it.categoria.lowercase().contains(q))
         }
