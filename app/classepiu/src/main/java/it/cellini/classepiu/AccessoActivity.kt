@@ -176,7 +176,7 @@ class AccessoActivity : AppCompatActivity() {
         imp.invioMail = true
         imp.segnaLette = true
         imp.controlloAutomatico = true
-        if (imp.oreIntervallo !in listOf(1, 2, 4, 8)) imp.oreIntervallo = 2
+        if (imp.oreIntervallo !in ImpostazioniFragment.ORE) imp.oreIntervallo = 2
         if (cambiato) Viste(this).cancella() // nuovo profilo: si riparte come al primo avvio
         Controllo.pianifica(this)
         // primo controllo subito: al primo avvio segna come già viste le circolari presenti, senza inviarle

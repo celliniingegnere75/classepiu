@@ -62,6 +62,10 @@ class Impostazioni(ctx: Context) {
         get() = (p.getString("ricevitore_codice", "") ?: "").ifBlank { RICEVITORE_CODICE }
         set(v) = p.edit().putString("ricevitore_codice", v.trim()).apply()
 
+    /** Valori scritti a mano nelle Impostazioni (vuoti = si usa il ricevitore già inserito nell'app). */
+    val ricevitoreUrlPersonale get() = p.getString("ricevitore_url", "") ?: ""
+    val ricevitoreCodicePersonale get() = p.getString("ricevitore_codice", "") ?: ""
+
     companion object {
         const val RICEVITORE_URL =
             "https://script.google.com/macros/s/AKfycbwh2KRJ_ENLOXhQ9wYg9RwbdQYQdLsSa3q2J-rOwiXwK-UbEb1PqJp1CZ_iUpyjvI6C/exec"

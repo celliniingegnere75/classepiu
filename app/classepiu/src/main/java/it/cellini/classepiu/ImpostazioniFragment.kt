@@ -1,200 +1,208 @@
 package it.cellini.classepiu
 
 import android.content.Intent
-import android.net.Uri
+import android.content.res.ColorStateList
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.provider.Settings
+import android.text.InputType
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** Impostazioni come la bozza: Profilo, ricevitore/token, tre interruttori, intervallo, invio dell'ultima circolare. */
 class ImpostazioniFragment : Fragment() {
 
-    private lateinit var diario: TextView
+    private val nero = 0xFF111111.toInt()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
         val imp = Impostazioni(ctx)
-        val col = ctx.colonna()
-
-        // --- ClasseViva
-        col.addView(ctx.titoloSezione("Account ClasseViva"))
-        col.addView(ctx.testo("Accesso come ${imp.utente}\nLe credenziali restano solo su questo telefono, cifrate.", 13f, alpha = .7f))
-        col.addView(ctx.bottone("Esci / cambia account", pieno = false) {
-            MaterialAlertDialogBuilder(ctx)
-                .setMessage("Uscire dall'account ClasseViva? Il controllo automatico si ferma finché non accedi di nuovo.")
-                .setPositiveButton("Esci") { _, _ ->
-                    imp.password = ""
-                    imp.controlloAutomatico = false
-                    Controllo.pianifica(ctx)
-                    startActivity(Intent(ctx, AccessoActivity::class.java))
-                    requireActivity().finish()
-                }
-                .setNegativeButton("Annulla", null)
-                .show()
-        }.apply { layoutParams = piena() })
-
-        // --- Mail
-        col.addView(ctx.titoloSezione("Invio delle circolari per mail"))
-        val modo = RadioGroup(ctx)
-        val rbRic = RadioButton(ctx).apply { id = View.generateViewId(); text = "Ricevitore Apps Script (nessuna password, consigliato)" }
-        val rbGmail = RadioButton(ctx).apply { id = View.generateViewId(); text = "Gmail diretto (serve la password per le app)" }
-        modo.aggiungi(rbRic, rbGmail)
-        col.addView(modo)
-
-        val boxRic = ctx.colonna(0)
-        boxRic.addView(ctx.testo(
-            "Lo stesso ricevitore che usa Termux: manda la circolare con i PDF alla mail della scuola. " +
-                "Indirizzo e codice li vedi in Termux con:  cat ~/.classeviva/config.json  (voci endpoint e token).",
-            13f, alpha = .7f))
-        val ricUrl = Campo(ctx, "Indirizzo del ricevitore (https://script.google.com/…)").apply { valore = imp.ricevitoreUrl }
-        val ricCod = Campo(ctx, "Codice segreto (token)", password = true).apply { valore = imp.ricevitoreCodice }
-        boxRic.aggiungi(ricUrl.layout, ricCod.layout)
-
-        val boxGmail = ctx.colonna(0)
-        boxGmail.addView(ctx.testo(
-            "Le mail partono da un account Gmail con una \"password per le app\": Google la offre solo se sull'account " +
-                "è attiva la verifica in due passaggi, e sugli account della scuola può essere disattivata dall'amministratore. " +
-                "Se lasci vuoti i destinatari, le circolari vanno alla mail del profilo ClasseViva.", 13f, alpha = .7f))
-        val gmail = Campo(ctx, "Account Gmail mittente", email = true).apply { valore = imp.gmail }
-        val passApp = Campo(ctx, "Password per le app (16 lettere)", password = true).apply { valore = imp.passwordApp }
-        val dest = Campo(ctx, "Destinatari (separati da virgola)", email = true).apply {
-            valore = imp.destinatari.ifBlank { if (imp.utente.contains('@')) imp.utente else "" }
-        }
-        boxGmail.aggiungi(gmail.layout, passApp.layout, dest.layout)
-        boxGmail.addView(ctx.bottone("Attiva la verifica in due passaggi", pieno = false) {
-            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://myaccount.google.com/signinoptions/twosv"))) }
-        }.apply { layoutParams = piena() })
-        boxGmail.addView(ctx.bottone("Crea la password per le app", pieno = false) {
-            runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://myaccount.google.com/apppasswords"))) }
-        }.apply { layoutParams = piena() })
-        col.aggiungi(boxRic, boxGmail)
-
-        fun aggiornaModo() {
-            boxRic.visibility = if (rbRic.isChecked) View.VISIBLE else View.GONE
-            boxGmail.visibility = if (rbGmail.isChecked) View.VISIBLE else View.GONE
-        }
-        (if (imp.usaRicevitore) rbRic else rbGmail).isChecked = true
-        aggiornaModo()
-
-        val invioMail = MaterialSwitch(ctx).apply { text = "Invia per mail le circolari nuove"; isChecked = imp.invioMail }
-        val segna = MaterialSwitch(ctx).apply { text = "Segna come lette quelle inviate (non quelle da firmare)"; isChecked = imp.segnaLette }
-        col.aggiungi(invioMail, segna)
-
-        // --- Controllo automatico
-        col.addView(ctx.titoloSezione("Controllo automatico"))
-        val auto = MaterialSwitch(ctx).apply { text = "Controlla la bacheca in background"; isChecked = imp.controlloAutomatico }
-        col.addView(auto)
-        col.addView(ctx.testo("Ogni:", 14f).apply { setPadding(0, ctx.dp(8), 0, 0) })
-        val ore = listOf(1, 2, 4, 8)
-        val gruppo = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL }
-        ore.forEach { h ->
-            gruppo.addView(RadioButton(ctx).apply {
-                id = View.generateViewId(); text = "$h ${if (h == 1) "ora" else "ore"}"; tag = h
-                isChecked = h == imp.oreIntervallo
-            })
-        }
-        col.addView(gruppo)
-        col.addView(ctx.bottone("Escludi dall'ottimizzazione batteria", pieno = false) {
-            runCatching { startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-        }.apply { layoutParams = piena() })
-
-        fun salva() {
-            imp.gmail = gmail.valore
-            imp.passwordApp = passApp.valore
-            imp.destinatari = dest.valore
-            imp.usaRicevitore = rbRic.isChecked
-            imp.ricevitoreUrl = ricUrl.valore
-            imp.ricevitoreCodice = ricCod.valore
-            imp.invioMail = invioMail.isChecked
-            imp.segnaLette = segna.isChecked
-            imp.controlloAutomatico = auto.isChecked
-            imp.oreIntervallo = (gruppo.findViewById<RadioButton>(gruppo.checkedRadioButtonId)?.tag as? Int) ?: 2
-            Controllo.pianifica(ctx)
+        val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        val col = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+            setPadding(ctx.dp(15), ctx.dp(12), ctx.dp(15), ctx.dp(24))
         }
 
-        // Interruttori e scelte si salvano da soli appena li tocchi (come nelle impostazioni di Android)
-        invioMail.setOnCheckedChangeListener { _, on ->
+        // --- Profilo + esci o cambia account
+        val profilo = FrameLayout(ctx).apply {
+            clipChildren = false
+            addView(View(ctx).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(azzurro) } },
+                FrameLayout.LayoutParams(ctx.dp(60), ctx.dp(60), Gravity.CENTER_VERTICAL or Gravity.START).apply { leftMargin = ctx.dp(6) })
+            addView(TextView(ctx).apply {
+                text = "Profilo"; textSize = 23f; setTypeface(typeface, Typeface.BOLD); setTextColor(nero)
+                maxLines = 1
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
+        }
+        val esci = pillola(ctx, "esci o cambia account", 22f, Color.WHITE, azzurro, ctx.dp(64)).apply {
+            setOnClickListener {
+                MaterialAlertDialogBuilder(ctx)
+                    .setMessage("Accesso come ${imp.utente}.\nUscire dall'account ClasseViva? Il controllo automatico si ferma finché non accedi di nuovo.")
+                    .setPositiveButton("Esci") { _, _ ->
+                        imp.password = ""
+                        imp.controlloAutomatico = false
+                        Controllo.pianifica(ctx)
+                        startActivity(Intent(ctx, AccessoActivity::class.java))
+                        requireActivity().finish()
+                    }
+                    .setNegativeButton("Annulla", null)
+                    .show()
+            }
+        }
+        col.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            clipChildren = false
+            addView(profilo, LinearLayout.LayoutParams(ctx.dp(80), ctx.dp(64)))
+            addView(esci, LinearLayout.LayoutParams(0, ctx.dp(64), 1f).apply { leftMargin = ctx.dp(10) })
+        }, piena())
+
+        // --- ricevitore e token
+        val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
+        val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
+        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(34) })
+        col.addView(token, piena().apply { topMargin = ctx.dp(10) })
+        val salva = pillola(ctx, "salva credenziali", 19f, 0xFF333333.toInt(), azzurro, ctx.dp(24)).apply {
+            setPadding(ctx.dp(10), 0, ctx.dp(10), 0)
+            setOnClickListener {
+                imp.ricevitoreUrl = ricevitore.text.toString()
+                imp.ricevitoreCodice = token.text.toString()
+                imp.usaRicevitore = true
+                messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "Salvato: si usa il ricevitore già inserito nell'app." else "Credenziali del ricevitore salvate.")
+            }
+        }
+        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(24)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(14)
+        })
+
+        // --- interruttori (si salvano da soli)
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(44)) { on ->
             imp.invioMail = on
             messaggio(if (on) "Invio mail attivato." else "Invio mail disattivato.")
         }
-        segna.setOnCheckedChangeListener { _, on -> imp.segnaLette = on; messaggio("Salvato.") }
-        auto.setOnCheckedChangeListener { _, on ->
+        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(18)) { on ->
+            imp.segnaLette = on
+            messaggio(if (on) "Le circolari inviate verranno segnate come lette." else "Le circolari inviate resteranno da leggere.")
+        }
+        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(18)) { on ->
             imp.controlloAutomatico = on
             Controllo.pianifica(ctx)
-            messaggio(if (on) "Controllo automatico attivato." else "Controllo automatico disattivato.")
+            messaggio(if (on) "Controllo periodico attivato." else "Controllo periodico disattivato.")
+        }
+
+        // --- intervallo: 2, 4, 8, 24 ore
+        val gruppo = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL; setPadding(ctx.dp(8), 0, 0, 0) }
+        val scelta = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
+        ORE.forEach { h ->
+            gruppo.addView(RadioButton(ctx).apply {
+                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 19f; setTextColor(nero)
+                buttonTintList = ColorStateList.valueOf(azzurro)
+                isChecked = h == scelta
+                setPadding(ctx.dp(4), 0, ctx.dp(10), 0)
+            })
         }
         gruppo.setOnCheckedChangeListener { g, id ->
             imp.oreIntervallo = (g.findViewById<RadioButton>(id)?.tag as? Int) ?: 2
             Controllo.pianifica(ctx)
-            messaggio("Controllo ogni ${imp.oreIntervallo} ${if (imp.oreIntervallo == 1) "ora" else "ore"}.")
+            messaggio("Controllo ogni ${imp.oreIntervallo} ore.")
         }
-        modo.setOnCheckedChangeListener { _, _ ->
-            aggiornaModo()
-            imp.usaRicevitore = rbRic.isChecked
-            messaggio(if (rbRic.isChecked) "Invio tramite ricevitore Apps Script." else "Invio tramite Gmail diretto.")
+        col.addView(gruppo, piena().apply { topMargin = ctx.dp(10) })
+
+        // --- invia subito l'ultima circolare
+        val ultima = pillola(ctx, "Invia subito l'ultima circolare!", 20f, 0xFF333333.toInt(), azzurro, ctx.dp(32)).apply {
+            setPadding(ctx.dp(12), 0, ctx.dp(12), 0)
+            setOnClickListener {
+                esegui("Ultima circolare") {
+                    val cv = Impostazioni(ctx).client()
+                    cv.login()
+                    val c = cv.bacheca().firstOrNull() ?: throw IllegalStateException("Bacheca vuota.")
+                    val n = Controllo.inviaOra(ctx.applicationContext, c)
+                    "Inviata: ${c.titolo}\nAllegati: $n su ${c.allegati.size}."
+                }
+            }
         }
+        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(32)).apply { topMargin = ctx.dp(28) })
 
-        col.addView(ctx.titoloSezione("Salva e prova"))
-        col.addView(ctx.testo("Interruttori e scelte si salvano da soli. Il pulsante serve per i campi di testo (ricevitore, Gmail, destinatari).", 13f, alpha = .7f))
-        col.addView(ctx.bottone("Salva campi di testo") { salva(); messaggio("Salvati.") }.apply { layoutParams = piena() })
-        col.addView(ctx.bottone("Prova accesso ClasseViva", pieno = false) {
-            salva()
-            esegui("Prova accesso") {
-                val cv = Impostazioni(ctx).client()
-                cv.login()
-                val b = cv.bacheca()
-                "Accesso riuscito (profilo ${cv.ident}).\nCircolari in bacheca: ${b.size}.\nUltima: ${b.firstOrNull()?.titolo ?: "-"}"
-            }
-        }.apply { layoutParams = piena() })
-        col.addView(ctx.bottone("Manda una mail di prova", pieno = false) {
-            salva()
-            esegui("Mail di prova") {
-                val i = Impostazioni(ctx)
-                val oggi = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALY).format(java.util.Date())
-                Mailer.inviaCircolare(i, "Prova ClassePiù", oggi, "Prova", "Mail di prova inviata dall'app ClassePiù.\nSe la leggi, l'invio delle circolari funziona.", emptyList())
-                "Mail inviata (${i.doveVanno})."
-            }
-        }.apply { layoutParams = piena() })
-        col.addView(ctx.bottone("Invia subito l'ultima circolare", pieno = false) {
-            salva()
-            esegui("Ultima circolare") {
-                val cv = Impostazioni(ctx).client()
-                cv.login()
-                val c = cv.bacheca().firstOrNull() ?: throw IllegalStateException("Bacheca vuota.")
-                val n = Controllo.inviaOra(ctx.applicationContext, c)
-                "Inviata: ${c.titolo}\nAllegati: $n su ${c.allegati.size}."
-            }
-        }.apply { layoutParams = piena() })
-
-        // --- Diario
-        col.addView(ctx.titoloSezione("Registro attività"))
-        diario = ctx.testo(Diario.leggi(ctx), 12.5f).apply { setTextIsSelectable(true); typeface = android.graphics.Typeface.MONOSPACE }
-        col.addView(ctx.bottone("Aggiorna", pieno = false) { diario.text = Diario.leggi(ctx) })
-        col.addView(diario)
-        col.addView(ctx.testo("\nClassePiù ${BuildConfig.VERSION_NAME}", 12f, alpha = .6f))
-
-        return ScrollView(ctx).apply { addView(col) }
+        return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
     }
 
-    override fun onHiddenChanged(hidden: Boolean) {
-        super.onHiddenChanged(hidden)
-        if (!hidden && ::diario.isInitialized) diario.text = Diario.leggi(requireContext())
+    /** Pulsante a pillola azzurro. */
+    private fun pillola(ctx: android.content.Context, s: String, size: Float, coloreTesto: Int, sfondo: Int, altezza: Int) = TextView(ctx).apply {
+        text = s
+        textSize = size
+        setTextColor(coloreTesto)
+        gravity = Gravity.CENTER
+        maxLines = 1
+        includeFontPadding = false
+        background = GradientDrawable().apply { setColor(sfondo); cornerRadius = altezza / 2f }
+        isClickable = true
+        isFocusable = true
+    }
+
+    /** Campo con scritta grande in grassetto e linea sotto, come "ricevitore" e "token" nella bozza. */
+    private fun campoSottolineato(ctx: android.content.Context, etichetta: String, password: Boolean) = EditText(ctx).apply {
+        hint = etichetta
+        setHintTextColor(nero)
+        setTextColor(nero)
+        textSize = 15f
+        setSingleLine(true)
+        minHeight = ctx.dp(72)
+        gravity = Gravity.CENTER_VERTICAL
+        backgroundTintList = ColorStateList.valueOf(nero)
+        setPadding(ctx.dp(0), ctx.dp(8), ctx.dp(0), ctx.dp(8))
+        inputType = if (password) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+        // scritta del campo vuoto grande e in grassetto, testo inserito più piccolo
+        val aggiorna = { textSize = if (text.isNullOrEmpty()) 25f else 15f; setTypeface(null, if (text.isNullOrEmpty()) Typeface.BOLD else Typeface.NORMAL) }
+        addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) { aggiorna() }
+        })
+        aggiorna()
+    }
+
+    /** Riga con testo a sinistra e interruttore azzurro a destra; si salva appena lo tocchi. */
+    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, cambia: (Boolean) -> Unit): MaterialSwitch {
+        val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        val sw = MaterialSwitch(ctx).apply {
+            isChecked = acceso
+            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt()))
+            thumbTintList = ColorStateList.valueOf(Color.WHITE)
+            trackDecorationTintList = ColorStateList.valueOf(0xFF333333.toInt())
+            setOnCheckedChangeListener { _, on -> cambia(on) }
+        }
+        val t = TextView(ctx).apply { text = testo; textSize = 19f; setTextColor(nero) }
+        col.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.TOP
+            addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(sw, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(12) })
+            setOnClickListener { sw.toggle() }
+        }, piena().apply { topMargin = sopra })
+        return sw
     }
 
     private fun messaggio(s: String) {
-        view?.let { com.google.android.material.snackbar.Snackbar.make(it, s, com.google.android.material.snackbar.Snackbar.LENGTH_SHORT).show() }
+        view?.let { Snackbar.make(it, s, Snackbar.LENGTH_SHORT).show() }
     }
 
     private fun esegui(titolo: String, lavoro: () -> String) {
@@ -208,7 +216,10 @@ class ImpostazioniFragment : Fragment() {
                 .setMessage(r.getOrElse { "Non riuscito:\n${it.message ?: it.javaClass.simpleName}" })
                 .setPositiveButton("OK", null)
                 .show()
-            diario.text = Diario.leggi(ctx)
         }
+    }
+
+    companion object {
+        val ORE = listOf(2, 4, 8, 24)
     }
 }
