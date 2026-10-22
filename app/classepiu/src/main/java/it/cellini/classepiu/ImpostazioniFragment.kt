@@ -72,7 +72,7 @@ class ImpostazioniFragment : Fragment() {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             clipChildren = false
-            addView(profilo, LinearLayout.LayoutParams(ctx.dp(80), ctx.dp(64)))
+            addView(profilo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(64))) // largo quanto serve: si legge tutto "Profilo"
             addView(esci, LinearLayout.LayoutParams(0, ctx.dp(64), 1f).apply { leftMargin = ctx.dp(10) })
         }, piena())
 
@@ -81,8 +81,8 @@ class ImpostazioniFragment : Fragment() {
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
         col.addView(ricevitore, piena().apply { topMargin = ctx.dp(34) })
         col.addView(token, piena().apply { topMargin = ctx.dp(10) })
-        val salva = pillola(ctx, "salva credenziali", 19f, 0xFF333333.toInt(), azzurro, ctx.dp(24)).apply {
-            setPadding(ctx.dp(10), 0, ctx.dp(10), 0)
+        val salva = pillola(ctx, "salva credenziali", 19f, 0xFF474747.toInt(), azzurro, ctx.dp(34)).apply { // testo schiarito del 10%
+            setPadding(ctx.dp(16), 0, ctx.dp(16), 0)
             setOnClickListener {
                 imp.ricevitoreUrl = ricevitore.text.toString()
                 imp.ricevitoreCodice = token.text.toString()
@@ -90,7 +90,7 @@ class ImpostazioniFragment : Fragment() {
                 messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "Salvato: si usa il ricevitore già inserito nell'app." else "Credenziali del ricevitore salvate.")
             }
         }
-        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(24)).apply {
+        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(34)).apply {
             gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(14)
         })
 
@@ -110,14 +110,16 @@ class ImpostazioniFragment : Fragment() {
         }
 
         // --- intervallo: 2, 4, 8, 24 ore
-        val gruppo = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL; setPadding(ctx.dp(8), 0, 0, 0) }
+        val gruppo = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL; setPadding(0, 0, 0, 0) }
         val scelta = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
         ORE.forEach { h ->
             gruppo.addView(RadioButton(ctx).apply {
-                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 19f; setTextColor(nero)
+                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 18f; setTextColor(nero)
                 buttonTintList = ColorStateList.valueOf(azzurro)
                 isChecked = h == scelta
-                setPadding(ctx.dp(4), 0, ctx.dp(10), 0)
+                setPadding(ctx.dp(2), 0, 0, 0)
+                // le quattro scelte si dividono la riga: nessuna resta tagliata con il solo cerchietto
+                layoutParams = RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
             })
         }
         gruppo.setOnCheckedChangeListener { g, id ->
@@ -128,7 +130,7 @@ class ImpostazioniFragment : Fragment() {
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(10) })
 
         // --- invia subito l'ultima circolare
-        val ultima = pillola(ctx, "Invia subito l'ultima circolare!", 20f, 0xFF333333.toInt(), azzurro, ctx.dp(32)).apply {
+        val ultima = pillola(ctx, "invia subito l'ultima circolare!", 20f, 0xFF333333.toInt(), azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(12), 0, ctx.dp(12), 0)
             setOnClickListener {
                 esegui("Ultima circolare") {
@@ -140,7 +142,7 @@ class ImpostazioniFragment : Fragment() {
                 }
             }
         }
-        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(32)).apply { topMargin = ctx.dp(28) })
+        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(32)).apply { topMargin = ctx.dp(12) })
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
     }
