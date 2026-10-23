@@ -255,7 +255,8 @@ fun leggiStato(grezzo: String): Map<String, Int> {
     val m = HashMap<String, Int>()
     for (i in 0 until a.length()) {
         val o = a.optJSONObject(i) ?: continue
-        val id = idDi(o).ifEmpty { continue }
+        val id = idDi(o)
+        if (id.isEmpty()) continue
         val t = o.toString().lowercase()
         val v = when {
             t.contains("\"aba") || t.contains("assen") || t.contains("absen") -> 2
