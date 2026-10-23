@@ -126,7 +126,7 @@ class ClasseViva(private val utente: String, private val password: String) {
         return Circolare(
             evtCode = o.optString("evtCode"),
             pubId = o.optString("pubId"),
-            titolo = o.optString("cnttitle").ifBlank { "circolare" },
+            titolo = o.optString("cntTitle").ifBlank { "circolare" },
             data = o.optString("cntValidFrom"),
             categoria = o.optString("cntCategory"),
             testo = o.optString("cntText"),
