@@ -166,6 +166,13 @@ class ClasseViva(private val utente: String, private val password: String) {
         return r.codice to r.testo
     }
 
+    /** Presenze della classe in un giorno (yyyyMMdd): risposta grezza, letta da leggiStato. */
+    fun statoGrezzo(tipo: String, classeId: String, giorno: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val r = http("GET", "$BASE/teachers/$id/students/status2/${tipo.ifEmpty { "ordinary" }}/$classeId/$giorno")
+        return r.codice to r.testo
+    }
+
     /** Segna la circolare come letta (come quando la si apre sull'app). */
     fun segnaLetta(c: Circolare, aderisci: Boolean = false): Boolean {
         if (percorso.isEmpty()) bacheca()
@@ -201,32 +208,63 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 }
 
-/** Cognome e nome di ogni studente dalla risposta di ClasseViva (campi dedotti, lettura tollerante). */
-fun leggiStudenti(grezzo: String): List<String> {
-    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyList() }
-    fun trova(v: Any?, liv: Int = 0): JSONArray? {
-        if (v is JSONArray) return v
-        if (v is JSONObject && liv < 3) {
-            for (k in listOf("students", "items", "data", "pupils")) v.optJSONArray(k)?.let { return it }
-            for (k in v.keys()) trova(v.opt(k), liv + 1)?.let { return it }
-        }
-        return null
+data class Studente(val id: String, val nome: String)
+
+private fun trovaArrayGenerico(v: Any?, chiavi: List<String>, liv: Int = 0): JSONArray? {
+    if (v is JSONArray) return v
+    if (v is JSONObject && liv < 3) {
+        for (k in chiavi) v.optJSONArray(k)?.let { return it }
+        for (k in v.keys()) trovaArrayGenerico(v.opt(k), chiavi, liv + 1)?.let { return it }
     }
-    val a = trova(radice) ?: return emptyList()
+    return null
+}
+
+private fun idDi(o: JSONObject): String {
+    val s = o.optJSONObject("student") ?: o
+    for (k in listOf("studentId", "id", "student_id", "pupilId")) {
+        val v = s.opt(k) ?: o.opt(k)
+        if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) return v.toString()
+    }
+    return ""
+}
+
+/** Studenti di una classe dalla risposta di ClasseViva (campi dedotti, lettura tollerante). */
+fun leggiStudenti(grezzo: String): List<Studente> {
+    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyList() }
+    val a = trovaArrayGenerico(radice, listOf("students", "items", "data", "pupils")) ?: return emptyList()
     fun JSONObject.t(vararg ks: String): String {
         for (k in ks) { val v = opt(k); if (v is String && v.isNotBlank()) return v.trim() }
         return ""
     }
-    val nomi = (0 until a.length()).mapNotNull { i ->
+    val lista = (0 until a.length()).mapNotNull { i ->
         val o = a.optJSONObject(i) ?: return@mapNotNull null
         val s = o.optJSONObject("student") ?: o
         val cognome = s.t("lastName", "surname", "cognome", "studentLastName")
         val nome = s.t("firstName", "name", "nome", "studentFirstName")
         val intero = s.t("studentName", "fullName", "completeName")
         val r = listOf(cognome, nome).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { intero }
-        r.takeIf { it.isNotEmpty() }
+        if (r.isEmpty()) null else Studente(idDi(o), r.lowercase().split(" ").joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } })
     }
-    return nomi.map { n -> n.lowercase().split(" ").joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } } }.distinct().sorted()
+    return lista.distinctBy { it.nome }.sortedBy { it.nome }
+}
+
+/** Stato di presenza per id studente: 0 presente, 1 altra condizione (ritardo, uscita...), 2 assente. Vuota = nessun dato. */
+fun leggiStato(grezzo: String): Map<String, Int> {
+    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
+    val a = trovaArrayGenerico(radice, listOf("students", "items", "data", "status", "pupils")) ?: return emptyMap()
+    val m = HashMap<String, Int>()
+    for (i in 0 until a.length()) {
+        val o = a.optJSONObject(i) ?: continue
+        val id = idDi(o).ifEmpty { continue }
+        val t = o.toString().lowercase()
+        val v = when {
+            t.contains("\"aba") || t.contains("assen") || t.contains("absen") -> 2
+            t.contains("\"abr") || t.contains("\"abu") || t.contains("ritard") || t.contains("uscit") || t.contains("late") || t.contains("\"abl") -> 1
+            else -> 0
+        }
+        m[id] = maxOf(m[id] ?: 0, v)
+    }
+    return m
 }
 
 /** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */
