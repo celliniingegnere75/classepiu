@@ -133,21 +133,6 @@ class ImpostazioniFragment : Fragment() {
         }
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(6) })
 
-        // --- invia subito l'ultima circolare
-        val ultima = pillola(ctx, "invia subito l'ultima circolare!", 16f, 0xFF333333.toInt(), azzurro, ctx.dp(42)).apply {
-            setPadding(ctx.dp(14), ctx.dp(8), ctx.dp(14), ctx.dp(8))
-            setOnClickListener {
-                esegui("Ultima circolare") {
-                    val cv = Impostazioni(ctx).client()
-                    cv.login()
-                    val c = cv.bacheca().firstOrNull() ?: throw IllegalStateException("Bacheca vuota.")
-                    val n = Controllo.inviaOra(ctx.applicationContext, c)
-                    "Inviata: ${c.titolo}\nAllegati: $n su ${c.allegati.size}."
-                }
-            }
-        }
-        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(16) })
-
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
     }
 
