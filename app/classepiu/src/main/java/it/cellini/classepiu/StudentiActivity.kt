@@ -69,7 +69,7 @@ class StudentiActivity : AppCompatActivity() {
         for (i in 0..giorniTotali) {
             val g = (inizio.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, i) }
             val numero = TextView(ctx).apply {
-                text = g.get(Calendar.DAY_OF_MONTH).toString(); textSize = 18f; gravity = Gravity.CENTER
+                text = g.get(Calendar.DAY_OF_MONTH).toString(); setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24f); gravity = Gravity.CENTER
             }
             val cella = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
@@ -125,7 +125,8 @@ class StudentiActivity : AppCompatActivity() {
         celle.forEach { (t, c) ->
             val sel = c.get(Calendar.DAY_OF_YEAR) == g.get(Calendar.DAY_OF_YEAR) && c.get(Calendar.YEAR) == g.get(Calendar.YEAR)
             t.setTextColor(Color.WHITE)
-            t.textSize = if (sel) 27f else 18f
+            // in dp (non in sp): con il carattere di sistema grande Android non scala in modo lineare e il rapporto non sarebbe 1,5
+            t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, if (sel) 36f else 24f)
             t.setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
         }
     }
