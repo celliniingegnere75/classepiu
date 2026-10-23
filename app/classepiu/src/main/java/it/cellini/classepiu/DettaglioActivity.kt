@@ -161,7 +161,7 @@ class DettaglioActivity : AppCompatActivity() {
                     cv.login(); cv.bacheca(); cv.segnaLetta(c, aderisci = true)
                 }
             }
-            avviso(if (r.getOrDefault(false)) "adesione registrata su classeviva." else "adesione non riuscita: ${r.exceptionornull()?.message ?: "risposta inattesa del server"}")
+            avviso(if (r.getOrDefault(false)) "adesione registrata su classeviva." else "adesione non riuscita: ${r.exceptionOrNull()?.message ?: "risposta inattesa del server"}")
         }
     }
 
@@ -173,7 +173,7 @@ class DettaglioActivity : AppCompatActivity() {
                     cv.login(); cv.bacheca(); cv.segnaLetta(c)
                 }
             }
-            avviso(if (r.getOrDefault(false)) "segnata come letta." else "non riuscito: ${r.exceptionornull()?.message ?: "risposta inattesa"}")
+            avviso(if (r.getOrDefault(false)) "segnata come letta." else "non riuscito: ${r.exceptionOrNull()?.message ?: "risposta inattesa"}")
         }
     }
 }
