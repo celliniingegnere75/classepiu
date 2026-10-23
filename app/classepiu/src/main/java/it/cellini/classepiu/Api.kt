@@ -268,6 +268,18 @@ fun leggiStato(grezzo: String): Map<String, Int> {
         val id = idDi(o)
         if (id.isEmpty()) continue
         val ss = mutableListOf<String>().also { stringhe(o, it) }
+        // codici di ClasseViva: AT00 presente, ABA0 assente, ABR*/ABU* ritardo/uscita; altri (es. nessuna lezione) = nessun dato
+        val codici = ss.map { it.uppercase() }.filter { it.length == 4 && it[0].isLetter() }
+        if (codici.isNotEmpty()) {
+            val v = when {
+                codici.any { it.startsWith("ABA") } -> 2
+                codici.any { it.startsWith("AB") } -> 1
+                codici.any { it.startsWith("AT") } -> 0
+                else -> -1
+            }
+            m[id] = maxOf(m[id] ?: -1, v)
+            continue
+        }
         val assente = ss.any { it == "absent" || it.startsWith("aba") || it.contains("assen") }
         val altro = ss.any { it == "late" || it == "shortlate" || it == "leaving" || it.startsWith("abr") || it.startsWith("abu") }
         val presente = ss.any { it == "present" || it == "presentinternship" || it == "presenteducationaltrip" }
