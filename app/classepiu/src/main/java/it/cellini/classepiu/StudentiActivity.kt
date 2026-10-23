@@ -66,12 +66,13 @@ class StudentiActivity : AppCompatActivity() {
         for (i in 0..giorniTotali) {
             val g = (inizio.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, i) }
             val numero = TextView(ctx).apply {
-                text = g.get(Calendar.DAY_OF_MONTH).toString(); textSize = 18f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+                text = g.get(Calendar.DAY_OF_MONTH).toString(); textSize = 18f; gravity = Gravity.CENTER
             }
             val cella = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 addView(TextView(ctx).apply { text = sigle[g.get(Calendar.DAY_OF_WEEK) - 1].toString(); textSize = 13f; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
-                addView(numero, LinearLayout.LayoutParams(dp(40), dp(40)).apply { topMargin = dp(4) })
+                numero.minHeight = dp(40)
+                addView(numero, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
                 setOnClickListener { seleziona(g) }
             }
             celle.add(numero to g)
@@ -104,8 +105,9 @@ class StudentiActivity : AppCompatActivity() {
         data.text = SimpleDateFormat("EEEE d MMMM yyyy", Locale.ITALIAN).format(g.time).uppercase()
         celle.forEach { (t, c) ->
             val sel = c.get(Calendar.DAY_OF_YEAR) == g.get(Calendar.DAY_OF_YEAR) && c.get(Calendar.YEAR) == g.get(Calendar.YEAR)
-            t.setTextColor(if (sel) azzurro else Color.WHITE)
-            t.background = if (sel) GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE) } else null
+            t.setTextColor(Color.WHITE)
+            t.textSize = if (sel) 27f else 18f
+            t.setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
         }
     }
 
