@@ -139,7 +139,8 @@ class ImpostazioniFragment : Fragment() {
             imp.oreIntervallo = (g.findViewById<RadioButton>(id)?.tag as? Int) ?: 2
             Controllo.pianifica(ctx)
         }
-        col.addView(gruppo, piena().apply { topMargin = ctx.dp(10) })
+        // la riga parte più a sinistra (cerchietto allineato alle scritte) e guadagna spazio a destra: "24 ore" non si taglia
+        col.addView(gruppo, piena().apply { topMargin = ctx.dp(10); leftMargin = -ctx.dp(12) })
         aggiornaOre(imp.controlloAutomatico)
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
@@ -186,6 +187,9 @@ class ImpostazioniFragment : Fragment() {
             isChecked = acceso
             trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt()))
             thumbTintList = ColorStateList.valueOf(Color.WHITE)
+            // pallino sempre della stessa dimensione, sia acceso sia spento
+            thumbDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(ctx.dp(24), ctx.dp(24)) }
+            thumbIconDrawable = null
             trackDecorationTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt())) // stesso colore della barra: nessun bordo scuro
             setOnCheckedChangeListener { _, on -> cambia(on) }
         }
