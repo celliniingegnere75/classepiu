@@ -89,16 +89,17 @@ class RegistroFragment : Fragment() {
 
         // --- le due schede a pillola
         fun scheda(testo: String, prima: Boolean) = TextView(ctx).apply {
-            text = testo; textSize = 17f; gravity = Gravity.CENTER; includeFontPadding = false
-            setPadding(ctx.dp(20), 0, ctx.dp(20), 0)
+            text = testo; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false
+            setSingleLine(true); ellipsize = null
+            setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             setOnClickListener { cambiaScheda(prima) }
         }
         schedaMie = scheda("Le mie classi", true)
         schedaTutte = scheda("Tutte le classi", false)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            addView(schedaMie, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(44)))
-            addView(schedaTutte, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(44)).apply { leftMargin = ctx.dp(10) })
+            addView(schedaMie, LinearLayout.LayoutParams(0, ctx.dp(44), 1f))
+            addView(schedaTutte, LinearLayout.LayoutParams(0, ctx.dp(44), 1f).apply { leftMargin = ctx.dp(10) })
         }
 
         // --- elenco
@@ -139,7 +140,7 @@ class RegistroFragment : Fragment() {
             setPadding(ctx.dp(14), ctx.dp(10), ctx.dp(14), 0)
             addView(titolo)
             addView(campoCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8); bottomMargin = ctx.dp(8) })
+            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8); bottomMargin = ctx.dp(8) })
             addView(corpo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
@@ -262,8 +263,8 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
                 addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }
-            val descrizione = TextView(ctx).apply { textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF222222.toInt()) }
-            val codice = TextView(ctx).apply { textSize = 16f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(4), 0, 0) }
+            val descrizione = TextView(ctx).apply { textSize = 14.4f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF222222.toInt()) }
+            val codice = TextView(ctx).apply { textSize = 12.8f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(4), 0, 0) }
             val testi = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL

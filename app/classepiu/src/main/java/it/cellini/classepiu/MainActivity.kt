@@ -158,7 +158,9 @@ class MainActivity : AppCompatActivity() {
             }
             val etichetta = TextView(this).apply {
                 text = nome
-                textSize = 14.5f
+                textSize = 12f
+                maxLines = 1
+                setSingleLine(true)
                 gravity = Gravity.CENTER
                 includeFontPadding = false
             }

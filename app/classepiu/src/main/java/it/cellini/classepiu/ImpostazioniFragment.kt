@@ -43,17 +43,27 @@ class ImpostazioniFragment : Fragment() {
             setPadding(ctx.dp(15), ctx.dp(12), ctx.dp(15), ctx.dp(24))
         }
 
-        // --- Profilo + esci o cambia account
-        val profilo = FrameLayout(ctx).apply {
-            clipChildren = false
-            addView(View(ctx).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(azzurro) } },
-                FrameLayout.LayoutParams(ctx.dp(60), ctx.dp(60), Gravity.CENTER_VERTICAL or Gravity.START).apply { leftMargin = ctx.dp(6) })
-            addView(TextView(ctx).apply {
-                text = "Profilo"; textSize = 23f; setTypeface(typeface, Typeface.BOLD); setTextColor(nero)
-                maxLines = 1
-            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER_VERTICAL))
+        // --- Profilo: cerchio con sagoma di persona, nome e account; sotto la pillola per uscire
+        val avatar = FrameLayout(ctx).apply {
+            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(azzurro) }
+            addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_profilo) },
+                FrameLayout.LayoutParams(ctx.dp(34), ctx.dp(34), Gravity.CENTER))
         }
-        val esci = pillola(ctx, "esci o cambia account", 22f, Color.WHITE, azzurro, ctx.dp(64)).apply {
+        val nomeProfilo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(ctx).apply { text = "Profilo"; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(nero) })
+            addView(TextView(ctx).apply {
+                text = imp.utente; textSize = 13f; setTextColor(0xFF666666.toInt()); maxLines = 1
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            })
+        }
+        col.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(avatar, LinearLayout.LayoutParams(ctx.dp(56), ctx.dp(56)))
+            addView(nomeProfilo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = ctx.dp(14) })
+        }, piena())
+        val esci = pillola(ctx, "esci o cambia account", 17f, Color.WHITE, azzurro, ctx.dp(44)).apply {
             setOnClickListener {
                 MaterialAlertDialogBuilder(ctx)
                     .setMessage("Accesso come ${imp.utente}.\nUscire dall'account ClasseViva? Il controllo automatico si ferma finché non accedi di nuovo.")
@@ -68,20 +78,14 @@ class ImpostazioniFragment : Fragment() {
                     .show()
             }
         }
-        col.addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            clipChildren = false
-            addView(profilo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(64))) // largo quanto serve: si legge tutto "Profilo"
-            addView(esci, LinearLayout.LayoutParams(0, ctx.dp(64), 1f).apply { leftMargin = ctx.dp(10) })
-        }, piena())
+        col.addView(esci, piena().apply { height = ctx.dp(44); topMargin = ctx.dp(14) })
 
         // --- ricevitore e token
         val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
-        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(34) })
-        col.addView(token, piena().apply { topMargin = ctx.dp(10) })
-        val salva = pillola(ctx, "salva credenziali", 19f, 0xFF474747.toInt(), azzurro, ctx.dp(34)).apply { // testo schiarito del 10%
+        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(22) })
+        col.addView(token, piena().apply { topMargin = ctx.dp(4) })
+        val salva = pillola(ctx, "salva credenziali", 16f, 0xFF474747.toInt(), azzurro, ctx.dp(38)).apply { // testo schiarito del 10%
             setPadding(ctx.dp(16), 0, ctx.dp(16), 0)
             setOnClickListener {
                 imp.ricevitoreUrl = ricevitore.text.toString()
@@ -90,20 +94,20 @@ class ImpostazioniFragment : Fragment() {
                 messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "Salvato: si usa il ricevitore già inserito nell'app." else "Credenziali del ricevitore salvate.")
             }
         }
-        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(34)).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(14)
+        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(38)).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(12)
         })
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(44)) { on ->
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(22)) { on ->
             imp.invioMail = on
             messaggio(if (on) "Invio mail attivato." else "Invio mail disattivato.")
         }
-        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(18)) { on ->
+        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(14)) { on ->
             imp.segnaLette = on
             messaggio(if (on) "Le circolari inviate verranno segnate come lette." else "Le circolari inviate resteranno da leggere.")
         }
-        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(18)) { on ->
+        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(14)) { on ->
             imp.controlloAutomatico = on
             Controllo.pianifica(ctx)
             messaggio(if (on) "Controllo periodico attivato." else "Controllo periodico disattivato.")
@@ -114,7 +118,7 @@ class ImpostazioniFragment : Fragment() {
         val scelta = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
         ORE.forEach { h ->
             gruppo.addView(RadioButton(ctx).apply {
-                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 18f; setTextColor(nero)
+                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 15f; setTextColor(nero)
                 buttonTintList = ColorStateList.valueOf(azzurro)
                 isChecked = h == scelta
                 setPadding(ctx.dp(2), 0, 0, 0)
@@ -127,10 +131,10 @@ class ImpostazioniFragment : Fragment() {
             Controllo.pianifica(ctx)
             messaggio("Controllo ogni ${imp.oreIntervallo} ore.")
         }
-        col.addView(gruppo, piena().apply { topMargin = ctx.dp(10) })
+        col.addView(gruppo, piena().apply { topMargin = ctx.dp(6) })
 
         // --- invia subito l'ultima circolare
-        val ultima = pillola(ctx, "invia subito l'ultima circolare!", 20f, 0xFF333333.toInt(), azzurro, ctx.dp(32)).apply {
+        val ultima = pillola(ctx, "invia subito l'ultima circolare!", 16f, 0xFF333333.toInt(), azzurro, ctx.dp(42)).apply {
             setPadding(ctx.dp(12), 0, ctx.dp(12), 0)
             setOnClickListener {
                 esegui("Ultima circolare") {
@@ -142,7 +146,7 @@ class ImpostazioniFragment : Fragment() {
                 }
             }
         }
-        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(32)).apply { topMargin = ctx.dp(12) })
+        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(42)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(16) })
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
     }
@@ -167,13 +171,13 @@ class ImpostazioniFragment : Fragment() {
         setTextColor(nero)
         textSize = 15f
         setSingleLine(true)
-        minHeight = ctx.dp(72)
+        minHeight = ctx.dp(56)
         gravity = Gravity.CENTER_VERTICAL
         backgroundTintList = ColorStateList.valueOf(nero)
         setPadding(ctx.dp(0), ctx.dp(8), ctx.dp(0), ctx.dp(8))
         inputType = if (password) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         // scritta del campo vuoto grande (senza grassetto), testo inserito più piccolo
-        val aggiorna = { textSize = if (text.isNullOrEmpty()) 25f else 15f; setTypeface(null, Typeface.NORMAL) }
+        val aggiorna = { textSize = if (text.isNullOrEmpty()) 20f else 14f; setTypeface(null, Typeface.NORMAL) }
         addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
@@ -192,7 +196,7 @@ class ImpostazioniFragment : Fragment() {
             trackDecorationTintList = ColorStateList.valueOf(0xFF333333.toInt())
             setOnCheckedChangeListener { _, on -> cambia(on) }
         }
-        val t = TextView(ctx).apply { text = testo; textSize = 19f; setTextColor(nero) }
+        val t = TextView(ctx).apply { text = testo; textSize = 16f; setTextColor(nero) }
         col.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.TOP
