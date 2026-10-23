@@ -26,10 +26,13 @@ class StudentiActivity : AppCompatActivity() {
     private val azzurro = 0xFF69BCE8.toInt()
     private lateinit var lista: LinearLayout
     private lateinit var data: TextView
+    private var striscia: HorizontalScrollView? = null
     private val celle = ArrayList<Pair<TextView, Calendar>>()
     private var studenti: List<Studente> = emptyList()
     private var selezionato: Calendar = Calendar.getInstance()
     private var lavoro: Job? = null
+    private var indiceCorrente = 120
+    private var indiceCaricato = 120
     private var tipo = ""
     private var classeId = ""
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
@@ -58,7 +61,7 @@ class StudentiActivity : AppCompatActivity() {
         // striscia dei giorni scorrevole: a destra le date precedenti, a sinistra le successive
         val larghezzaCella = resources.displayMetrics.widthPixels / 7
         val sigle = "DLMMGVS"
-        val riga = LinearLayout(ctx).apply { gravity = Gravity.CENTER }
+        val riga = LinearLayout(ctx).apply { gravity = Gravity.CENTER; setPadding(3 * larghezzaCella, 0, 3 * larghezzaCella, 0) }
         val oggi = Calendar.getInstance()
         val inizio = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -120) }
         val giorniTotali = 120 + 60
@@ -73,13 +76,29 @@ class StudentiActivity : AppCompatActivity() {
                 addView(TextView(ctx).apply { text = sigle[g.get(Calendar.DAY_OF_WEEK) - 1].toString(); textSize = 13f; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
                 numero.minHeight = dp(40)
                 addView(numero, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
-                setOnClickListener { seleziona(g) }
+                setOnClickListener { striscia?.smoothScrollTo(i * larghezzaCella, 0) }
             }
             celle.add(numero to g)
             riga.addView(cella, LinearLayout.LayoutParams(larghezzaCella, ViewGroup.LayoutParams.WRAP_CONTENT))
             if (i == 120) cellaOggi = cella
         }
         val striscia = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(riga) }
+        this.striscia = striscia
+        // il giorno al centro della striscia è quello selezionato: la data in alto si aggiorna mentre si scorre
+        val assesta = Runnable {
+            striscia.smoothScrollTo(indiceCorrente * larghezzaCella, 0)
+            if (indiceCorrente != indiceCaricato) {
+                indiceCaricato = indiceCorrente
+                mostra(emptyMap(), caricamento = true)
+                caricaStato()
+            }
+        }
+        striscia.setOnScrollChangeListener { v, x, _, _, _ ->
+            val idx = ((x + larghezzaCella / 2) / larghezzaCella).coerceIn(0, giorniTotali)
+            if (idx != indiceCorrente) { indiceCorrente = idx; colora(celle[idx].second) }
+            v.removeCallbacks(assesta)
+            v.postDelayed(assesta, 150)
+        }
 
         lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(16), dp(14), dp(16)) }
         val pannello = ScrollView(ctx).apply {
@@ -95,7 +114,7 @@ class StudentiActivity : AppCompatActivity() {
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         })
         // oggi selezionato e al centro della striscia
-        striscia.post { striscia.scrollTo((cellaOggi?.left ?: 0) - 3 * larghezzaCella, 0) }
+        striscia.post { striscia.scrollTo(120 * larghezzaCella, 0) }
         colora(oggi)
         carica()
     }
@@ -109,12 +128,6 @@ class StudentiActivity : AppCompatActivity() {
             t.textSize = if (sel) 27f else 18f
             t.setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
         }
-    }
-
-    private fun seleziona(g: Calendar) {
-        colora(g)
-        mostra(emptyMap(), caricamento = true)
-        caricaStato()
     }
 
     /** Carica l'elenco studenti una volta, poi le presenze del giorno. */
