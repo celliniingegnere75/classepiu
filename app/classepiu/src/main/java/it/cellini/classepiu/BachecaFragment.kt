@@ -53,14 +53,14 @@ class BachecaFragment : Fragment() {
         val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
         val statoSel = arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf())
         val layoutCerca = TextInputLayout(ctx).apply {
-            hint = "Cerca nelle circolari"
+            hint = "cerca nelle circolari"
             boxStrokeColor = celeste
             hintTextColor = android.content.res.ColorStateList.valueOf(celeste)
             addView(campoCerca)
         }
 
         val chips = ChipGroup(ctx).apply { isSingleSelection = true; isSelectionRequired = true }
-        listOf("Tutte", "Da leggere").forEachIndexed { i, s ->
+        listOf("tutte", "da leggere").forEachIndexed { i, s ->
             chips.addView(Chip(ctx).apply {
                 text = s; isCheckable = true; isChecked = i == 0; id = View.generateViewId()
                 setOnClickListener { filtro = i; mostra() }
@@ -93,7 +93,7 @@ class BachecaFragment : Fragment() {
             addView(vuoto)
         }
         val fab = ExtendedFloatingActionButton(ctx).apply {
-            text = "Controlla ed inoltra"
+            text = "controlla ed inoltra"
             setIconResource(android.R.drawable.ic_dialog_email)
             backgroundTintList = android.content.res.ColorStateList.valueOf(celeste)
             setTextColor(0xFFFFFFFF.toInt())
@@ -133,7 +133,7 @@ class BachecaFragment : Fragment() {
         val imp = Impostazioni(ctx)
         if (!imp.pronta) {
             aggiorna.isRefreshing = false
-            vuoto.text = "Inserisci utente e password ClasseViva nella scheda Impostazioni."
+            vuoto.text = "inserisci utente e password classeviva nella scheda impostazioni."
             vuoto.visibility = View.VISIBLE
             return
         }
@@ -152,7 +152,7 @@ class BachecaFragment : Fragment() {
                 runCatching { cache().writeText(JSONArray().apply { lista.forEach { put(it.json()) } }.toString()) }
                 mostra()
             }.onFailure { e ->
-                view?.let { Snackbar.make(it, e.message ?: "Errore", Snackbar.LENGTH_LONG).show() }
+                view?.let { Snackbar.make(it, e.message ?: "errore", Snackbar.LENGTH_LONG).show() }
                 mostra()
             }
         }
@@ -161,11 +161,11 @@ class BachecaFragment : Fragment() {
     private fun controllaOra(v: View) {
         val ctx = requireContext()
         v.isEnabled = false
-        Snackbar.make(v, "Controllo in corso…", Snackbar.LENGTH_SHORT).show()
+        Snackbar.make(v, "controllo in corso…", Snackbar.LENGTH_SHORT).show()
         viewLifecycleOwner.lifecycleScope.launch {
             val esito = withContext(Dispatchers.IO) { runCatching { Controllo.esegui(ctx.applicationContext) } }
             v.isEnabled = true
-            val msg = esito.fold({ it.messaggio + if (!Impostazioni(ctx).mailPronta) " (mail non configurata)" else "" }, { "Errore: ${it.message}" })
+            val msg = esito.fold({ it.messaggio + if (!Impostazioni(ctx).mailPronta) " (mail non configurata)" else "" }, { "errore: ${it.message}" })
             view?.let { Snackbar.make(it, msg, Snackbar.LENGTH_LONG).show() }
             carica()
         }
@@ -182,7 +182,7 @@ class BachecaFragment : Fragment() {
         adattatore.dati = vis
         adattatore.notifyDataSetChanged()
         if (::vuoto.isInitialized && Impostazioni(requireContext()).pronta) {
-            vuoto.text = if (tutte.isEmpty()) "Nessuna circolare. Trascina in basso per aggiornare." else "Nessuna circolare con questo filtro."
+            vuoto.text = if (tutte.isEmpty()) "nessuna circolare. trascina in basso per aggiornare." else "nessuna circolare con questo filtro."
             vuoto.visibility = if (vis.isEmpty()) View.VISIBLE else View.GONE
         }
     }
@@ -217,8 +217,8 @@ class BachecaFragment : Fragment() {
             if (c.categoria.isNotBlank()) parti += c.categoria
             if (c.allegati.isNotEmpty()) parti += "${c.allegati.size} allegat" + if (c.allegati.size == 1) "o" else "i"
             h.info.text = parti.joinToString(" · ")
-            val badge = (c.azioni.map { it.uppercase() } + if (c.adesione) listOf("ADESIONE") else emptyList()).joinToString(" · ")
-            h.badge.text = if (badge.isNotEmpty()) "DA FARE: $badge" else ""
+            val badge = (c.azioni + if (c.adesione) listOf("adesione") else emptyList()).joinToString(" · ")
+            h.badge.text = if (badge.isNotEmpty()) "da fare: $badge" else ""
             h.badge.visibility = if (badge.isNotEmpty()) View.VISIBLE else View.GONE
             h.titolo.alpha = if (c.letta) 0.75f else 1f
             h.box.setOnClickListener {

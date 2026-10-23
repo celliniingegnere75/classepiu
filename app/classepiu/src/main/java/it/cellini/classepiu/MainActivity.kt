@@ -149,9 +149,9 @@ class MainActivity : AppCompatActivity() {
             setPadding(dp(14), 0, dp(14), 0)
         }
         listOf(
-            Triple(TAB_REGISTRO, "Registro", R.drawable.ic_nav_registro),
-            Triple(TAB_BACHECA, "Bacheca", R.drawable.ic_nav_bacheca),
-            Triple(TAB_IMPOSTAZIONI, "Impostazioni", R.drawable.ic_nav_impostazioni),
+            Triple(TAB_REGISTRO, "registro", R.drawable.ic_nav_registro),
+            Triple(TAB_BACHECA, "bacheca", R.drawable.ic_nav_bacheca),
+            Triple(TAB_IMPOSTAZIONI, "impostazioni", R.drawable.ic_nav_impostazioni),
         ).forEach { (tab, nome, icona) ->
             val img = ImageView(this).apply { setImageResource(icona) }
             val riquadro = FrameLayout(this).apply {

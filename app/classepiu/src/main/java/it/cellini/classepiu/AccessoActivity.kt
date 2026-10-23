@@ -52,14 +52,14 @@ class AccessoActivity : AppCompatActivity() {
             adjustViewBounds = true
         }, LinearLayout.LayoutParams(dp(250), ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(48) })
 
-        val (boxUtente, campoUtente) = campo("USERNAME/EMAIL", password = false)
+        val (boxUtente, campoUtente) = campo("username/email", password = false)
         campoUtente.setText(imp.utente)
         val (boxPass, campoPass) = campo("PASSWORD", password = true)
         col.addView(boxUtente)
         col.addView(boxPass, piena().apply { topMargin = dp(12) })
 
         col.addView(TextView(this).apply {
-            text = "Password dimenticata?"
+            text = "password dimenticata?"
             setTextColor(0xFF555555.toInt())
             textSize = 17f
             gravity = Gravity.CENTER
@@ -68,7 +68,7 @@ class AccessoActivity : AppCompatActivity() {
         }, piena())
 
         val accedi = MaterialButton(this).apply {
-            text = "ACCEDI"
+            text = "accedi"
             textSize = 18f
             letterSpacing = 0.02f
             cornerRadius = dp(30)

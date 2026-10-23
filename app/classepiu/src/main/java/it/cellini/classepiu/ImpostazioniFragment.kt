@@ -32,6 +32,7 @@ import kotlinx.coroutines.withContext
 class ImpostazioniFragment : Fragment() {
 
     private val nero = 0xFF111111.toInt()
+    private var aggiornaOre: (Boolean) -> Unit = {}
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
@@ -51,7 +52,7 @@ class ImpostazioniFragment : Fragment() {
         }
         val nomeProfilo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(TextView(ctx).apply { text = "Profilo"; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(nero) })
+            addView(TextView(ctx).apply { text = "profilo"; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(nero) })
             addView(TextView(ctx).apply {
                 text = imp.utente; textSize = 13f; setTextColor(0xFF666666.toInt()); maxLines = 1
                 ellipsize = android.text.TextUtils.TruncateAt.END
@@ -66,55 +67,63 @@ class ImpostazioniFragment : Fragment() {
         val esci = pillola(ctx, "esci o cambia account", 17f, Color.WHITE, azzurro, ctx.dp(44)).apply {
             setOnClickListener {
                 MaterialAlertDialogBuilder(ctx)
-                    .setMessage("Uscire dall'account?")
-                    .setPositiveButton("Conferma") { _, _ ->
+                    .setMessage("uscire dall'account?")
+                    .setPositiveButton("conferma") { _, _ ->
                         imp.password = ""
                         imp.controlloAutomatico = false
                         Controllo.pianifica(ctx)
                         startActivity(Intent(ctx, AccessoActivity::class.java))
                         requireActivity().finish()
                     }
-                    .setNegativeButton("Annulla", null)
+                    .setNegativeButton("annulla", null)
                     .show()
             }
         }
-        col.addView(esci, piena().apply { height = ViewGroup.LayoutParams.WRAP_CONTENT; topMargin = ctx.dp(14) })
+        col.addView(esci, piena().apply { height = ViewGroup.LayoutParams.WRAP_CONTENT; topMargin = ctx.dp(16) })
 
         // --- ricevitore e token
         val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
-        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(22) })
+        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(20) })
         col.addView(token, piena().apply { topMargin = ctx.dp(4) })
-        val salva = pillola(ctx, "Salva", 16f, 0xFF474747.toInt(), azzurro, ctx.dp(38)).apply { // testo schiarito del 10%
+        val salva = pillola(ctx, "salva", 16f, Color.WHITE, azzurro, ctx.dp(38)).apply {
             setPadding(ctx.dp(28), ctx.dp(6), ctx.dp(28), ctx.dp(6))
             setOnClickListener {
                 imp.ricevitoreUrl = ricevitore.text.toString()
                 imp.ricevitoreCodice = token.text.toString()
                 imp.usaRicevitore = true
-                messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "Salvato: si usa il ricevitore già inserito nell'app." else "Credenziali del ricevitore salvate.")
+                messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "salvato: si usa il ricevitore già inserito nell'app." else "credenziali del ricevitore salvate.")
             }
         }
         col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(12)
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(16)
         })
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(22)) { on ->
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(26)) { on ->
             imp.invioMail = on
-            messaggio(if (on) "Invio mail attivato." else "Invio mail disattivato.")
+            messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
         }
-        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(14)) { on ->
+        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(20)) { on ->
             imp.segnaLette = on
-            messaggio(if (on) "Le circolari inviate verranno segnate come lette." else "Le circolari inviate resteranno da leggere.")
+            messaggio(if (on) "le circolari inviate verranno segnate come lette." else "le circolari inviate resteranno da leggere.")
         }
-        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(14)) { on ->
+        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(20)) { on ->
             imp.controlloAutomatico = on
             Controllo.pianifica(ctx)
-            messaggio(if (on) "Controllo periodico attivato." else "Controllo periodico disattivato.")
+            aggiornaOre(on)
+            messaggio(if (on) "controllo periodico attivato." else "controllo periodico disattivato.")
         }
 
-        // --- intervallo: 2, 4, 8, 24 ore
+        // --- intervallo: 2, 4, 8, 24 ore (grigio e non selezionabile se il controllo periodico è spento)
         val gruppo = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL; setPadding(0, 0, 0, 0) }
+        aggiornaOre = { acceso ->
+            for (i in 0 until gruppo.childCount) (gruppo.getChildAt(i) as RadioButton).apply {
+                isEnabled = acceso
+                setTextColor(if (acceso) nero else 0xFFA8A8A8.toInt())
+                buttonTintList = ColorStateList.valueOf(if (acceso) azzurro else 0xFFC4C4C4.toInt())
+            }
+        }
         val scelta = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
         ORE.forEach { h ->
             gruppo.addView(RadioButton(ctx).apply {
@@ -129,9 +138,9 @@ class ImpostazioniFragment : Fragment() {
         gruppo.setOnCheckedChangeListener { g, id ->
             imp.oreIntervallo = (g.findViewById<RadioButton>(id)?.tag as? Int) ?: 2
             Controllo.pianifica(ctx)
-            messaggio("Controllo ogni ${imp.oreIntervallo} ore.")
         }
-        col.addView(gruppo, piena().apply { topMargin = ctx.dp(6) })
+        col.addView(gruppo, piena().apply { topMargin = ctx.dp(10) })
+        aggiornaOre(imp.controlloAutomatico)
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
     }
@@ -177,12 +186,11 @@ class ImpostazioniFragment : Fragment() {
             isChecked = acceso
             trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt()))
             thumbTintList = ColorStateList.valueOf(Color.WHITE)
-            trackDecorationTintList = ColorStateList.valueOf(0xFF333333.toInt())
+            trackDecorationTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt())) // stesso colore della barra: nessun bordo scuro
             setOnCheckedChangeListener { _, on -> cambia(on) }
         }
         val t = TextView(ctx).apply {
-            text = testo; textSize = 16f; setTextColor(nero); setSingleLine(true)
-            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, 10, 16, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+            text = testo; textSize = 16f; setTextColor(nero) // va a capo se lo spazio non basta
         }
         col.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -206,7 +214,7 @@ class ImpostazioniFragment : Fragment() {
             if (!isAdded) return@launch
             MaterialAlertDialogBuilder(ctx)
                 .setTitle(titolo)
-                .setMessage(r.getOrElse { "Non riuscito:\n${it.message ?: it.javaClass.simpleName}" })
+                .setMessage(r.getOrElse { "non riuscito:\n${it.message ?: it.javaClass.simpleName}" })
                 .setPositiveButton("OK", null)
                 .show()
         }

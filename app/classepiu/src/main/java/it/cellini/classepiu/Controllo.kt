@@ -33,10 +33,10 @@ object Controllo {
     fun esegui(ctx: Context): Esito {
         val imp = Impostazioni(ctx)
         val archivio = Viste(ctx)
-        if (!imp.pronta) return Esito(0, 0, false, "Credenziali ClasseViva non impostate.")
+        if (!imp.pronta) return Esito(0, 0, false, "credenziali classeviva non impostate.")
         // come cv.py ("Manca il ricevitore"): senza invio configurato non si tocca nulla,
         // così nessuna circolare viene segnata come vista senza essere stata mandata
-        if (imp.invioMail && !imp.mailPronta) throw IllegalStateException("Invio mail non configurato: completa le Impostazioni.")
+        if (imp.invioMail && !imp.mailPronta) throw IllegalStateException("invio mail non configurato: completa le impostazioni.")
         val caricate = archivio.carica()
         val primo = caricate == null
         val viste = caricate ?: mutableMapOf()
@@ -80,8 +80,8 @@ object Controllo {
             viste.keys.retainAll(presenti)
         }
         archivio.salva(viste)
-        val msg = if (primo) "Primo avvio: segnate come già viste ${items.size} circolari."
-        else "Controllo fatto. Circolari nuove: $nuove" + if (errori > 0) ", non inviate: $errori" else ""
+        val msg = if (primo) "primo avvio: segnate come già viste ${items.size} circolari."
+        else "controllo fatto. circolari nuove: $nuove" + if (errori > 0) ", non inviate: $errori" else ""
         Diario.scrivi(ctx, msg)
         return Esito(nuove, errori, primo, msg)
     }
@@ -158,7 +158,7 @@ object Notifiche {
 
     fun creaCanale(ctx: Context) {
         val nm = ctx.getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(NotificationChannel(CANALE, "Nuove circolari", NotificationManager.IMPORTANCE_DEFAULT))
+        nm.createNotificationChannel(NotificationChannel(CANALE, "nuove circolari", NotificationManager.IMPORTANCE_DEFAULT))
     }
 
     fun circolare(ctx: Context, c: Circolare) {
@@ -172,7 +172,7 @@ object Notifiche {
         )
         val n = NotificationCompat.Builder(ctx, CANALE)
             .setSmallIcon(android.R.drawable.ic_dialog_email)
-            .setContentTitle(if (c.azioni.isNotEmpty()) "Circolare da confermare" else "Nuova circolare")
+            .setContentTitle(if (c.azioni.isNotEmpty()) "circolare da confermare" else "nuova circolare")
             .setContentText(c.titolo)
             .setStyle(NotificationCompat.BigTextStyle().bigText(c.titolo))
             .setContentIntent(apri)

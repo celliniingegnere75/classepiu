@@ -47,7 +47,7 @@ class StudentiActivity : AppCompatActivity() {
 
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
-            text = nome; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER; maxLines = 1
+            text = nome; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER; setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END
         }
         val barra = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -121,7 +121,7 @@ class StudentiActivity : AppCompatActivity() {
 
     private fun colora(g: Calendar) {
         selezionato = g
-        data.text = SimpleDateFormat("EEEE d MMMM yyyy", Locale.ITALIAN).format(g.time).uppercase()
+        data.text = SimpleDateFormat("EEEE d MMMM yyyy", Locale.ITALIAN).format(g.time)
         celle.forEach { (t, c) ->
             val sel = c.get(Calendar.DAY_OF_YEAR) == g.get(Calendar.DAY_OF_YEAR) && c.get(Calendar.YEAR) == g.get(Calendar.YEAR)
             t.setTextColor(Color.WHITE)
@@ -133,13 +133,13 @@ class StudentiActivity : AppCompatActivity() {
 
     /** Carica l'elenco studenti una volta, poi le presenze del giorno. */
     private fun carica() {
-        testo("Carico gli studenti…")
+        testo("carico gli studenti…")
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@StudentiActivity).client().studentiGrezzi(tipo, classeId) } }
-            val (codice, corpo) = r.getOrElse { testo("Non riuscito: ${it.message}"); return@launch }
+            val (codice, corpo) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
             studenti = if (codice == 200) leggiStudenti(corpo) else emptyList()
             if (studenti.isEmpty()) {
-                testo(if (codice == 200) "Risposta ricevuta ma nessuno studente riconosciuto." else "ClasseViva ha risposto con un errore (HTTP $codice).", codice, corpo)
+                testo(if (codice == 200) "risposta ricevuta ma nessuno studente riconosciuto." else "classeviva ha risposto con un errore (http $codice).", codice, corpo)
                 return@launch
             }
             mostra(emptyMap(), caricamento = true)
@@ -180,13 +180,13 @@ class StudentiActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(12) })
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
-        if (!caricamento && grezzo != null) copiaRisposta("Copia la risposta di ClasseViva di questo giorno", grezzo.first, "giorno ${formatoApi.format(selezionato.time)}\n${grezzo.second}")
+        if (!caricamento && grezzo != null) copiaRisposta("copia la risposta di classeviva di questo giorno", grezzo.first, "giorno ${formatoApi.format(selezionato.time)}\n${grezzo.second}")
     }
 
     private fun testo(s: String, codice: Int = 0, corpo: String = "") {
         lista.removeAllViews()
         lista.addView(TextView(this).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
-        if (corpo.isNotEmpty()) copiaRisposta("Mostra la risposta di ClasseViva (tocca per copiare)", codice, corpo)
+        if (corpo.isNotEmpty()) copiaRisposta("mostra la risposta di classeviva (tocca per copiare)", codice, corpo)
     }
 
     private fun copiaRisposta(etichetta: String, codice: Int, corpo: String) {
@@ -195,7 +195,7 @@ class StudentiActivity : AppCompatActivity() {
             setOnClickListener {
                 val cm = getSystemService(android.content.ClipboardManager::class.java)
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("risposta", "HTTP $codice\n$corpo"))
-                android.widget.Toast.makeText(context, "Copiata.", android.widget.Toast.LENGTH_SHORT).show()
+                android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
             }
         })
     }

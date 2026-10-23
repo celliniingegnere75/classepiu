@@ -58,7 +58,7 @@ class RegistroFragment : Fragment() {
 
         // --- titolo e lente di ricerca
         val campoCerca = EditText(ctx).apply {
-            hint = "Cerca una classe"
+            hint = "cerca una classe"
             setSingleLine(true)
             textSize = 17f
             visibility = View.GONE
@@ -72,7 +72,7 @@ class RegistroFragment : Fragment() {
             setImageResource(android.R.drawable.ic_menu_search)
             imageTintList = android.content.res.ColorStateList.valueOf(0xFF3F3F3F.toInt())
             setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(8))
-            contentDescription = "Cerca"
+            contentDescription = "cerca"
             setOnClickListener {
                 campoCerca.visibility = if (campoCerca.visibility == View.VISIBLE) View.GONE else View.VISIBLE
                 if (campoCerca.visibility == View.GONE) campoCerca.setText("") else campoCerca.requestFocus()
@@ -94,8 +94,8 @@ class RegistroFragment : Fragment() {
             setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             setOnClickListener { cambiaScheda(prima) }
         }
-        schedaMie = scheda("Le mie classi", true)
-        schedaTutte = scheda("Tutte le classi", false)
+        schedaMie = scheda("le mie classi", true)
+        schedaTutte = scheda("tutte le classi", false)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(schedaMie, LinearLayout.LayoutParams(0, ctx.dp(44), 1f))
@@ -120,7 +120,7 @@ class RegistroFragment : Fragment() {
             visibility = View.GONE
         }
         dettagli = TextView(ctx).apply {
-            text = "Mostra la risposta di ClasseViva"
+            text = "mostra la risposta di classeviva"
             textSize = 14f; setTextColor(celeste)
             setPadding(ctx.dp(8), ctx.dp(12), ctx.dp(8), ctx.dp(12))
             visibility = View.GONE
@@ -195,10 +195,10 @@ class RegistroFragment : Fragment() {
                     if (classi.isNotEmpty()) runCatching { fileCache(mieClassi).writeText(testo) }
                     if (mieClassi) datiMie = classi else { datiTutte = classi; caricateTutte = true }
                 } else if (!mieClassi) caricateTutte = true
-                mostra(errore = if (codice == 200) null else "ClasseViva ha risposto con un errore (HTTP $codice).")
+                mostra(errore = if (codice == 200) null else "classeviva ha risposto con un errore (http $codice).")
             }.onFailure { e ->
                 ultimaRisposta = "Errore: ${e.message}"
-                mostra(errore = "Non riesco a leggere le classi: ${e.message}")
+                mostra(errore = "non riesco a leggere le classi: ${e.message}")
             }
         }
     }
@@ -211,9 +211,9 @@ class RegistroFragment : Fragment() {
         adattatore.notifyDataSetChanged()
         val testo = when {
             errore != null && base.isEmpty() -> errore
-            base.isEmpty() && ultimaRisposta.isNotEmpty() -> "Ho ricevuto la risposta di ClasseViva ma non vi ho riconosciuto nessuna classe."
-            base.isEmpty() -> "Carico le classi…"
-            vis.isEmpty() -> "Nessuna classe corrisponde alla ricerca."
+            base.isEmpty() && ultimaRisposta.isNotEmpty() -> "ho ricevuto la risposta di classeviva ma non vi ho riconosciuto nessuna classe."
+            base.isEmpty() -> "carico le classi…"
+            vis.isEmpty() -> "nessuna classe corrisponde alla ricerca."
             else -> ""
         }
         vuoto.text = testo
@@ -231,14 +231,14 @@ class RegistroFragment : Fragment() {
             setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(20), ctx.dp(12))
         }
         MaterialAlertDialogBuilder(ctx)
-            .setTitle(if (mie) "Risposta: le mie classi" else "Risposta: tutte le classi")
+            .setTitle(if (mie) "risposta: le mie classi" else "risposta: tutte le classi")
             .setView(ScrollView(ctx).apply { addView(t) })
-            .setPositiveButton("Copia") { _, _ ->
+            .setPositiveButton("copia") { _, _ ->
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                 cm.setPrimaryClip(ClipData.newPlainText("risposta", ultimaRisposta))
-                Toast.makeText(ctx, "Copiato", Toast.LENGTH_SHORT).show()
+                Toast.makeText(ctx, "copiato", Toast.LENGTH_SHORT).show()
             }
-            .setNegativeButton("Chiudi", null)
+            .setNegativeButton("chiudi", null)
             .show()
     }
 

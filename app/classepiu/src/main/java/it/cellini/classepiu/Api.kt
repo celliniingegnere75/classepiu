@@ -84,12 +84,12 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     fun login() {
-        if (utente.isBlank() || password.isBlank()) throw ClasseVivaException("Utente e password ClasseViva non impostati (vai in Impostazioni).")
+        if (utente.isBlank() || password.isBlank()) throw ClasseVivaException("utente e password classeviva non impostati (vai in impostazioni).")
         token = ""
         fun prova(profilo: String?): JSONObject {
             val body = JSONObject().put("ident", profilo ?: JSONObject.NULL).put("pass", password).put("uid", utente)
             val r = http("POST", "$BASE/auth/login", body)
-            if (r.codice != 200) throw ClasseVivaException("Accesso non riuscito (HTTP ${r.codice}): ${r.testo.take(200)}")
+            if (r.codice != 200) throw ClasseVivaException("accesso non riuscito (http ${r.codice}): ${r.testo.take(200)}")
             return JSONObject(r.testo)
         }
         var j = prova(null)
@@ -114,7 +114,7 @@ class ClasseViva(private val utente: String, private val password: String) {
             }
             errori += "$p: HTTP ${r.codice}"
         }
-        throw ClasseVivaException("Bacheca non leggibile (" + errori.joinToString(", ") + ")")
+        throw ClasseVivaException("bacheca non leggibile (" + errori.joinToString(", ") + ")")
     }
 
     private fun leggi(o: JSONObject): Circolare {
@@ -126,7 +126,7 @@ class ClasseViva(private val utente: String, private val password: String) {
         return Circolare(
             evtCode = o.optString("evtCode"),
             pubId = o.optString("pubId"),
-            titolo = o.optString("cntTitle").ifBlank { "Circolare" },
+            titolo = o.optString("cnttitle").ifBlank { "circolare" },
             data = o.optString("cntValidFrom"),
             categoria = o.optString("cntCategory"),
             testo = o.optString("cntText"),
@@ -200,7 +200,7 @@ class ClasseViva(private val utente: String, private val password: String) {
         return presi.values.toList()
     }
 
-    class CircolareRitirata : Exception("Circolare ritirata dalla scuola")
+    class CircolareRitirata : Exception("circolare ritirata dalla scuola")
 
     companion object {
         const val BASE = "https://web.spaggiari.eu/rest/v1"

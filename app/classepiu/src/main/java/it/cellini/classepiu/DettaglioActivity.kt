@@ -2,6 +2,7 @@ package it.cellini.classepiu
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.graphics.Color
 import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.LinearLayout
@@ -30,7 +31,7 @@ class DettaglioActivity : AppCompatActivity() {
         c = circolareDa(JSONObject(intent.getStringExtra("circolare") ?: "{}"))
 
         val barra = MaterialToolbar(this).apply {
-            title = if (c.numero.isNotEmpty()) "Circolare n. ${c.numero}" else "Circolare"
+            title = if (c.numero.isNotEmpty()) "circolare n. ${c.numero}" else "circolare"
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { finish() }
         }
@@ -42,12 +43,13 @@ class DettaglioActivity : AppCompatActivity() {
         if (c.azioni.isNotEmpty()) {
             val avviso = colonna(12)
             val cosa = c.azioni.joinToString(", ")
-            avviso.addView(testo("Azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
-            avviso.addView(testo("La conferma si fa sul sito ClasseViva: premi il pulsante (l'accesso è automatico) e conferma la circolare in Bacheca.", 14f))
-            avviso.addView(bottone("Apri ClasseViva nel browser") {
+            avviso.addView(testo("azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
+            avviso.addView(testo("la conferma si fa sul sito classeviva: premi il pulsante (l'accesso è automatico) e conferma la circolare in bacheca.", 14f))
+            avviso.addView(bottone("apri classeviva nel browser") {
                 startActivity(Intent(this, WebActivity::class.java))
             })
             col.addView(MaterialCardView(this).apply {
+                setCardBackgroundColor(Color.WHITE)
                 addView(avviso)
                 layoutParams = piena().apply { bottomMargin = dp(12) }
             })
@@ -57,7 +59,7 @@ class DettaglioActivity : AppCompatActivity() {
         col.addView(testo(corpo.ifEmpty { "(nessun testo)" }, 15.5f).apply { setTextIsSelectable(true) })
 
         if (c.allegati.isNotEmpty()) {
-            col.addView(titoloSezione("Allegati"))
+            col.addView(titoloSezione("allegati"))
             c.allegati.forEach { a ->
                 col.addView(TextView(this).apply {
                     text = "📎 ${a.nome}"; textSize = 15f
@@ -68,8 +70,8 @@ class DettaglioActivity : AppCompatActivity() {
             }
         }
 
-        col.addView(titoloSezione("Azioni"))
-        col.addView(bottone("Invia per mail ora") { inviaOra() }.apply { layoutParams = piena() })
+        col.addView(titoloSezione("azioni"))
+        col.addView(bottone("invia per mail") { inviaOra() }.apply { layoutParams = piena() })
         val pref = getSharedPreferences("app", MODE_PRIVATE)
         val chiaveLetta = "letta_app_${c.chiave}"
         val letta = TextView(this).apply {
@@ -104,6 +106,7 @@ class DettaglioActivity : AppCompatActivity() {
         val scroll = ScrollView(this).apply { addView(col) }
         setContentView(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            setBackgroundColor(0xFFF5F5F5.toInt())
             addView(barra)
             addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         })
@@ -112,7 +115,7 @@ class DettaglioActivity : AppCompatActivity() {
     private fun avviso(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
 
     private fun apriAllegato(a: Allegato) {
-        avviso("Scarico ${a.nome}…")
+        avviso("scarico ${a.nome}…")
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
@@ -121,7 +124,7 @@ class DettaglioActivity : AppCompatActivity() {
                     cv.bacheca()
                     var f = cv.allegato(c, a)
                     if (f == null) { cv.segnaLetta(c); f = cv.allegato(c, a) }
-                    f ?: throw IllegalStateException("ClasseViva non rende ancora disponibile l'allegato.")
+                    f ?: throw IllegalStateException("classeviva non rende ancora disponibile l'allegato.")
                     val dir = File(cacheDir, "allegati").apply { mkdirs() }
                     File(dir, f.nome.replace(Regex("[\\\\/:*?\"<>|]"), "_")).apply { writeBytes(f.dati) }
                 }
@@ -133,20 +136,20 @@ class DettaglioActivity : AppCompatActivity() {
                 try {
                     startActivity(Intent.createChooser(vedi, file.name))
                 } catch (e: ActivityNotFoundException) {
-                    avviso("Nessuna app per aprire il file.")
+                    avviso("nessuna app per aprire il file.")
                 }
-            }.onFailure { avviso(it.message ?: "Errore") }
+            }.onFailure { avviso(it.message ?: "errore") }
         }
     }
 
     private fun inviaOra() {
         val imp = Impostazioni(this)
-        if (!imp.mailPronta) { avviso("Imposta prima l'invio delle mail in Impostazioni."); return }
-        avviso("Invio in corso…")
+        if (!imp.mailPronta) { avviso("imposta prima l'invio delle mail in impostazioni."); return }
+        avviso("invio in corso…")
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(applicationContext, c) } }
-            r.onSuccess { avviso("Inviata (${imp.doveVanno}, allegati $it/${c.allegati.size}).") }
-                .onFailure { avviso("Invio non riuscito: ${it.message}") }
+            r.onSuccess { avviso("inviata (${imp.doveVanno}, allegati $it/${c.allegati.size}).") }
+                .onFailure { avviso("invio non riuscito: ${it.message}") }
         }
     }
 
@@ -158,7 +161,7 @@ class DettaglioActivity : AppCompatActivity() {
                     cv.login(); cv.bacheca(); cv.segnaLetta(c, aderisci = true)
                 }
             }
-            avviso(if (r.getOrDefault(false)) "Adesione registrata su ClasseViva." else "Adesione non riuscita: ${r.exceptionOrNull()?.message ?: "risposta inattesa del server"}")
+            avviso(if (r.getOrDefault(false)) "adesione registrata su classeviva." else "adesione non riuscita: ${r.exceptionornull()?.message ?: "risposta inattesa del server"}")
         }
     }
 
@@ -170,7 +173,7 @@ class DettaglioActivity : AppCompatActivity() {
                     cv.login(); cv.bacheca(); cv.segnaLetta(c)
                 }
             }
-            avviso(if (r.getOrDefault(false)) "Segnata come letta." else "Non riuscito: ${r.exceptionOrNull()?.message ?: "risposta inattesa"}")
+            avviso(if (r.getOrDefault(false)) "segnata come letta." else "non riuscito: ${r.exceptionornull()?.message ?: "risposta inattesa"}")
         }
     }
 }
