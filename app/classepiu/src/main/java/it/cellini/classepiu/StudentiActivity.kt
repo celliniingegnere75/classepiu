@@ -154,12 +154,13 @@ class StudentiActivity : AppCompatActivity() {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(colore) }
             }
             lista.addView(LinearLayout(ctx).apply {
-                gravity = Gravity.TOP
-                setPadding(dp(16), dp(14), dp(16), dp(26))
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(16), dp(12), dp(16), dp(12))
                 background = GradientDrawable().apply { setColor(0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
                 addView(pallino, LinearLayout.LayoutParams(dp(34), dp(34)))
-                addView(TextView(ctx).apply { text = s.nome; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); gravity = Gravity.TOP },
-                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(12); topMargin = dp(4) })
+                addView(TextView(ctx).apply { text = s.nome; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); gravity = Gravity.TOP
+                    setLines(2); ellipsize = android.text.TextUtils.TruncateAt.END },
+                    LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(12) })
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
         if (!caricamento && grezzo != null && stato.isEmpty()) copiaRisposta("Presenze non riconosciute: mostra la risposta di ClasseViva (tocca per copiare)", grezzo.first, grezzo.second)
