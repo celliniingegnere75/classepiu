@@ -163,7 +163,7 @@ class StudentiActivity : AppCompatActivity() {
                     LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = dp(12) })
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
-        if (!caricamento && grezzo != null && stato.isEmpty()) copiaRisposta("Presenze non riconosciute: mostra la risposta di ClasseViva (tocca per copiare)", grezzo.first, grezzo.second)
+        if (!caricamento && grezzo != null) copiaRisposta("Copia la risposta di ClasseViva di questo giorno", grezzo.first, "giorno ${formatoApi.format(selezionato.time)}\n${grezzo.second}")
     }
 
     private fun testo(s: String, codice: Int = 0, corpo: String = "") {
