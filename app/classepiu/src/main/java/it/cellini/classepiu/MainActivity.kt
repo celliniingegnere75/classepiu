@@ -115,6 +115,14 @@ class MainActivity : AppCompatActivity() {
             permessoNotifiche.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else chiediBatteria()
         gestisci(intent)
+        if (savedInstanceState == null) Splash.mostra(this)
+    }
+
+    private var inPausa = false
+    override fun onStop() { super.onStop(); inPausa = true }
+    override fun onStart() {
+        super.onStart()
+        if (inPausa) { inPausa = false; Splash.mostra(this) }
     }
 
     /** Una sola volta: chiede di escludere l'app dall'ottimizzazione batteria, così i controlli partono a orario. */

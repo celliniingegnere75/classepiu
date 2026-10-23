@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -42,9 +43,9 @@ class DettaglioActivity : AppCompatActivity() {
             val avviso = colonna(12)
             val cosa = (c.azioni + if (c.adesione) listOf("adesione") else emptyList()).joinToString(", ")
             avviso.addView(testo("Azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
-            avviso.addView(testo("La conferma si fa sul sito ClasseViva: premi il pulsante, accedi e conferma la circolare in Bacheca.", 14f))
+            avviso.addView(testo("La conferma si fa sul sito ClasseViva: premi il pulsante (l'accesso è automatico) e conferma la circolare in Bacheca.", 14f))
             avviso.addView(bottone("Apri ClasseViva nel browser") {
-                runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://web.spaggiari.eu/"))) }
+                startActivity(Intent(this, WebActivity::class.java))
             })
             col.addView(MaterialCardView(this).apply {
                 addView(avviso)
@@ -64,7 +65,20 @@ class DettaglioActivity : AppCompatActivity() {
 
         col.addView(titoloSezione("Azioni"))
         col.addView(bottone("Invia per mail ora") { inviaOra() }.apply { layoutParams = piena() })
-        col.addView(bottone("Segna come letta", pieno = false) { segnaLetta() }.apply { layoutParams = piena() })
+        val pref = getSharedPreferences("app", MODE_PRIVATE)
+        val chiaveLetta = "letta_app_${c.chiave}"
+        val letta = TextView(this).apply {
+            text = "Segna come letta"; textSize = 16f; gravity = android.view.Gravity.CENTER
+            setPadding(dp(8), dp(14), dp(8), dp(14))
+            fun colora() = setTextColor(if (pref.getBoolean(chiaveLetta, false)) 0xFF9E9E9E.toInt() else ContextCompat.getColor(context, R.color.primario))
+            colora()
+            setOnClickListener {
+                pref.edit().putBoolean(chiaveLetta, true).apply()
+                colora()
+                segnaLetta()
+            }
+        }
+        col.addView(letta, piena())
 
         val scroll = ScrollView(this).apply { addView(col) }
         setContentView(LinearLayout(this).apply {

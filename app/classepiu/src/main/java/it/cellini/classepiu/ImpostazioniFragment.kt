@@ -167,7 +167,7 @@ class ImpostazioniFragment : Fragment() {
     /** Campo con scritta grande in grassetto e linea sotto, come "ricevitore" e "token" nella bozza. */
     private fun campoSottolineato(ctx: android.content.Context, etichetta: String, password: Boolean) = EditText(ctx).apply {
         hint = etichetta
-        setHintTextColor(0xFF585858.toInt()) // scritte ricevitore/token schiarite del 30%
+        setHintTextColor(0xFF797979.toInt()) // scritte ricevitore/token schiarite del 30%
         setTextColor(nero)
         textSize = 15f
         setSingleLine(true)

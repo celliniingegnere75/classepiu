@@ -30,6 +30,8 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
+        <activity android:name=".WebActivity" android:exported="false" android:parentActivityName=".MainActivity" />
+
         <activity
             android:name=".DettaglioActivity"
             android:exported="false"

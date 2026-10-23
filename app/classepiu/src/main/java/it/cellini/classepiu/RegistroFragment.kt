@@ -263,7 +263,7 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
                 addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }
-            val descrizione = TextView(ctx).apply { textSize = 14.4f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF222222.toInt()) }
+            val descrizione = TextView(ctx).apply { textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF4E4E4E.toInt()) }
             val codice = TextView(ctx).apply { textSize = 12.8f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(4), 0, 0) }
             val testi = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL

@@ -134,6 +134,7 @@ class AccessoActivity : AppCompatActivity() {
         campoPass.setOnEditorActionListener { _, id, _ -> if (id == EditorInfo.IME_ACTION_DONE) { entra(); true } else false }
 
         setContentView(ScrollView(this).apply { isFillViewport = true; setBackgroundColor(grigio); addView(col) })
+        if (savedInstanceState == null) Splash.mostra(this)
     }
 
     /** Campo bianco arrotondato, senza bordo, con la scritta in maiuscolo (come su ClasseViva). */
