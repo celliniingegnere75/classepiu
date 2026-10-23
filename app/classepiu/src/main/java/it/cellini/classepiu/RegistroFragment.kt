@@ -1,164 +1,297 @@
 package it.cellini.classepiu
 
-import android.annotation.SuppressLint
-import android.app.Activity
-import android.app.DownloadManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
-import android.graphics.Bitmap
-import android.net.Uri
+import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.os.Environment
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.webkit.CookieManager
-import android.webkit.URLUtil
-import android.webkit.ValueCallback
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import android.widget.HorizontalScrollView
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ProgressBar
+import android.widget.ScrollView
+import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
-import org.json.JSONObject
+import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
- * Registro web ufficiale (web.spaggiari.eu) dentro l'app: classi, lezioni, firme, voti, competenze,
- * note, agenda, assenze e giustificazioni, didattica, colloqui. L'accesso resta salvato.
+ * Registro: elenco delle classi letto direttamente da ClasseViva (senza aprire il sito).
+ * Due schede: "Le mie classi" e "Tutte le classi".
  */
 class RegistroFragment : Fragment() {
 
-    private var web: WebView? = null
-    private lateinit var carica: ProgressBar
-    private var sceltaFile: ValueCallback<Array<Uri>>? = null
+    private var mie = true
+    private var cerca = ""
+    private var datiMie: List<Classe> = emptyList()
+    private var datiTutte: List<Classe> = emptyList()
+    private var caricateTutte = false
+    private var ultimaRisposta = ""
+    private lateinit var elenco: RecyclerView
+    private lateinit var aggiorna: SwipeRefreshLayout
+    private lateinit var vuoto: TextView
+    private lateinit var dettagli: TextView
+    private lateinit var schedaMie: TextView
+    private lateinit var schedaTutte: TextView
+    private val adattatore = Adattatore()
 
-    private val selettore = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { r ->
-        val uris = if (r.resultCode == Activity.RESULT_OK) WebChromeClient.FileChooserParams.parseResult(r.resultCode, r.data) else null
-        sceltaFile?.onReceiveValue(uris)
-        sceltaFile = null
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
-        carica = ProgressBar(ctx, null, android.R.attr.progressBarStyleHorizontal).apply { max = 100; visibility = View.GONE }
+        val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
 
-        val w = WebView(ctx)
-        web = w
-        CookieManager.getInstance().setAcceptCookie(true)
-        CookieManager.getInstance().setAcceptThirdPartyCookies(w, true)
-        w.settings.apply {
-            javaScriptEnabled = true
-            domStorageEnabled = true
-            databaseEnabled = true
-            loadWithOverviewMode = true
-            useWideViewPort = true
-            builtInZoomControls = true
-            displayZoomControls = false
-            setSupportMultipleWindows(false)
-            javaScriptCanOpenWindowsAutomatically = true
+        // --- titolo e lente di ricerca
+        val campoCerca = EditText(ctx).apply {
+            hint = "Cerca una classe"
+            setSingleLine(true)
+            textSize = 17f
+            visibility = View.GONE
+            addTextChangedListener(object : TextWatcher {
+                override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+                override fun afterTextChanged(s: Editable?) { cerca = s?.toString().orEmpty(); mostra() }
+            })
         }
-        w.webViewClient = object : WebViewClient() {
-            override fun shouldOverrideUrlLoading(view: WebView, req: WebResourceRequest): Boolean {
-                val u = req.url
-                if (u.scheme == "http" || u.scheme == "https") return false
-                return try { startActivity(Intent(Intent.ACTION_VIEW, u)); true } catch (e: Exception) { true }
-            }
-            override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) { carica.visibility = View.VISIBLE }
-            override fun onPageFinished(view: WebView?, url: String?) {
-                carica.visibility = View.GONE
-                CookieManager.getInstance().flush()
+        val lente = ImageView(ctx).apply {
+            setImageResource(android.R.drawable.ic_menu_search)
+            imageTintList = android.content.res.ColorStateList.valueOf(0xFF3F3F3F.toInt())
+            setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(8))
+            contentDescription = "Cerca"
+            setOnClickListener {
+                campoCerca.visibility = if (campoCerca.visibility == View.VISIBLE) View.GONE else View.VISIBLE
+                if (campoCerca.visibility == View.GONE) campoCerca.setText("") else campoCerca.requestFocus()
             }
         }
-        w.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView?, p: Int) { carica.progress = p }
-            override fun onShowFileChooser(v: WebView?, cb: ValueCallback<Array<Uri>>?, params: FileChooserParams?): Boolean {
-                sceltaFile?.onReceiveValue(null)
-                sceltaFile = cb
-                return try { selettore.launch(params!!.createIntent()); true } catch (e: Exception) { sceltaFile = null; false }
-            }
+        val titolo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            addView(TextView(ctx).apply {
+                text = "Classi"; textSize = 26f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt())
+            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(lente, LinearLayout.LayoutParams(ctx.dp(44), ctx.dp(44)))
         }
-        w.setDownloadListener { url, userAgent, contentDisposition, mimeType, _ -> scarica(ctx, url, userAgent, contentDisposition, mimeType) }
 
-        val pulsanti = ctx.riga().apply { setPadding(ctx.dp(8), ctx.dp(4), ctx.dp(8), ctx.dp(4)) }
-        fun p(s: String, f: () -> Unit) = pulsanti.addView(ctx.bottone(s, pieno = false) { f() }.apply {
-            layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { marginEnd = ctx.dp(6) }
-        })
-        p("Compila accesso") { compilaAccesso() }
-        p("Apri nel browser") { w.url?.let { runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it))) } } }
+        // --- le due schede a pillola
+        fun scheda(testo: String, prima: Boolean) = TextView(ctx).apply {
+            text = testo; textSize = 17f; gravity = Gravity.CENTER; includeFontPadding = false
+            setPadding(ctx.dp(20), 0, ctx.dp(20), 0)
+            setOnClickListener { cambiaScheda(prima) }
+        }
+        schedaMie = scheda("Le mie classi", true)
+        schedaTutte = scheda("Tutte le classi", false)
+        val schede = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            addView(schedaMie, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(44)))
+            addView(schedaTutte, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(44)).apply { leftMargin = ctx.dp(10) })
+        }
 
-        if (savedInstanceState != null) w.restoreState(savedInstanceState) else w.loadUrl(HOME)
+        // --- elenco
+        elenco = RecyclerView(ctx).apply {
+            layoutManager = LinearLayoutManager(ctx)
+            adapter = adattatore
+            clipToPadding = false
+            setPadding(0, ctx.dp(4), 0, ctx.dp(16))
+        }
+        aggiorna = SwipeRefreshLayout(ctx).apply {
+            addView(elenco)
+            setColorSchemeColors(celeste)
+            setOnRefreshListener { carica(mie, forza = true) }
+        }
+        vuoto = TextView(ctx).apply {
+            textSize = 15f; alpha = .75f
+            setPadding(ctx.dp(8), ctx.dp(32), ctx.dp(8), 0)
+            visibility = View.GONE
+        }
+        dettagli = TextView(ctx).apply {
+            text = "Mostra la risposta di ClasseViva"
+            textSize = 14f; setTextColor(celeste)
+            setPadding(ctx.dp(8), ctx.dp(12), ctx.dp(8), ctx.dp(12))
+            visibility = View.GONE
+            setOnClickListener { mostraRisposta() }
+        }
+        val corpo = FrameLayout(ctx).apply {
+            addView(aggiorna)
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(vuoto); addView(dettagli)
+            }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
 
-        return LinearLayout(ctx).apply {
+        val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            addView(HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(pulsanti) })
-            addView(carica, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(3)))
-            addView(w, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            setBackgroundColor(Color.WHITE)
+            setPadding(ctx.dp(14), ctx.dp(10), ctx.dp(14), 0)
+            addView(titolo)
+            addView(campoCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8); bottomMargin = ctx.dp(8) })
+            addView(corpo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+
+        datiMie = leggiCache(true)
+        datiTutte = leggiCache(false)
+        aggiornaSchede()
+        mostra()
+        carica(true, forza = false)
+        return col
+    }
+
+    private fun cambiaScheda(prima: Boolean) {
+        mie = prima
+        aggiornaSchede()
+        mostra()
+        if (!prima && !caricateTutte) carica(false, forza = false)
+    }
+
+    private fun aggiornaSchede() {
+        val ctx = requireContext()
+        val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        fun stile(v: TextView, attiva: Boolean) {
+            v.background = GradientDrawable().apply { cornerRadius = ctx.dp(22).toFloat(); setColor(if (attiva) celeste else 0xFFF0F0F0.toInt()) }
+            v.setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
+        }
+        stile(schedaMie, mie)
+        stile(schedaTutte, !mie)
+    }
+
+    private fun fileCache(mie: Boolean) = File(requireContext().filesDir, if (mie) "classi_mie.json" else "classi_tutte.json")
+
+    private fun leggiCache(mie: Boolean): List<Classe> = try { leggiClassi(fileCache(mie).readText()) } catch (e: Exception) { emptyList() }
+
+    fun carica(mieClassi: Boolean, forza: Boolean) {
+        val ctx = context ?: return
+        val imp = Impostazioni(ctx)
+        if (!imp.pronta) { aggiorna.isRefreshing = false; return }
+        aggiorna.isRefreshing = true
+        viewLifecycleOwner.lifecycleScope.launch {
+            val esito = withContext(Dispatchers.IO) {
+                runCatching {
+                    val cv = imp.client()
+                    cv.login()
+                    cv.classiGrezze(!mieClassi)
+                }
+            }
+            aggiorna.isRefreshing = false
+            esito.onSuccess { (codice, testo) ->
+                ultimaRisposta = "HTTP $codice\n$testo"
+                if (codice == 200) {
+                    val classi = leggiClassi(testo)
+                    if (classi.isNotEmpty()) runCatching { fileCache(mieClassi).writeText(testo) }
+                    if (mieClassi) datiMie = classi else { datiTutte = classi; caricateTutte = true }
+                } else if (!mieClassi) caricateTutte = true
+                mostra(errore = if (codice == 200) null else "ClasseViva ha risposto con un errore (HTTP $codice).")
+            }.onFailure { e ->
+                ultimaRisposta = "Errore: ${e.message}"
+                mostra(errore = "Non riesco a leggere le classi: ${e.message}")
+            }
         }
     }
 
-    /** Inserisce utente e password salvati nei campi della pagina di accesso. */
-    private fun compilaAccesso() {
-        val imp = Impostazioni(requireContext())
-        if (!imp.pronta) { Toast.makeText(requireContext(), "Imposta prima utente e password.", Toast.LENGTH_LONG).show(); return }
-        val u = JSONObject.quote(imp.utente)
-        val p = JSONObject.quote(imp.password)
-        val js = """
-            (function(){
-              function set(el,v){ if(!el) return; el.focus(); el.value=v; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); }
-              var pw=document.querySelector('input[type=password]');
-              var us=document.querySelector('input[type=email]')||document.querySelector('input[name*=uid],input[name*=login],input[id*=login],input[name*=user]')||document.querySelector('input[type=text]');
-              set(us,$u); set(pw,$p);
-              return (us?1:0)+(pw?1:0);
-            })();
-        """.trimIndent()
-        web?.evaluateJavascript(js) { r ->
-            val msg = if (r == "2") "Campi compilati: premi Accedi." else "Non trovo i campi di accesso in questa pagina."
-            context?.let { Toast.makeText(it, msg, Toast.LENGTH_SHORT).show() }
+    private fun mostra(errore: String? = null) {
+        val q = cerca.trim().lowercase()
+        val base = if (mie) datiMie else datiTutte
+        val vis = base.filter { q.isEmpty() || it.nome.lowercase().contains(q) || it.descrizione.lowercase().contains(q) || it.codice.lowercase().contains(q) }
+        adattatore.dati = vis
+        adattatore.notifyDataSetChanged()
+        val testo = when {
+            errore != null && base.isEmpty() -> errore
+            base.isEmpty() && ultimaRisposta.isNotEmpty() -> "Ho ricevuto la risposta di ClasseViva ma non vi ho riconosciuto nessuna classe."
+            base.isEmpty() -> "Carico le classi…"
+            vis.isEmpty() -> "Nessuna classe corrisponde alla ricerca."
+            else -> ""
         }
+        vuoto.text = testo
+        vuoto.visibility = if (testo.isEmpty()) View.GONE else View.VISIBLE
+        dettagli.visibility = if (base.isEmpty() && ultimaRisposta.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
-    private fun scarica(ctx: Context, url: String, ua: String, disp: String?, mime: String?) {
-        try {
-            val nome = URLUtil.guessFileName(url, disp, mime)
-            val r = DownloadManager.Request(Uri.parse(url))
-                .addRequestHeader("Cookie", CookieManager.getInstance().getCookie(url) ?: "")
-                .addRequestHeader("User-Agent", ua)
-                .setMimeType(mime)
-                .setTitle(nome)
-                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                .setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, nome)
-            (ctx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager).enqueue(r)
-            Toast.makeText(ctx, "Scarico $nome in Download", Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
-            Toast.makeText(ctx, "Download non riuscito: ${e.message}", Toast.LENGTH_LONG).show()
+    /** Mostra il testo esatto che ClasseViva ha risposto, copiabile: serve se l'elenco non compare. */
+    private fun mostraRisposta() {
+        val ctx = requireContext()
+        val t = TextView(ctx).apply {
+            text = ultimaRisposta.take(6000)
+            textSize = 11f; typeface = Typeface.MONOSPACE
+            setTextIsSelectable(true)
+            setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(20), ctx.dp(12))
         }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(if (mie) "Risposta: le mie classi" else "Risposta: tutte le classi")
+            .setView(ScrollView(ctx).apply { addView(t) })
+            .setPositiveButton("Copia") { _, _ ->
+                val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                cm.setPrimaryClip(ClipData.newPlainText("risposta", ultimaRisposta))
+                Toast.makeText(ctx, "Copiato", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Chiudi", null)
+            .show()
     }
 
-    /** Torna alla pagina precedente del registro; false se non c'è. */
-    fun indietro(): Boolean {
-        val w = web ?: return false
-        if (w.canGoBack()) { w.goBack(); return true }
-        return false
-    }
+    /** Compatibilità con il tasto indietro della schermata principale. */
+    fun indietro(): Boolean = false
 
-    override fun onSaveInstanceState(outState: Bundle) {
-        super.onSaveInstanceState(outState)
-        web?.saveState(outState)
-    }
+    private inner class Adattatore : RecyclerView.Adapter<Adattatore.VH>() {
+        var dati: List<Classe> = emptyList()
 
-    override fun onDestroyView() {
-        web?.destroy()
-        web = null
-        super.onDestroyView()
-    }
+        inner class VH(val box: View, val nome: TextView, val descrizione: TextView, val codice: TextView) : RecyclerView.ViewHolder(box)
 
-    companion object {
-        const val HOME = "https://web.spaggiari.eu/"
+        override fun getItemCount() = dati.size
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
+            val ctx = parent.context
+            val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+            val nome = TextView(ctx).apply {
+                textSize = 30f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
+                gravity = Gravity.CENTER; maxLines = 1; includeFontPadding = false
+            }
+            val tessera = FrameLayout(ctx).apply {
+                background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
+                addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            }
+            val descrizione = TextView(ctx).apply { textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF222222.toInt()) }
+            val codice = TextView(ctx).apply { textSize = 16f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(4), 0, 0) }
+            val testi = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(descrizione); addView(codice)
+            }
+            val riga = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(ctx.dp(14), ctx.dp(14), ctx.dp(14), ctx.dp(14))
+                background = GradientDrawable().apply {
+                    setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(18).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
+                }
+                addView(tessera, LinearLayout.LayoutParams(ctx.dp(100), ctx.dp(80)))
+                addView(testi, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = ctx.dp(14) })
+                layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+                    setMargins(0, ctx.dp(6), 0, ctx.dp(6))
+                }
+            }
+            return VH(riga, nome, descrizione, codice)
+        }
+
+        override fun onBindViewHolder(h: VH, pos: Int) {
+            val c = dati[pos]
+            h.nome.text = c.nome
+            h.descrizione.text = c.descrizione.ifEmpty { c.nome }
+            h.descrizione.visibility = View.VISIBLE
+            h.codice.text = c.codice
+            h.codice.visibility = if (c.codice.isEmpty()) View.GONE else View.VISIBLE
+        }
     }
 }

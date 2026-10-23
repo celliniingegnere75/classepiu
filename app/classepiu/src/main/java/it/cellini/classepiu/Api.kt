@@ -148,6 +148,17 @@ class ClasseViva(private val utente: String, private val password: String) {
         return null
     }
 
+    /**
+     * Classi del docente: "mine" = le sue classi, "all/students1" = tutte le classi della scuola.
+     * Restituisce il codice HTTP e il testo grezzo della risposta (letto da leggiClassi).
+     */
+    fun classiGrezze(tutte: Boolean): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val percorsoClassi = if (tutte) "classes/all/students1" else "classes/mine"
+        val r = http("GET", "$BASE/teachers/$id/$percorsoClassi")
+        return r.codice to r.testo
+    }
+
     /** Segna la circolare come letta (come quando la si apre sull'app). */
     fun segnaLetta(c: Circolare): Boolean {
         if (percorso.isEmpty()) bacheca()
@@ -181,4 +192,53 @@ class ClasseViva(private val utente: String, private val password: String) {
         const val BASE = "https://web.spaggiari.eu/rest/v1"
         const val RITIRATA = "no more active"
     }
+}
+
+/** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */
+data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String)
+
+/**
+ * Legge l'elenco delle classi dalla risposta di ClasseViva. Prova più nomi di campo possibili,
+ * perché la risposta non è documentata; le classi uguali (una riga per materia) si contano una volta sola.
+ */
+fun leggiClassi(grezzo: String): List<Classe> {
+    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyList() }
+    fun trovaArray(v: Any?, livello: Int = 0): JSONArray? {
+        if (v is JSONArray) return v
+        if (v is JSONObject && livello < 3) {
+            for (k in listOf("classes", "classrooms", "items", "data", "classi")) v.optJSONArray(k)?.let { return it }
+            for (k in v.keys()) trovaArray(v.opt(k), livello + 1)?.let { return it }
+        }
+        return null
+    }
+    val array = trovaArray(radice) ?: return emptyList()
+    fun JSONObject.testo(vararg chiavi: String): String {
+        for (k in chiavi) {
+            val v = opt(k)
+            if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                val t = v.toString().trim()
+                if (t.isNotEmpty() && t != "null") return t
+            }
+        }
+        return ""
+    }
+    val visti = LinkedHashMap<String, Classe>()
+    for (i in 0 until array.length()) {
+        val o = array.optJSONObject(i) ?: continue
+        val c = o.optJSONObject("classroom") ?: o.optJSONObject("class") ?: o
+        fun t(vararg k: String) = c.testo(*k).ifEmpty { o.testo(*k) }
+        val livello = t("classLevel", "classRealLevel", "level")
+        val indirizzo = t("classAddr", "classAddress", "address")
+        val sezione = t("classSection", "section")
+        var nome = t("className", "classroomName", "name", "classCode")
+        if (nome.isEmpty()) nome = livello + indirizzo + sezione
+        val descrizione = t("classDesc", "classroomDescription", "description", "desc", "classDescription")
+        var codice = t("classCode", "classroomCode", "code", "classCodeDescription", "schoolClassCode")
+        if (codice == nome) codice = ""
+        if (nome.isEmpty() && descrizione.isEmpty()) continue
+        val id = t("classId", "classroomId", "id").ifEmpty { nome }
+        val tipo = t("classType", "classroomType", "type")
+        visti.getOrPut("$tipo|$id|$nome") { Classe("$tipo|$id|$nome", nome.uppercase(), descrizione.uppercase(), codice.uppercase()) }
+    }
+    return visti.values.sortedWith(compareBy({ it.nome.firstOrNull()?.digitToIntOrNull() ?: 9 }, { it.nome }))
 }

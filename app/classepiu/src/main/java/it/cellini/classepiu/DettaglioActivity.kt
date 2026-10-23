@@ -42,12 +42,9 @@ class DettaglioActivity : AppCompatActivity() {
             val avviso = colonna(12)
             val cosa = (c.azioni + if (c.adesione) listOf("adesione") else emptyList()).joinToString(", ")
             avviso.addView(testo("Azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
-            avviso.addView(testo("La conferma si fa nel registro ufficiale: apri la scheda Registro, poi Bacheca, e conferma la circolare.", 14f))
-            avviso.addView(bottone("Apri il registro web") {
-                startActivity(Intent(this, MainActivity::class.java)
-                    .putExtra(MainActivity.EXTRA_REGISTRO, true)
-                    .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
-                finish()
+            avviso.addView(testo("La conferma si fa sul sito ClasseViva: premi il pulsante, accedi e conferma la circolare in Bacheca.", 14f))
+            avviso.addView(bottone("Apri ClasseViva nel browser") {
+                runCatching { startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://web.spaggiari.eu/"))) }
             })
             col.addView(MaterialCardView(this).apply {
                 addView(avviso)
