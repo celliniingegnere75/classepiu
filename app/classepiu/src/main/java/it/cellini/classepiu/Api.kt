@@ -160,10 +160,10 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     /** Segna la circolare come letta (come quando la si apre sull'app). */
-    fun segnaLetta(c: Circolare): Boolean {
+    fun segnaLetta(c: Circolare, aderisci: Boolean = false): Boolean {
         if (percorso.isEmpty()) bacheca()
         // ClasseViva vuole {"join": false}: con il corpo vuoto risponde 400
-        val r = http("POST", "$BASE/$percorso/$id/noticeboard/read/${c.evtCode}/${c.pubId}/101", JSONObject().put("join", false))
+        val r = http("POST", "$BASE/$percorso/$id/noticeboard/read/${c.evtCode}/${c.pubId}/101", JSONObject().put("join", aderisci))
         return r.codice == 200
     }
 

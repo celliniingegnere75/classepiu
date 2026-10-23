@@ -39,9 +39,9 @@ class DettaglioActivity : AppCompatActivity() {
         val info = listOf(dataBreve(c.data), c.categoria).filter { it.isNotBlank() }.joinToString(" · ")
         col.addView(testo(info, 13f, alpha = .7f).apply { setPadding(0, dp(4), 0, dp(8)) })
 
-        if (c.azioni.isNotEmpty() || c.adesione) {
+        if (c.azioni.isNotEmpty()) {
             val avviso = colonna(12)
-            val cosa = (c.azioni + if (c.adesione) listOf("adesione") else emptyList()).joinToString(", ")
+            val cosa = c.azioni.joinToString(", ")
             avviso.addView(testo("Azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
             avviso.addView(testo("La conferma si fa sul sito ClasseViva: premi il pulsante (l'accesso è automatico) e conferma la circolare in Bacheca.", 14f))
             avviso.addView(bottone("Apri ClasseViva nel browser") {
@@ -59,7 +59,12 @@ class DettaglioActivity : AppCompatActivity() {
         if (c.allegati.isNotEmpty()) {
             col.addView(titoloSezione("Allegati"))
             c.allegati.forEach { a ->
-                col.addView(bottone("📎 ${a.nome}", pieno = false) { apriAllegato(a) }.apply { layoutParams = piena() })
+                col.addView(TextView(this).apply {
+                    text = "📎 ${a.nome}"; textSize = 15f
+                    setTextColor(ContextCompat.getColor(context, R.color.primario))
+                    setPadding(dp(4), dp(10), dp(4), dp(10))
+                    setOnClickListener { apriAllegato(a) }
+                }, piena())
             }
         }
 
@@ -79,6 +84,22 @@ class DettaglioActivity : AppCompatActivity() {
             }
         }
         col.addView(letta, piena())
+        if (c.adesione) {
+            val chiaveAdesione = "adesione_app_${c.chiave}"
+            val aderisci = TextView(this).apply {
+                text = "Aderisci"; textSize = 16f; gravity = android.view.Gravity.CENTER
+                setPadding(dp(8), dp(14), dp(8), dp(14))
+                fun colora() = setTextColor(if (pref.getBoolean(chiaveAdesione, false)) 0xFF9E9E9E.toInt() else ContextCompat.getColor(context, R.color.primario))
+                colora()
+                setOnClickListener {
+                    if (pref.getBoolean(chiaveAdesione, false)) return@setOnClickListener
+                    pref.edit().putBoolean(chiaveAdesione, true).putBoolean(chiaveLetta, true).apply()
+                    colora(); letta.setTextColor(0xFF9E9E9E.toInt())
+                    aderisci()
+                }
+            }
+            col.addView(aderisci, piena())
+        }
 
         val scroll = ScrollView(this).apply { addView(col) }
         setContentView(LinearLayout(this).apply {
@@ -126,6 +147,18 @@ class DettaglioActivity : AppCompatActivity() {
             val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(applicationContext, c) } }
             r.onSuccess { avviso("Inviata (${imp.doveVanno}, allegati $it/${c.allegati.size}).") }
                 .onFailure { avviso("Invio non riuscito: ${it.message}") }
+        }
+    }
+
+    private fun aderisci() {
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val cv = Impostazioni(this@DettaglioActivity).client()
+                    cv.login(); cv.bacheca(); cv.segnaLetta(c, aderisci = true)
+                }
+            }
+            avviso(if (r.getOrDefault(false)) "Adesione registrata su ClasseViva." else "Adesione non riuscita: ${r.exceptionOrNull()?.message ?: "risposta inattesa del server"}")
         }
     }
 
