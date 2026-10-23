@@ -41,7 +41,7 @@ class ImpostazioniFragment : Fragment() {
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
-            setPadding(ctx.dp(15), ctx.dp(12), ctx.dp(15), ctx.dp(24))
+            setPadding(ctx.dp(15), ctx.dp(4), ctx.dp(15), ctx.dp(10))
         }
 
         // --- Profilo: cerchio con sagoma di persona, nome e account; sotto la pillola per uscire
@@ -61,7 +61,7 @@ class ImpostazioniFragment : Fragment() {
         col.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(avatar, LinearLayout.LayoutParams(ctx.dp(56), ctx.dp(56)))
+            addView(avatar, LinearLayout.LayoutParams(ctx.dp(48), ctx.dp(48)))
             addView(nomeProfilo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = ctx.dp(14) })
         }, piena())
         val esci = pillola(ctx, "esci o cambia account", 17f, Color.WHITE, azzurro, ctx.dp(44)).apply {
@@ -79,13 +79,13 @@ class ImpostazioniFragment : Fragment() {
                     .show()
             }
         }
-        col.addView(esci, piena().apply { height = ViewGroup.LayoutParams.WRAP_CONTENT; topMargin = ctx.dp(16) })
+        col.addView(esci, piena().apply { height = ViewGroup.LayoutParams.WRAP_CONTENT; topMargin = ctx.dp(10) })
 
         // --- ricevitore e token
         val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
-        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(20) })
-        col.addView(token, piena().apply { topMargin = ctx.dp(4) })
+        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(8) })
+        col.addView(token, piena().apply { topMargin = ctx.dp(0) })
         val salva = pillola(ctx, "salva", 16f, Color.WHITE, azzurro, ctx.dp(38)).apply {
             setPadding(ctx.dp(28), ctx.dp(6), ctx.dp(28), ctx.dp(6))
             setOnClickListener {
@@ -96,19 +96,19 @@ class ImpostazioniFragment : Fragment() {
             }
         }
         col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(16)
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(10)
         })
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(26)) { on ->
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(14)) { on ->
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
         }
-        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(20)) { on ->
+        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(10)) { on ->
             imp.segnaLette = on
             messaggio(if (on) "le circolari inviate verranno segnate come lette." else "le circolari inviate resteranno da leggere.")
         }
-        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(20)) { on ->
+        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(10)) { on ->
             imp.controlloAutomatico = on
             Controllo.pianifica(ctx)
             aggiornaOre(on)
@@ -140,7 +140,7 @@ class ImpostazioniFragment : Fragment() {
             Controllo.pianifica(ctx)
         }
         // la riga parte più a sinistra (cerchietto allineato alle scritte) e guadagna spazio a destra: "24 ore" non si taglia
-        col.addView(gruppo, piena().apply { topMargin = ctx.dp(10); leftMargin = -ctx.dp(12) })
+        col.addView(gruppo, piena().apply { topMargin = ctx.dp(4); leftMargin = -ctx.dp(12) })
         aggiornaOre(imp.controlloAutomatico)
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
@@ -165,7 +165,7 @@ class ImpostazioniFragment : Fragment() {
         setTextColor(nero)
         textSize = 15f
         setSingleLine(true)
-        minHeight = ctx.dp(56)
+        minHeight = ctx.dp(48)
         gravity = Gravity.CENTER_VERTICAL
         backgroundTintList = ColorStateList.valueOf(nero)
         setPadding(ctx.dp(0), ctx.dp(8), ctx.dp(0), ctx.dp(8))
