@@ -159,6 +159,13 @@ class ClasseViva(private val utente: String, private val password: String) {
         return r.codice to r.testo
     }
 
+    /** Elenco degli studenti di una classe (risposta grezza, letta da leggiStudenti). */
+    fun studentiGrezzi(tipo: String, classeId: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val r = http("GET", "$BASE/teachers/$id/students/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
+        return r.codice to r.testo
+    }
+
     /** Segna la circolare come letta (come quando la si apre sull'app). */
     fun segnaLetta(c: Circolare, aderisci: Boolean = false): Boolean {
         if (percorso.isEmpty()) bacheca()
@@ -192,6 +199,34 @@ class ClasseViva(private val utente: String, private val password: String) {
         const val BASE = "https://web.spaggiari.eu/rest/v1"
         const val RITIRATA = "no more active"
     }
+}
+
+/** Cognome e nome di ogni studente dalla risposta di ClasseViva (campi dedotti, lettura tollerante). */
+fun leggiStudenti(grezzo: String): List<String> {
+    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyList() }
+    fun trova(v: Any?, liv: Int = 0): JSONArray? {
+        if (v is JSONArray) return v
+        if (v is JSONObject && liv < 3) {
+            for (k in listOf("students", "items", "data", "pupils")) v.optJSONArray(k)?.let { return it }
+            for (k in v.keys()) trova(v.opt(k), liv + 1)?.let { return it }
+        }
+        return null
+    }
+    val a = trova(radice) ?: return emptyList()
+    fun JSONObject.t(vararg ks: String): String {
+        for (k in ks) { val v = opt(k); if (v is String && v.isNotBlank()) return v.trim() }
+        return ""
+    }
+    val nomi = (0 until a.length()).mapNotNull { i ->
+        val o = a.optJSONObject(i) ?: return@mapNotNull null
+        val s = o.optJSONObject("student") ?: o
+        val cognome = s.t("lastName", "surname", "cognome", "studentLastName")
+        val nome = s.t("firstName", "name", "nome", "studentFirstName")
+        val intero = s.t("studentName", "fullName", "completeName")
+        val r = listOf(cognome, nome).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { intero }
+        r.takeIf { it.isNotEmpty() }
+    }
+    return nomi.map { n -> n.lowercase().split(" ").joinToString(" ") { w -> w.replaceFirstChar { it.uppercase() } } }.distinct().sorted()
 }
 
 /** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */

@@ -66,8 +66,8 @@ class ImpostazioniFragment : Fragment() {
         val esci = pillola(ctx, "esci o cambia account", 17f, Color.WHITE, azzurro, ctx.dp(44)).apply {
             setOnClickListener {
                 MaterialAlertDialogBuilder(ctx)
-                    .setMessage("Accesso come ${imp.utente}.\nUscire dall'account ClasseViva? Il controllo automatico si ferma finché non accedi di nuovo.")
-                    .setPositiveButton("Esci") { _, _ ->
+                    .setMessage("Uscire dall'account?")
+                    .setPositiveButton("Conferma") { _, _ ->
                         imp.password = ""
                         imp.controlloAutomatico = false
                         Controllo.pianifica(ctx)
@@ -78,15 +78,15 @@ class ImpostazioniFragment : Fragment() {
                     .show()
             }
         }
-        col.addView(esci, piena().apply { height = ctx.dp(44); topMargin = ctx.dp(14) })
+        col.addView(esci, piena().apply { height = ViewGroup.LayoutParams.WRAP_CONTENT; topMargin = ctx.dp(14) })
 
         // --- ricevitore e token
         val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
         col.addView(ricevitore, piena().apply { topMargin = ctx.dp(22) })
         col.addView(token, piena().apply { topMargin = ctx.dp(4) })
-        val salva = pillola(ctx, "salva credenziali", 16f, 0xFF474747.toInt(), azzurro, ctx.dp(38)).apply { // testo schiarito del 10%
-            setPadding(ctx.dp(16), 0, ctx.dp(16), 0)
+        val salva = pillola(ctx, "Salva", 16f, 0xFF474747.toInt(), azzurro, ctx.dp(38)).apply { // testo schiarito del 10%
+            setPadding(ctx.dp(28), ctx.dp(6), ctx.dp(28), ctx.dp(6))
             setOnClickListener {
                 imp.ricevitoreUrl = ricevitore.text.toString()
                 imp.ricevitoreCodice = token.text.toString()
@@ -94,7 +94,7 @@ class ImpostazioniFragment : Fragment() {
                 messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "Salvato: si usa il ricevitore già inserito nell'app." else "Credenziali del ricevitore salvate.")
             }
         }
-        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(38)).apply {
+        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(12)
         })
 
@@ -118,7 +118,7 @@ class ImpostazioniFragment : Fragment() {
         val scelta = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
         ORE.forEach { h ->
             gruppo.addView(RadioButton(ctx).apply {
-                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 15f; setTextColor(nero)
+                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 14f; setTextColor(nero); setSingleLine(true); gravity = Gravity.CENTER_VERTICAL
                 buttonTintList = ColorStateList.valueOf(azzurro)
                 isChecked = h == scelta
                 setPadding(ctx.dp(2), 0, 0, 0)
@@ -135,7 +135,7 @@ class ImpostazioniFragment : Fragment() {
 
         // --- invia subito l'ultima circolare
         val ultima = pillola(ctx, "invia subito l'ultima circolare!", 16f, 0xFF333333.toInt(), azzurro, ctx.dp(42)).apply {
-            setPadding(ctx.dp(12), 0, ctx.dp(12), 0)
+            setPadding(ctx.dp(14), ctx.dp(8), ctx.dp(14), ctx.dp(8))
             setOnClickListener {
                 esegui("Ultima circolare") {
                     val cv = Impostazioni(ctx).client()
@@ -146,7 +146,7 @@ class ImpostazioniFragment : Fragment() {
                 }
             }
         }
-        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(42)).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(16) })
+        col.addView(ultima, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(16) })
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
     }
@@ -157,8 +157,7 @@ class ImpostazioniFragment : Fragment() {
         textSize = size
         setTextColor(coloreTesto)
         gravity = Gravity.CENTER
-        maxLines = 1
-        includeFontPadding = false
+        minHeight = altezza
         background = GradientDrawable().apply { setColor(sfondo); cornerRadius = altezza / 2f }
         isClickable = true
         isFocusable = true
@@ -196,10 +195,13 @@ class ImpostazioniFragment : Fragment() {
             trackDecorationTintList = ColorStateList.valueOf(0xFF333333.toInt())
             setOnCheckedChangeListener { _, on -> cambia(on) }
         }
-        val t = TextView(ctx).apply { text = testo; textSize = 16f; setTextColor(nero) }
+        val t = TextView(ctx).apply {
+            text = testo; textSize = 16f; setTextColor(nero); setSingleLine(true)
+            androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, 10, 16, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+        }
         col.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.TOP
+            gravity = Gravity.CENTER_VERTICAL
             addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(sw, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(12) })
             setOnClickListener { sw.toggle() }

@@ -293,6 +293,12 @@ class RegistroFragment : Fragment() {
             h.descrizione.visibility = View.VISIBLE
             h.codice.text = c.codice
             h.codice.visibility = if (c.codice.isEmpty()) View.GONE else View.VISIBLE
+            h.box.setOnClickListener {
+                val p = c.chiave.split("|", limit = 3)
+                startActivity(android.content.Intent(requireContext(), StudentiActivity::class.java)
+                    .putExtra("tipo", p.getOrElse(0) { "" }).putExtra("id", p.getOrElse(1) { "" })
+                    .putExtra("nome", c.nome).putExtra("descrizione", c.descrizione))
+            }
         }
     }
 }
