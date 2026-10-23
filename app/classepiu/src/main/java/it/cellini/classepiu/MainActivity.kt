@@ -32,7 +32,7 @@ import androidx.fragment.app.Fragment
 class MainActivity : AppCompatActivity() {
 
     private val contenitoreId = View.generateViewId()
-    private var schedaAttiva = TAB_BACHECA
+    private var schedaAttiva = TAB_REGISTRO
     private val voci = mutableMapOf<Int, Pair<View, TextView>>() // tab -> (riquadro icona, etichetta)
     private val icone = mutableMapOf<Int, ImageView>()
 
@@ -95,10 +95,10 @@ class MainActivity : AppCompatActivity() {
                 .add(contenitoreId, RegistroFragment(), "t$TAB_REGISTRO")
                 .add(contenitoreId, ImpostazioniFragment(), "t$TAB_IMPOSTAZIONI")
                 .commitNow()
-            mostra(TAB_BACHECA)
+            mostra(TAB_REGISTRO)
             Controllo.pianifica(this)
         } else {
-            mostra(savedInstanceState.getInt("tab", TAB_BACHECA))
+            mostra(savedInstanceState.getInt("tab", TAB_REGISTRO))
         }
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
