@@ -248,22 +248,36 @@ fun leggiStudenti(grezzo: String): List<Studente> {
     return lista.distinctBy { it.nome }.sortedBy { it.nome }
 }
 
-/** Stato di presenza per id studente: 0 presente, 1 altra condizione (ritardo, uscita...), 2 assente. Vuota = nessun dato. */
+/**
+ * Stato di presenza per id studente: -1 nessuna lezione/nessun dato, 0 presente, 1 ritardo/uscita, 2 assente.
+ * L'app ufficiale usa gli stati present, absent, late, shortLate, leaving, noLesson, presentInternship, presentEducationalTrip.
+ */
 fun leggiStato(grezzo: String): Map<String, Int> {
     val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
     val a = trovaArrayGenerico(radice, listOf("students", "items", "data", "status", "pupils")) ?: return emptyMap()
+    fun stringhe(v: Any?, out: MutableList<String>) {
+        when (v) {
+            is String -> out.add(v.lowercase())
+            is JSONObject -> v.keys().forEach { stringhe(v.opt(it), out) }
+            is JSONArray -> for (i in 0 until v.length()) stringhe(v.opt(i), out)
+        }
+    }
     val m = HashMap<String, Int>()
     for (i in 0 until a.length()) {
         val o = a.optJSONObject(i) ?: continue
         val id = idDi(o)
         if (id.isEmpty()) continue
-        val t = o.toString().lowercase()
+        val ss = mutableListOf<String>().also { stringhe(o, it) }
+        val assente = ss.any { it == "absent" || it.startsWith("aba") || it.contains("assen") }
+        val altro = ss.any { it == "late" || it == "shortlate" || it == "leaving" || it.startsWith("abr") || it.startsWith("abu") }
+        val presente = ss.any { it == "present" || it == "presentinternship" || it == "presenteducationaltrip" }
         val v = when {
-            t.contains("\"aba") || t.contains("assen") || t.contains("absen") -> 2
-            t.contains("\"abr") || t.contains("\"abu") || t.contains("ritard") || t.contains("uscit") || t.contains("late") || t.contains("\"abl") -> 1
-            else -> 0
+            assente -> 2
+            altro -> 1
+            presente -> 0
+            else -> -1 // noLesson o nessun dato
         }
-        m[id] = maxOf(m[id] ?: 0, v)
+        m[id] = maxOf(m[id] ?: -1, v)
     }
     return m
 }

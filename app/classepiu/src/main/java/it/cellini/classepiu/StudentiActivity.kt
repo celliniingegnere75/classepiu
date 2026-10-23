@@ -147,7 +147,7 @@ class StudentiActivity : AppCompatActivity() {
         studenti.forEach { s ->
             val colore = when {
                 caricamento || stato.isEmpty() -> 0xFFB8B8B8.toInt()           // nessun dato: grigio
-                else -> when (stato[s.id] ?: 0) { 2 -> 0xFFE53935.toInt(); 1 -> 0xFFF2C200.toInt(); else -> 0xFF2EB82E.toInt() }
+                else -> when (stato[s.id] ?: -1) { 2 -> 0xFFE53935.toInt(); 1 -> 0xFFF2C200.toInt(); 0 -> 0xFF2EB82E.toInt(); else -> 0xFFB8B8B8.toInt() }
             }
             val pallino = TextView(ctx).apply {
                 gravity = Gravity.CENTER; textSize = 11f; setTextColor(Color.WHITE)
