@@ -14,15 +14,12 @@ import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
 import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -116,31 +113,50 @@ class ImpostazioniFragment : Fragment() {
         }
 
         // --- intervallo: 2, 4, 8, 24 ore (grigio e non selezionabile se il controllo periodico è spento)
-        val gruppo = RadioGroup(ctx).apply { orientation = RadioGroup.HORIZONTAL; setPadding(0, 0, 0, 0) }
-        aggiornaOre = { acceso ->
-            for (i in 0 until gruppo.childCount) (gruppo.getChildAt(i) as RadioButton).apply {
-                isEnabled = acceso
-                setTextColor(if (acceso) nero else 0xFFA8A8A8.toInt())
-                buttonTintList = ColorStateList.valueOf(if (acceso) azzurro else 0xFFC4C4C4.toInt())
+        // scelte disegnate a mano (cerchio, punto, scritta) con spazi flessibili tra l'una e l'altra:
+        // nessuna larghezza fissa, così "24 ore" non viene mai tagliato
+        val gruppo = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
+        var oreScelte = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
+        var oreAttive = imp.controlloAutomatico
+        val voci = ArrayList<Triple<Int, View, TextView>>() // ore, punto interno, scritta
+        val cerchi = ArrayList<GradientDrawable>()
+        fun ridisegna() {
+            val colore = if (oreAttive) azzurro else 0xFFC4C4C4.toInt()
+            voci.forEachIndexed { i, (h, punto, scritta) ->
+                cerchi[i].setStroke(ctx.dp(2), colore)
+                (punto.background as GradientDrawable).setColor(colore)
+                punto.visibility = if (h == oreScelte) View.VISIBLE else View.INVISIBLE
+                scritta.setTextColor(if (oreAttive) nero else 0xFFA8A8A8.toInt())
             }
         }
-        val scelta = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
-        ORE.forEach { h ->
-            gruppo.addView(RadioButton(ctx).apply {
-                id = View.generateViewId(); text = "$h ore"; tag = h; textSize = 14f; setTextColor(nero); setSingleLine(true); gravity = Gravity.CENTER_VERTICAL
-                buttonTintList = ColorStateList.valueOf(azzurro)
-                isChecked = h == scelta
-                setPadding(ctx.dp(2), 0, 0, 0)
-                // le quattro scelte si dividono la riga: nessuna resta tagliata con il solo cerchietto
-                layoutParams = RadioGroup.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f)
-            })
+        ORE.forEachIndexed { i, h ->
+            if (i > 0) gruppo.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+            val anello = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.TRANSPARENT) }
+            cerchi.add(anello)
+            val punto = View(ctx).apply { background = GradientDrawable().apply { shape = GradientDrawable.OVAL } }
+            val cerchio = FrameLayout(ctx).apply {
+                background = anello
+                addView(punto, FrameLayout.LayoutParams(ctx.dp(10), ctx.dp(10), Gravity.CENTER))
+            }
+            val scritta = TextView(ctx).apply { text = "$h ore"; textSize = 14f; setSingleLine(true) }
+            voci.add(Triple(h, punto, scritta))
+            gruppo.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(0, ctx.dp(8), 0, ctx.dp(8))
+                addView(cerchio, LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)))
+                addView(scritta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(6) })
+                setOnClickListener {
+                    if (!oreAttive) return@setOnClickListener
+                    oreScelte = h
+                    imp.oreIntervallo = h
+                    Controllo.pianifica(ctx)
+                    ridisegna()
+                }
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        gruppo.setOnCheckedChangeListener { g, id ->
-            imp.oreIntervallo = (g.findViewById<RadioButton>(id)?.tag as? Int) ?: 2
-            Controllo.pianifica(ctx)
-        }
-        // la riga parte più a sinistra (cerchietto allineato alle scritte) e guadagna spazio a destra: "24 ore" non si taglia
-        col.addView(gruppo, piena().apply { topMargin = ctx.dp(4); leftMargin = -ctx.dp(12) })
+        aggiornaOre = { acceso -> oreAttive = acceso; ridisegna() }
+        col.addView(gruppo, piena().apply { topMargin = ctx.dp(4) })
         aggiornaOre(imp.controlloAutomatico)
 
         return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
@@ -181,16 +197,25 @@ class ImpostazioniFragment : Fragment() {
     }
 
     /** Riga con testo a sinistra e interruttore azzurro a destra; si salva appena lo tocchi. */
-    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, cambia: (Boolean) -> Unit): MaterialSwitch {
+    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, cambia: (Boolean) -> Unit): androidx.appcompat.widget.SwitchCompat {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
-        val sw = MaterialSwitch(ctx).apply {
+        fun pillola(colore: Int) = GradientDrawable().apply {
+            setColor(colore); cornerRadius = ctx.dp(15).toFloat(); setSize(ctx.dp(52), ctx.dp(30))
+        }
+        val sfondo = android.graphics.drawable.StateListDrawable().apply {
+            addState(intArrayOf(android.R.attr.state_checked), pillola(azzurro))
+            addState(intArrayOf(), pillola(0xFFE3E3E3.toInt()))
+        }
+        // pallino bianco di 22 dp con 4 dp di margine: sta sempre dentro lo sfondo, uguale acceso e spento
+        val pallino = android.graphics.drawable.InsetDrawable(
+            GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(ctx.dp(22), ctx.dp(22)) }, ctx.dp(4))
+        val sw = androidx.appcompat.widget.SwitchCompat(ctx, null, 0).apply {
+            trackDrawable = sfondo
+            thumbDrawable = pallino
+            switchMinWidth = ctx.dp(52)
+            showText = false
+            background = null
             isChecked = acceso
-            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt()))
-            thumbTintList = ColorStateList.valueOf(Color.WHITE)
-            // pallino sempre della stessa dimensione, sia acceso sia spento
-            thumbDrawable = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(ctx.dp(24), ctx.dp(24)) }
-            thumbIconDrawable = null
-            trackDecorationTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(azzurro, 0xFFE3E3E3.toInt())) // stesso colore della barra: nessun bordo scuro
             setOnCheckedChangeListener { _, on -> cambia(on) }
         }
         val t = TextView(ctx).apply {
