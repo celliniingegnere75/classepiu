@@ -263,34 +263,27 @@ fun leggiStato(grezzo: String): Map<String, Int> {
         }
     }
     val m = HashMap<String, Int>()
+    val senzaCodice = ArrayList<String>()
     for (i in 0 until a.length()) {
         val o = a.optJSONObject(i) ?: continue
         val id = idDi(o)
         if (id.isEmpty()) continue
+        // codici di ClasseViva: AT00 presente, ABA0 assente, ABU0/ABR* uscita/ritardo
         val ss = mutableListOf<String>().also { stringhe(o, it) }
-        // codici di ClasseViva: AT00 presente, ABA0 assente, ABR*/ABU* ritardo/uscita; altri (es. nessuna lezione) = nessun dato
         val codici = ss.map { it.uppercase() }.filter { it.length == 4 && it[0].isLetter() }
-        if (codici.isNotEmpty()) {
-            val v = when {
-                codici.any { it.startsWith("ABA") } -> 2
-                codici.any { it.startsWith("AB") } -> 1
-                codici.any { it.startsWith("AT") } -> 0
-                else -> -1
-            }
-            m[id] = maxOf(m[id] ?: -1, v)
-            continue
-        }
-        val assente = ss.any { it == "absent" || it.startsWith("aba") || it.contains("assen") }
-        val altro = ss.any { it == "late" || it == "shortlate" || it == "leaving" || it.startsWith("abr") || it.startsWith("abu") }
-        val presente = ss.any { it == "present" || it == "presentinternship" || it == "presenteducationaltrip" }
+        if (codici.isEmpty()) { senzaCodice.add(id); continue }
         val v = when {
-            assente -> 2
-            altro -> 1
-            presente -> 0
-            else -> -1 // noLesson o nessun dato
+            codici.any { it.startsWith("ABA") } -> 2
+            codici.any { it.startsWith("AB") } -> 1
+            codici.any { it.startsWith("AT") } -> 0
+            else -> -1
         }
         m[id] = maxOf(m[id] ?: -1, v)
     }
+    // Senza segnalazioni lo studente è presente, ma solo se quel giorno c'è lezione:
+    // se nella classe nessuno ha un codice (domenica, festivo, giorno futuro) restano tutti senza dato.
+    val giornoDiLezione = m.isNotEmpty()
+    for (id in senzaCodice) m[id] = if (giornoDiLezione) 0 else -1
     return m
 }
 
