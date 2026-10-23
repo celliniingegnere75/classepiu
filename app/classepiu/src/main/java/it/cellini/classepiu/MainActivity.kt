@@ -131,6 +131,11 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onStart() {
+        super.onStart()
+        if (Impostazioni(this).pronta) Controllo.recupera(this)
+    }
+
     override fun onResume() {
         super.onResume()
         if (Build.VERSION.SDK_INT >= 33 &&

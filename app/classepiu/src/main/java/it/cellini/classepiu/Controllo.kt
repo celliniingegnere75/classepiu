@@ -29,6 +29,26 @@ data class Esito(val nuove: Int, val nonInviate: Int, val primoAvvio: Boolean, v
 object Controllo {
     private const val ATTESA_ALLEGATI_MS = 48L * 3600 * 1000
 
+    private val inCorso = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    /**
+     * Quando l'app si risveglia: se il controllo automatico è in ritardo (Android lo ha bloccato o rimandato),
+     * lo esegue subito. Le circolari che non partono ora si riprovano al giro successivo.
+     */
+    fun recupera(ctx: Context) {
+        val imp = Impostazioni(ctx)
+        if (!imp.pronta || !imp.controlloAutomatico) return
+        val ultimo = ctx.getSharedPreferences("app", Context.MODE_PRIVATE).getLong("ultimo_controllo", 0L)
+        val scadenza = ultimo + imp.oreIntervallo * 3600_000L + 5 * 60_000L
+        if (ultimo != 0L && System.currentTimeMillis() < scadenza) return
+        if (!inCorso.compareAndSet(false, true)) return
+        val app = ctx.applicationContext
+        Thread {
+            try { runCatching { esegui(app) }.onFailure { Diario.scrivi(app, "controllo al risveglio non riuscito: ${it.message}") } }
+            finally { inCorso.set(false) }
+        }.start()
+    }
+
     @Synchronized
     fun esegui(ctx: Context): Esito {
         val imp = Impostazioni(ctx)
@@ -83,6 +103,7 @@ object Controllo {
         val msg = if (primo) "primo avvio: segnate come già viste ${items.size} circolari."
         else "controllo fatto. circolari nuove: $nuove" + if (errori > 0) ", non inviate: $errori" else ""
         Diario.scrivi(ctx, msg)
+        ctx.getSharedPreferences("app", Context.MODE_PRIVATE).edit().putLong("ultimo_controllo", System.currentTimeMillis()).apply()
         return Esito(nuove, errori, primo, msg)
     }
 
