@@ -39,7 +39,7 @@ class StudentiActivity : AppCompatActivity() {
             gravity = Gravity.CENTER_VERTICAL
             addView(chiudi, LinearLayout.LayoutParams(dp(48), dp(48)))
             addView(titolo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(android.view.View(this), LinearLayout.LayoutParams(dp(48), dp(48)))
+            addView(android.view.View(this@StudentiActivity), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
 
         // striscia dei giorni: oggi al centro
@@ -50,7 +50,7 @@ class StudentiActivity : AppCompatActivity() {
         for (i in 0 until 7) {
             val g = (inizio.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, i) }
             val oggi = i == 3
-            giorni.addView(LinearLayout(this).apply {
+            giorni.addView(LinearLayout(this@StudentiActivity).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
                 addView(TextView(context).apply { text = sigle[g.get(Calendar.DAY_OF_WEEK) - 1].toString(); textSize = 13f; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
                 addView(TextView(context).apply {
