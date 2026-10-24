@@ -45,6 +45,22 @@ object GoogleMail {
 
     fun indirizzoDa(r: AuthorizationResult): String = r.accessToken?.let { indirizzo(it) }.orEmpty()
 
+    /**
+     * Revoca davvero il consenso lato Google (non solo in locale): senza questo, Play Services ricorda
+     * il consenso già dato e al prossimo accesso lo riusa senza più mostrare la scelta dell'account.
+     * Va chiamata PRIMA di dimenticare l'account in classePiù, perché serve un gettone ancora valido.
+     */
+    fun revoca(ctx: Context) {
+        val gettone = runCatching { gettone(ctx) }.getOrNull() ?: return
+        runCatching {
+            val c = URL("https://oauth2.googleapis.com/revoke?token=$gettone").openConnection() as HttpURLConnection
+            c.requestMethod = "POST"
+            c.connectTimeout = 15_000; c.readTimeout = 15_000
+            c.responseCode
+            c.disconnect()
+        }
+    }
+
     /** Spedisce la mail completa di allegati con l'endpoint di caricamento della Gmail API (fino a 35 MB). */
     fun invia(ctx: Context, destinatari: List<String>, oggetto: String, testo: String, allegati: List<FileScaricato>) {
         if (destinatari.isEmpty()) throw IllegalStateException("nessun destinatario impostato.")

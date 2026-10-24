@@ -302,18 +302,21 @@ class ImpostazioniFragment : Fragment() {
     }
 
     /**
-     * Dimentica l'account google in classePiù e cancella la memoria in cache, così al prossimo giro
-     * si può scegliere un altro account. Nota: Google potrebbe ancora ricordare il consenso
-     * già dato; per una revoca completa togli il permesso da myaccount.google.com/permissions.
+     * Revoca il consenso lato Google (non solo in locale, altrimenti Play Services lo riuserebbe
+     * senza più mostrare la scelta dell'account) e poi dimentica l'account in classePiù.
      */
     private fun scollegaGoogle(ctx: android.content.Context) {
         MaterialAlertDialogBuilder(ctx)
             .setTitle("scollegare l'account google?")
-            .setMessage("classePiù dimenticherà questo account e mostrerà la scelta dell'account la prossima volta. Se Google continua a ricordare il consenso, togli il permesso da myaccount.google.com/permissions.")
+            .setMessage("classePiù revocherà il permesso e dimenticherà questo account, così la prossima volta potrai sceglierne un altro.")
             .setPositiveButton("scollega") { _, _ ->
-                Impostazioni(ctx).googleAccount = ""
-                aggiornaAccount()
-                messaggio("account google scollegato.")
+                messaggio("scollegamento in corso…")
+                lifecycleScope.launch {
+                    withContext(Dispatchers.IO) { runCatching { GoogleMail.revoca(ctx) } }
+                    Impostazioni(ctx).googleAccount = ""
+                    aggiornaAccount()
+                    messaggio("account google scollegato.")
+                }
             }
             .setNegativeButton("annulla", null)
             .show()
