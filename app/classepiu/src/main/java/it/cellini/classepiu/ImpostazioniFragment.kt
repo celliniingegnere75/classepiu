@@ -68,11 +68,12 @@ class ImpostazioniFragment : Fragment() {
         col.addView(contoGoogle, piena().apply { topMargin = ctx.dp(2) })
         val titoloDestinatario = TextView(ctx).apply {
             text = "le email saranno inviate a:"; textSize = 14f; setTextColor(0xFF666666.toInt())
+            carattereNormale(ctx)?.let { typeface = it }
             visibility = View.GONE
         }
         titoloDestinatarioView = titoloDestinatario
         col.addView(titoloDestinatario, piena().apply { topMargin = ctx.dp(10) })
-        val destinatario = campoSottolineato(ctx, "destinatario (vuoto = te stesso)", password = false).apply { setText(imp.destinatari) }
+        val destinatario = campoSottolineato(ctx, "destinatario (vuoto = te stesso)", password = false).apply { setText(imp.destinatari); carattereNormale(ctx)?.let { typeface = it } }
         destinatarioView = destinatario
         col.addView(destinatario, piena().apply { topMargin = ctx.dp(2) })
 
