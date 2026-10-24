@@ -199,7 +199,7 @@ class MainActivity : AppCompatActivity() {
             Triple(TAB_HOME, "home", R.drawable.ic_nav_home),
             Triple(TAB_REGISTRO, "registro", R.drawable.ic_nav_registro),
             Triple(TAB_BACHECA, "bacheca", R.drawable.ic_nav_bacheca),
-            Triple(TAB_IMPOSTAZIONI, "opzioni", R.drawable.ic_nav_impostazioni),
+            Triple(TAB_IMPOSTAZIONI, "setting", R.drawable.ic_nav_impostazioni),
         ).forEach { (tab, nome, icona) ->
             val img = ImageView(this).apply { setImageResource(icona) }
             val riquadro = FrameLayout(this).apply {
