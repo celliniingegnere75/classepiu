@@ -35,6 +35,7 @@ class ImpostazioniFragment : Fragment() {
 
     private val nero = 0xFF111111.toInt()
     private var aggiornaOre: (Boolean) -> Unit = {}
+    private var invioMailRow: View? = null
     private var segnaLetteRow: View? = null
     private var controlloPeriodicoRow: View? = null
     private var gruppoIntervallo: View? = null
@@ -46,7 +47,7 @@ class ImpostazioniFragment : Fragment() {
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
-            setPadding(ctx.dp(15), ctx.dp(4), ctx.dp(15), ctx.dp(10))
+            setPadding(ctx.dp(15), ctx.dp(24), ctx.dp(15), ctx.dp(10))
         }
 
         // invio con gmail dopo l'accesso google (unico modo, il ricevitore Apps Script non c'è più)
@@ -116,11 +117,11 @@ class ImpostazioniFragment : Fragment() {
         }
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(28), false) { on ->
+        invioMailRow = riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(28), true) { on ->
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
             aggiornaVisibilitaControlli()
-        }
+        } as View
         segnaLetteRow = riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12), true) { on ->
             imp.segnaLette = on
             messaggio(if (on) "le circolari inviate verranno segnate come lette." else "le circolari inviate resteranno da leggere.")
@@ -291,11 +292,16 @@ class ImpostazioniFragment : Fragment() {
         titoloDestinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         destinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         if (!autenticato) salvaDestinatarioView?.visibility = View.GONE
+        aggiornaVisibilitaControlli()
     }
 
+    /** Senza autenticazione non si può inviare nulla: gli interruttori e l'intervallo restano nascosti. */
     private fun aggiornaVisibilitaControlli() {
-        val imp = Impostazioni(context ?: return)
-        val visibile = imp.invioMail
+        val ctx = context ?: return
+        val imp = Impostazioni(ctx)
+        val autenticato = imp.googleAccount.contains('@')
+        invioMailRow?.visibility = if (autenticato) View.VISIBLE else View.GONE
+        val visibile = autenticato && imp.invioMail
         segnaLetteRow?.visibility = if (visibile) View.VISIBLE else View.GONE
         controlloPeriodicoRow?.visibility = if (visibile) View.VISIBLE else View.GONE
         gruppoIntervallo?.visibility = if (visibile) View.VISIBLE else View.GONE

@@ -35,10 +35,11 @@ fun Context.titoloSezione(s: String): TextView = testo(s, 17f, true).apply {
     setPadding(0, dp(20), 0, dp(6))
 }
 
-fun Context.bottone(s: String, pieno: Boolean = true, click: (View) -> Unit): MaterialButton {
+fun Context.bottone(s: String, pieno: Boolean = true, icona: Int? = null, click: (View) -> Unit): MaterialButton {
     val b = if (pieno) MaterialButton(this) else MaterialButton(this, null, com.google.android.material.R.attr.materialButtonOutlinedStyle)
     b.text = s
     b.isAllCaps = false
+    if (icona != null) b.icon = androidx.core.content.ContextCompat.getDrawable(this, icona)
     b.setOnClickListener(click)
     return b
 }

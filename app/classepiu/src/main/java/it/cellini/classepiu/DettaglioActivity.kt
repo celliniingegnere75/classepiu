@@ -72,7 +72,7 @@ class DettaglioActivity : AppCompatActivity() {
         }
 
         col.addView(titoloSezione("azioni"))
-        col.addView(bottone("invia per mail") { inviaOra() }.apply { layoutParams = piena() })
+        col.addView(bottone("invia per mail", icona = android.R.drawable.ic_dialog_email) { inviaOra() }.apply { layoutParams = piena() })
         val pref = getSharedPreferences("app", MODE_PRIVATE)
         val chiaveLetta = "letta_app_${c.chiave}"
         val letta = TextView(this).apply {
