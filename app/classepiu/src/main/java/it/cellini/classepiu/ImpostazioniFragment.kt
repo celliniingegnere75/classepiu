@@ -52,6 +52,14 @@ class ImpostazioniFragment : Fragment() {
         val destinatario = campoSottolineato(ctx, "destinatario (vuoto = te stesso)", password = false).apply { setText(imp.destinatari) }
         col.addView(destinatario, piena())
         aggiornaAccount()
+        // destinatario vuoto: si prova a prendere l'email registrata su classeviva
+        if (imp.destinatari.isBlank() && imp.pronta) lifecycleScope.launch {
+            val email = withContext(Dispatchers.IO) { imp.client().emailRegistrata() }
+            if (!isAdded || email.isEmpty() || imp.destinatari.isNotBlank()) return@launch
+            imp.destinatari = email
+            destinatario.setText(email)
+            messaggio("email presa da classeviva: $email")
+        }
 
         val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))

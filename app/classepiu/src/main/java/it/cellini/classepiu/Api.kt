@@ -200,6 +200,40 @@ class ClasseViva(private val utente: String, private val password: String) {
         return presi.values.toList()
     }
 
+    /**
+     * Email registrata sul profilo ClasseViva. Non c'è nella REST API: si entra nel portale web
+     * (sessione a cookie, non documentato) e si legge data.emailAddress da OtpApi.php?a=recStatus.
+     * Se Spaggiari cambia qualcosa torna "" e il destinatario si scrive a mano.
+     */
+    fun emailRegistrata(): String = runCatching {
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val browser = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
+        val login = URL("https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php?a=aLoginPwd").openConnection() as HttpURLConnection
+        login.requestMethod = "POST"
+        login.connectTimeout = 30_000
+        login.readTimeout = 30_000
+        login.instanceFollowRedirects = false
+        login.setRequestProperty("User-Agent", browser)
+        login.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+        login.doOutput = true
+        login.outputStream.use { it.write("cid=&uid=${enc(utente)}&pwd=${enc(password)}&pin=&target=".toByteArray()) }
+        login.responseCode
+        val biscotti = login.headerFields.filterKeys { it.equals("Set-Cookie", ignoreCase = true) }
+            .values.flatten().map { it.substringBefore(';') }.filter { it.contains('=') }
+        login.disconnect()
+        if (biscotti.isEmpty()) return@runCatching ""
+
+        val stato = URL("https://web.spaggiari.eu/auth/app/default/OtpApi.php?a=recStatus").openConnection() as HttpURLConnection
+        stato.connectTimeout = 30_000
+        stato.readTimeout = 30_000
+        stato.setRequestProperty("User-Agent", browser)
+        stato.setRequestProperty("Cookie", biscotti.joinToString("; "))
+        val testo = (if (stato.responseCode in 200..299) stato.inputStream else stato.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
+        stato.disconnect()
+        val j = JSONObject(testo)
+        (j.optJSONObject("data")?.optString("emailAddress") ?: j.optString("emailAddress")).trim().takeIf { it.contains('@') }.orEmpty()
+    }.getOrDefault("")
+
     class CircolareRitirata : Exception("circolare ritirata dalla scuola")
 
     companion object {
