@@ -59,6 +59,18 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = "ClassePiù"
                 adjustViewBounds = true
             }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            // a destra del logo: orologio funzionante e, sotto, il giorno ("mar, 2 ott")
+            val data = TextView(this@MainActivity).apply {
+                textSize = 11f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+                setSingleLine(true); includeFontPadding = false
+            }
+            val orologio = Orologio(this@MainActivity, sulAzzurro = true).apply { alTick = { data.text = giornoBreve() } }
+            addView(LinearLayout(this@MainActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                addView(orologio, LinearLayout.LayoutParams(dp(34), dp(34)))
+                addView(data, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
+            }, FrameLayout.LayoutParams(dp(74), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply { rightMargin = dp(10) })
         }
 
         // --- pannello bianco con angoli superiori arrotondati, da bordo a bordo (come la bozza);
@@ -119,6 +131,10 @@ class MainActivity : AppCompatActivity() {
         // dopo l'ingresso con le credenziali si entra subito, senza animazione
         if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) Splash.mostra(this)
     }
+
+    /** Giorno in forma breve, tutto minuscolo: "mar, 2 ott". */
+    private fun giornoBreve(): String =
+        java.text.SimpleDateFormat("EEE, d MMM", java.util.Locale.ITALY).format(java.util.Date()).lowercase().replace(".", "")
 
     /** Una sola volta: chiede di escludere l'app dall'ottimizzazione batteria, così i controlli partono a orario. */
     @SuppressLint("BatteryLife")
