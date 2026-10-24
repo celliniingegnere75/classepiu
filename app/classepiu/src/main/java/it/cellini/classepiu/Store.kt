@@ -46,8 +46,18 @@ class Impostazioni(ctx: Context) {
         get() {
             val elenco = destinatari.split(',', ';', ' ').map { it.trim() }.filter { it.contains('@') }
             if (elenco.isNotEmpty()) return elenco
+            if (invioGoogle && googleAccount.contains('@')) return listOf(googleAccount)
             return if (utente.contains('@')) listOf(utente) else emptyList()
         }
+
+    /** true = invio con Gmail dopo l'accesso con Google (OAuth, permesso gmail.send): ha la precedenza sul ricevitore. */
+    var invioGoogle: Boolean
+        get() = p.getBoolean("invio_google", false)
+        set(v) = p.edit().putBoolean("invio_google", v).apply()
+    /** Account Google con cui si è dato il consenso (serve per mostrarlo e come destinatario predefinito). */
+    var googleAccount: String
+        get() = p.getString("google_account", "") ?: ""
+        set(v) = p.edit().putString("google_account", v.trim()).apply()
 
     /** true = invio tramite il ricevitore Apps Script (nessuna password per le app); false = Gmail diretto. */
     var usaRicevitore: Boolean
@@ -88,11 +98,12 @@ class Impostazioni(ctx: Context) {
 
     val pronta get() = utente.isNotBlank() && password.isNotBlank()
     val mailPronta
-        get() = if (usaRicevitore) ricevitoreUrl.startsWith("https://") && ricevitoreCodice.isNotBlank()
+        get() = if (invioGoogle) googleAccount.contains('@') && destinatariEffettivi.isNotEmpty()
+        else if (usaRicevitore) ricevitoreUrl.startsWith("https://") && ricevitoreCodice.isNotBlank()
         else gmail.contains('@') && passwordApp.isNotBlank() && destinatariEffettivi.isNotEmpty()
 
     /** Descrizione di dove vanno le mail, per i messaggi all'utente. */
-    val doveVanno get() = if (usaRicevitore) "ricevitore Apps Script" else destinatariEffettivi.joinToString(", ")
+    val doveVanno get() = if (invioGoogle) destinatariEffettivi.joinToString(", ") else if (usaRicevitore) "ricevitore Apps Script" else destinatariEffettivi.joinToString(", ")
 
     fun client() = ClasseViva(utente, password)
 }

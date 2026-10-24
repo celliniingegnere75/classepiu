@@ -80,7 +80,7 @@ object Controllo {
                     continue
                 }
                 if (imp.invioMail && imp.mailPronta) {
-                    Mailer.inviaCircolare(imp, c.titolo, c.data, c.categoria, Mailer.testoCircolare(c, scaricati.size), scaricati)
+                    Mailer.inviaCircolare(ctx, imp, c.titolo, c.data, c.categoria, Mailer.testoCircolare(c, scaricati.size), scaricati)
                 }
                 viste[c.chiave] = if (scaricati.size < c.allegati.size) System.currentTimeMillis() else 1L
                 archivio.salva(viste)
@@ -124,7 +124,7 @@ object Controllo {
         }
         try {
             if (imp.invioMail && imp.mailPronta) {
-                Mailer.inviaCircolare(imp, "Allegato - ${c.titolo}", c.data, c.categoria, "Allegato della circolare inviata in precedenza senza documento.", scaricati)
+                Mailer.inviaCircolare(ctx, imp, "Allegato - ${c.titolo}", c.data, c.categoria, "Allegato della circolare inviata in precedenza senza documento.", scaricati)
             }
             viste[c.chiave] = 1L
             Diario.scrivi(ctx, "Inviato allegato: ${c.titolo}")
@@ -140,7 +140,7 @@ object Controllo {
         cv.login()
         cv.bacheca()
         val scaricati = cv.tuttiGliAllegati(c, 3, apriSeServe = true)
-        Mailer.inviaCircolare(imp, c.titolo, c.data, c.categoria, Mailer.testoCircolare(c, scaricati.size), scaricati)
+        Mailer.inviaCircolare(ctx, imp, c.titolo, c.data, c.categoria, Mailer.testoCircolare(c, scaricati.size), scaricati)
         Diario.scrivi(ctx, "Inviata a mano: ${c.titolo} (allegati ${scaricati.size}/${c.allegati.size})")
         return scaricati.size
     }

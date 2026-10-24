@@ -36,8 +36,14 @@ object Mailer {
             override fun getPasswordAuthentication() = PasswordAuthentication(imp.gmail, imp.passwordApp)
         })
 
+        val msg = messaggio(sessione, imp.gmail, destinatari, oggetto, testo, allegati)
+        Transport.send(msg)
+    }
+
+    /** Mail completa (testo e allegati PDF), usata sia da SMTP sia dalla Gmail API. */
+    fun messaggio(sessione: Session, mittente: String, destinatari: List<String>, oggetto: String, testo: String, allegati: List<FileScaricato>): MimeMessage {
         val msg = MimeMessage(sessione)
-        msg.setFrom(InternetAddress(imp.gmail, "ClassePiù", "UTF-8"))
+        if (mittente.isNotBlank()) msg.setFrom(InternetAddress(mittente, "ClassePiù", "UTF-8"))
         msg.setRecipients(Message.RecipientType.TO, destinatari.joinToString(",") { it })
         msg.setSubject(oggetto, "UTF-8")
         msg.sentDate = Date()
@@ -52,15 +58,17 @@ object Mailer {
             corpo.addBodyPart(parte)
         }
         msg.setContent(corpo)
-        Transport.send(msg)
+        return msg
     }
 
     /**
      * Invia una circolare nel modo scelto: ricevitore Apps Script (lo stesso usato da cv.py, che la manda
-     * per mail con prefisso [CLASSEVIVA]) oppure Gmail diretto.
+     * per mail con prefisso [CLASSEVIVA]), Gmail con l'accesso Google (OAuth) oppure Gmail con password per le app.
      */
-    fun inviaCircolare(imp: Impostazioni, titolo: String, data: String, categoria: String, testo: String, allegati: List<FileScaricato>) {
-        if (imp.usaRicevitore) ricevitore(imp, titolo, data, categoria, testo, allegati)
+    fun inviaCircolare(ctx: android.content.Context, imp: Impostazioni, titolo: String, data: String, categoria: String, testo: String, allegati: List<FileScaricato>) {
+        if (imp.invioGoogle) GoogleMail.invia(ctx, imp.destinatariEffettivi, "[CLASSEVIVA] $titolo",
+            "Data: $data\n" + (if (categoria.isNotBlank()) "Categoria: $categoria\n" else "") + "\n" + testo, allegati)
+        else if (imp.usaRicevitore) ricevitore(imp, titolo, data, categoria, testo, allegati)
         else invia(imp, "[CLASSEVIVA] $titolo",
             "Data: $data\n" + (if (categoria.isNotBlank()) "Categoria: $categoria\n" else "") + "\n" + testo, allegati)
     }
