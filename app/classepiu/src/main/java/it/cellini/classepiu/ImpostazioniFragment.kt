@@ -41,47 +41,10 @@ class ImpostazioniFragment : Fragment() {
             setPadding(ctx.dp(15), ctx.dp(4), ctx.dp(15), ctx.dp(10))
         }
 
-        // --- Profilo: cerchio con sagoma di persona, nome e account; sotto la pillola per uscire
-        val avatar = FrameLayout(ctx).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(azzurro) }
-            addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_profilo) },
-                FrameLayout.LayoutParams(ctx.dp(34), ctx.dp(34), Gravity.CENTER))
-        }
-        val nomeProfilo = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            addView(TextView(ctx).apply { text = "profilo"; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(nero) })
-            addView(TextView(ctx).apply {
-                text = imp.utente; textSize = 13f; setTextColor(0xFF666666.toInt()); maxLines = 1
-                ellipsize = android.text.TextUtils.TruncateAt.END
-            })
-        }
-        col.addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(avatar, LinearLayout.LayoutParams(ctx.dp(48), ctx.dp(48)))
-            addView(nomeProfilo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = ctx.dp(14) })
-        }, piena())
-        val esci = pillola(ctx, "esci o cambia account", 17f, Color.WHITE, azzurro, ctx.dp(44)).apply {
-            setOnClickListener {
-                MaterialAlertDialogBuilder(ctx)
-                    .setMessage("uscire dall'account?")
-                    .setPositiveButton("conferma") { _, _ ->
-                        imp.password = ""
-                        imp.controlloAutomatico = false
-                        Controllo.pianifica(ctx)
-                        startActivity(Intent(ctx, AccessoActivity::class.java))
-                        requireActivity().finish()
-                    }
-                    .setNegativeButton("annulla", null)
-                    .show()
-            }
-        }
-        col.addView(esci, piena().apply { height = ViewGroup.LayoutParams.WRAP_CONTENT; topMargin = ctx.dp(10) })
-
         // --- ricevitore e token
         val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
-        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(4) })
+        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(2) })
         col.addView(token, piena().apply { topMargin = ctx.dp(0) })
         val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
