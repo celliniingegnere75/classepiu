@@ -17,6 +17,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -52,11 +53,20 @@ class ImpostazioniFragment : Fragment() {
         imp.invioGoogle = true
         val titoloGoogle = TextView(ctx).apply {
             textSize = 17f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
-            isClickable = true; isFocusable = true
-            setOnClickListener { accediGoogle() }
         }
         titoloGoogleView = titoloGoogle
-        col.addView(titoloGoogle, piena().apply { topMargin = ctx.dp(6) })
+        val iconaCatenaGoogle = ImageView(ctx).apply { setImageResource(R.drawable.ic_catena) }
+        val rigaTitoloGoogle = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            isClickable = true; isFocusable = true
+            setOnClickListener { accediGoogle() }
+            addView(titoloGoogle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(iconaCatenaGoogle, LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { leftMargin = ctx.dp(6) })
+        }
+        col.addView(rigaTitoloGoogle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(6)
+        })
         val contoGoogle = TextView(ctx).apply {
             textSize = 13f; setTextColor(0xFF797979.toInt()); gravity = Gravity.CENTER
             isClickable = true; isFocusable = true
