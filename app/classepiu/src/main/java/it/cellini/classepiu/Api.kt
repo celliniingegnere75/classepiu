@@ -325,7 +325,11 @@ fun leggiClassi(grezzo: String): List<Classe> {
         val sezione = t("classSection", "section")
         var nome = t("className", "classroomName", "name", "classCode")
         if (nome.isEmpty()) nome = livello + indirizzo + sezione
+        // il nome può arrivare come "4ETA ELETTRONICA": la sigla è la parte prima del primo spazio, il resto è descrizione
+        val nomeIntero = nome
+        nome = siglaClasse(nome)
         val descrizione = t("classDesc", "classroomDescription", "description", "desc", "classDescription")
+            .ifEmpty { if (nomeIntero != nome) nomeIntero else "" }
         var codice = t("classCode", "classroomCode", "code", "classCodeDescription", "schoolClassCode")
         if (codice == nome) codice = ""
         if (nome.isEmpty() && descrizione.isEmpty()) continue
@@ -379,6 +383,7 @@ fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
         fun t(vararg k: String) = c.testo(*k).ifEmpty { o.testo(*k) }
         var nome = t("className", "classroomName", "name", "classCode")
         if (nome.isEmpty()) nome = t("classLevel", "classRealLevel", "level") + t("classAddr", "classAddress", "address") + t("classSection", "section")
+        nome = siglaClasse(nome)
         if (nome.isEmpty()) continue
         val materie = materieDi(o).ifEmpty { if (c !== o) materieDi(c) else emptyList() }
         if (materie.isEmpty()) visti += Insegnamento(nome.uppercase(), "")
@@ -386,3 +391,6 @@ fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
     }
     return visti.sortedWith(compareBy({ it.classe.firstOrNull()?.digitToIntOrNull() ?: 9 }, { it.classe }, { it.materia }))
 }
+
+/** Solo la sigla della classe: il testo prima del primo spazio ("4ETA ELETTRONICA" -> "4ETA"). */
+fun siglaClasse(nome: String): String = nome.trim().substringBefore(' ')

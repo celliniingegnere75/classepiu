@@ -255,16 +255,13 @@ class RegistroFragment : Fragment() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val ctx = parent.context
             val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
-            // il nome si rimpicciolisce (fino a 12 sp, su due righe) invece di tagliarsi: "4ETA ELETTRONICA" non diventa "4ETA E"
             val nome = TextView(ctx).apply {
                 textSize = 30f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
-                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false
-                setPadding(ctx.dp(4), 0, ctx.dp(4), 0)
-                androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(this, 12, 30, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
+                gravity = Gravity.CENTER; maxLines = 1; includeFontPadding = false
             }
             val tessera = FrameLayout(ctx).apply {
                 background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
-                addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT, Gravity.CENTER))
+                addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }
             val descrizione = TextView(ctx).apply { textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF4E4E4E.toInt()) }
             val codice = TextView(ctx).apply { textSize = 12.8f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(4), 0, 0) }
