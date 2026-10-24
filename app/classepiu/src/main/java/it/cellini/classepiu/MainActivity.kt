@@ -59,6 +59,14 @@ class MainActivity : AppCompatActivity() {
                 contentDescription = "ClassePiù"
                 adjustViewBounds = true
             }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            // a sinistra del logo: omino per uscire dall'account (con conferma)
+            addView(FrameLayout(this@MainActivity).apply {
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x40FFFFFF) }
+                contentDescription = "esci o cambia account"
+                addView(ImageView(this@MainActivity).apply { setImageResource(R.drawable.ic_profilo) },
+                    FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
+                setOnClickListener { esciDallAccount() }
+            }, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(14) })
             // a destra del logo: orologio funzionante e, sotto, il giorno ("mar, 2 ott")
             val data = TextView(this@MainActivity).apply {
                 textSize = 11f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
@@ -130,6 +138,22 @@ class MainActivity : AppCompatActivity() {
         gestisci(intent)
         // dopo l'ingresso con le credenziali si entra subito, senza animazione
         if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) Splash.mostra(this)
+    }
+
+    /** Stessa uscita del pulsante in opzioni: toglie la password, ferma il controllo e torna all'accesso. */
+    private fun esciDallAccount() {
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+            .setMessage("uscire dall'account?")
+            .setPositiveButton("conferma") { _, _ ->
+                val imp = Impostazioni(this)
+                imp.password = ""
+                imp.controlloAutomatico = false
+                Controllo.pianifica(this)
+                startActivity(Intent(this, AccessoActivity::class.java))
+                finish()
+            }
+            .setNegativeButton("annulla", null)
+            .show()
     }
 
     /** Giorno in forma breve, tutto minuscolo: "mar, 2 ott". */
