@@ -296,7 +296,6 @@ class ImpostazioniFragment : Fragment() {
             .setMessage("classePiù dimenticherà questo account e mostrerà la scelta dell'account la prossima volta. Se Google continua a ricordare il consenso, togli il permesso da myaccount.google.com/permissions.")
             .setPositiveButton("scollega") { _, _ ->
                 Impostazioni(ctx).googleAccount = ""
-                com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(ctx).clearCachedAuthorizationState()
                 aggiornaAccount()
                 messaggio("account google scollegato.")
             }
