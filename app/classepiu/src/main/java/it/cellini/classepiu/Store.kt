@@ -229,9 +229,14 @@ class Orario(ctx: Context) {
 
     fun fascia(ora: Int): Fascia = fasce[ora - 1]
 
+    /** Cambia l'ora indicata e, a cascata, fa iniziare ogni ora successiva quando finisce la precedente (durata invariata). */
     fun impostaFascia(ora: Int, f: Fascia) {
         fasce[ora - 1] = f
-        for (k in celle.indices) celle[k]?.let { if (it.ora == ora) celle[k] = it.copy(fascia = f) }
+        for (k in ora until ORE) {
+            val durata = fasce[k].fine - fasce[k].inizio
+            fasce[k] = Fascia(fasce[k - 1].fine, fasce[k - 1].fine + durata)
+        }
+        for (k in celle.indices) celle[k]?.let { celle[k] = it.copy(fascia = fasce[it.ora - 1]) }
         salva()
     }
 

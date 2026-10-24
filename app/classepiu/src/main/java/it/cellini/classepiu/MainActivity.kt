@@ -58,7 +58,7 @@ class MainActivity : AppCompatActivity() {
                 setImageResource(R.drawable.logo_bianco)
                 contentDescription = "ClassePiù"
                 adjustViewBounds = true
-            }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply { rightMargin = dp(20) }) // un po' a sinistra, per lasciare posto all'orologio
             // a sinistra del logo: omino per uscire dall'account (con conferma)
             addView(FrameLayout(this@MainActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x40FFFFFF) }
@@ -78,7 +78,7 @@ class MainActivity : AppCompatActivity() {
                 gravity = Gravity.CENTER_HORIZONTAL
                 addView(orologio, LinearLayout.LayoutParams(dp(34), dp(34)))
                 addView(data, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
-            }, FrameLayout.LayoutParams(dp(74), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply { rightMargin = dp(10) })
+            }, FrameLayout.LayoutParams(dp(80), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply { rightMargin = dp(16) })
         }
 
         // --- pannello bianco con angoli superiori arrotondati, da bordo a bordo (come la bozza);

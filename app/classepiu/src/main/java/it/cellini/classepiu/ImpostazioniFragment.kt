@@ -228,12 +228,12 @@ class ImpostazioniFragment : Fragment() {
                 addView(LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_HORIZONTAL
-                    setPadding(0, 0, ctx.dp(12), 0) // numero, "aula" e sigla un po' più a sinistra, lontani dalla linea
+                    setPadding(0, 0, ctx.dp(8), 0) // numero, orario, "aula" e sigla un po' più a sinistra, lontani dalla linea
                     // "1° ora" e sotto inizio-fine: toccandoli si cambia l'orario di quell'ora
                     addView(LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL
                         gravity = Gravity.CENTER_HORIZONTAL
-                        addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero); includeFontPadding = false; gravity = Gravity.CENTER })
+                        addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero); includeFontPadding = false; gravity = Gravity.CENTER; setSingleLine(true) })
                         addView(TextView(ctx).apply {
                             textSize = 10f; setTextColor(azzurro); includeFontPadding = false; gravity = Gravity.CENTER; setSingleLine(true)
                         }.also { fasceView.add(it) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(1) })
@@ -242,7 +242,7 @@ class ImpostazioniFragment : Fragment() {
                     addView(TextView(ctx).apply { text = "aula"; textSize = 10f; setTextColor(0xFF777777.toInt()); includeFontPadding = false; gravity = Gravity.CENTER },
                         LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(3) })
                     addView(aulaView, LinearLayout.LayoutParams(ctx.dp(52), ctx.dp(24)))
-                }, LinearLayout.LayoutParams(ctx.dp(68), ViewGroup.LayoutParams.WRAP_CONTENT))
+                }, LinearLayout.LayoutParams(ctx.dp(80), ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(View(ctx).apply { setBackgroundColor(0xFFE6E6E6.toInt()) }, LinearLayout.LayoutParams(ctx.dp(1), ViewGroup.LayoutParams.MATCH_PARENT))
                 addView(destra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }, piena().apply { topMargin = ctx.dp(6) })
