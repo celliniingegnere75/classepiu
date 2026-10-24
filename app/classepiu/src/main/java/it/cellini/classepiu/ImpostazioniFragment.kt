@@ -10,6 +10,8 @@ import android.text.InputType
 import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -60,9 +62,15 @@ class ImpostazioniFragment : Fragment() {
         }
         contoGoogleView = contoGoogle
         col.addView(contoGoogle, piena().apply { topMargin = ctx.dp(2) })
+        val titoloDestinatario = TextView(ctx).apply {
+            text = "le email saranno inviate a:"; textSize = 14f; setTextColor(0xFF666666.toInt())
+            visibility = View.GONE
+        }
+        titoloDestinatarioView = titoloDestinatario
+        col.addView(titoloDestinatario, piena().apply { topMargin = ctx.dp(10) })
         val destinatario = campoSottolineato(ctx, "destinatario (vuoto = te stesso)", password = false).apply { setText(imp.destinatari) }
         destinatarioView = destinatario
-        col.addView(destinatario, piena().apply { topMargin = ctx.dp(10) })
+        col.addView(destinatario, piena().apply { topMargin = ctx.dp(2) })
 
         val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
@@ -198,17 +206,23 @@ class ImpostazioniFragment : Fragment() {
 
     private var titoloGoogleView: TextView? = null
     private var contoGoogleView: TextView? = null
+    private var titoloDestinatarioView: TextView? = null
     private var destinatarioView: EditText? = null
     private var salvaDestinatarioView: View? = null
 
-    /** Scritta con "Google" a colori come il logo, il resto nel colore normale. */
-    private fun scrittaConGoogle(ctx: android.content.Context, prima: String): SpannableString {
-        val testo = "$prima Google"
+    /** Scritta con "Google" a colori come il logo (con font sans-serif-medium), il resto nel colore normale. */
+    private fun scrittaConGoogle(ctx: android.content.Context, prima: String, dopo: String = ""): SpannableString {
+        val testo = "$prima Google$dopo"
         val s = SpannableString(testo)
         val colori = intArrayOf(0xFF4285F4.toInt(), 0xFFEA4335.toInt(), 0xFFFBBC05.toInt(), 0xFF4285F4.toInt(), 0xFF34A853.toInt(), 0xFFEA4335.toInt())
-        s.setSpan(ForegroundColorSpan(nero), 0, testo.length - 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        val inizio = testo.length - 6
-        colori.forEachIndexed { i, c -> s.setSpan(ForegroundColorSpan(c), inizio + i, inizio + i + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        s.setSpan(ForegroundColorSpan(nero), 0, prima.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val inizio = prima.length
+        colori.forEachIndexed { i, c ->
+            s.setSpan(ForegroundColorSpan(c), inizio + i, inizio + i + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
+        s.setSpan(TypefaceSpan("sans-serif-medium"), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        s.setSpan(StyleSpan(Typeface.BOLD), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (dopo.isNotEmpty()) s.setSpan(ForegroundColorSpan(nero), inizio + 6, testo.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         return s
     }
 
@@ -247,27 +261,28 @@ class ImpostazioniFragment : Fragment() {
         val ctx = context ?: return
         val a = Impostazioni(ctx).googleAccount
         val autenticato = a.contains('@')
-        titoloGoogleView?.text = scrittaConGoogle(ctx, if (autenticato) "autenticato con" else "autenticati con")
+        titoloGoogleView?.text = scrittaConGoogle(ctx, if (autenticato) "autenticato con" else "autenticati con", " per inviare le email")
         contoGoogleView?.apply {
             text = if (autenticato) "$a · tocca per scollegare" else ""
             visibility = if (autenticato) View.VISIBLE else View.GONE
         }
+        titoloDestinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         destinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         if (!autenticato) salvaDestinatarioView?.visibility = View.GONE
     }
 
     /**
-     * Dimentica l'account google in classePiù (così al prossimo giro si può scegliere un altro
-     * account o lo stesso di nuovo). Non revoca il permesso lato Google: Google ricorda il consenso
-     * già dato e la prossima volta riconcede il gettone senza far scegliere l'account, a meno che
-     * l'utente non tolga lui stesso l'accesso da myaccount.google.com/permissions.
+     * Dimentica l'account google in classePiù e cancella la memoria in cache, così al prossimo giro
+     * si può scegliere un altro account. Nota: Google potrebbe ancora ricordare il consenso
+     * già dato; per una revoca completa togli il permesso da myaccount.google.com/permissions.
      */
     private fun scollegaGoogle(ctx: android.content.Context) {
         MaterialAlertDialogBuilder(ctx)
             .setTitle("scollegare l'account google?")
-            .setMessage("classePiù dimenticherà questo account. Per far apparire la scelta dell'account anche la prossima volta, togli il permesso da myaccount.google.com/permessi (cerca \"classePiù\").")
+            .setMessage("classePiù dimenticherà questo account e mostrerà la scelta dell'account la prossima volta. Se Google continua a ricordare il consenso, togli il permesso da myaccount.google.com/permissions.")
             .setPositiveButton("scollega") { _, _ ->
                 Impostazioni(ctx).googleAccount = ""
+                com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(ctx).clearCachedAuthorizationState()
                 aggiornaAccount()
                 messaggio("account google scollegato.")
             }
@@ -614,7 +629,14 @@ class ImpostazioniFragment : Fragment() {
     }
 
     private fun messaggio(s: String) {
-        view?.let { Snackbar.make(it, s, Snackbar.LENGTH_SHORT).show() }
+        view?.let {
+            Snackbar.make(it, s, Snackbar.LENGTH_SHORT).apply {
+                view.background = GradientDrawable().apply {
+                    setColor(0xFF323232.toInt())
+                    cornerRadius = requireContext().dp(12).toFloat()
+                }
+            }.show()
+        }
     }
 
     private fun esegui(titolo: String, lavoro: () -> String) {
