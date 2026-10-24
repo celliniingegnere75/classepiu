@@ -249,6 +249,12 @@ class Orario(ctx: Context) {
         salva()
     }
 
+    /** Svuota classe, materia e aula di un giorno (null = tutta la settimana); le fasce orarie restano. */
+    fun pulisci(giorno: Int?) {
+        for (k in celle.indices) if (giorno == null || k / ORE == giorno - 1) celle[k] = null
+        salva()
+    }
+
     /** Tutte le lezioni con una classe, in ordine di giorno e ora (per gli usi futuri). */
     fun lezioni(): List<Lezione> = celle.filterNotNull().filter { it.classe.isNotEmpty() }
 

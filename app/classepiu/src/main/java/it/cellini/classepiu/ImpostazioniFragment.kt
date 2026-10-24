@@ -248,12 +248,12 @@ class ImpostazioniFragment : Fragment() {
             }, piena().apply { topMargin = ctx.dp(6) })
             Triple(classe, materia, aulaView)
         }
-        ore.addView(TextView(ctx).apply {
-            text = "copia la risposta di classeviva (se mancano classi o materie)"
-            textSize = 13f; setTextColor(azzurro); gravity = Gravity.CENTER
-            setPadding(0, ctx.dp(14), 0, ctx.dp(6))
-            setOnClickListener { copiaRispostaClassi(ctx) }
-        }, piena())
+        ore.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
+            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
+            setOnClickListener { pulisci(ctx, orario) }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
+        })
 
         aggiornaOrario = {
             pillole.forEachIndexed { i, p ->
@@ -331,6 +331,17 @@ class ImpostazioniFragment : Fragment() {
                     (v as? TextView)?.minHeight = ctx.dp(52)
                 }
         }
+
+    /** Svuota classe, materia e aula del giorno scelto o di tutta la settimana (gli orari di inizio e fine restano). */
+    private fun pulisci(ctx: android.content.Context, orario: Orario) {
+        val giorno = GIORNI_INTERI[giornoScelto]
+        MaterialAlertDialogBuilder(ctx)
+            .setMessage("cosa vuoi pulire?")
+            .setPositiveButton("solo $giorno") { _, _ -> orario.pulisci(giornoScelto + 1); aggiornaOrario() }
+            .setNeutralButton("tutta la settimana") { _, _ -> orario.pulisci(null); aggiornaOrario() }
+            .setNegativeButton("annulla", null)
+            .show()
+    }
 
     /** Inizio e fine di un'ora (uguali per tutti i giorni): prima si sceglie l'inizio, poi la fine. */
     private fun scegliFascia(ctx: android.content.Context, orario: Orario, ora: Int) {
