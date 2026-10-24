@@ -221,7 +221,7 @@ class ImpostazioniFragment : Fragment() {
         override fun updateMeasureState(paint: android.text.TextPaint) { paint.typeface = tf }
     }
 
-    /** Scritta con "Google" a colori come il logo (carattere Raleway bold), il resto nel colore normale. */
+    /** Scritta con "Google" a colori come il logo (carattere Outfit bold), il resto nel colore normale. */
     private fun scrittaConGoogle(ctx: android.content.Context, prima: String, dopo: String = ""): SpannableString {
         val testo = "$prima Google$dopo"
         val s = SpannableString(testo)
@@ -231,8 +231,8 @@ class ImpostazioniFragment : Fragment() {
         colori.forEachIndexed { i, c ->
             s.setSpan(ForegroundColorSpan(c), inizio + i, inizio + i + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        val raleway = androidx.core.content.res.ResourcesCompat.getFont(ctx, R.font.raleway_bold)
-        if (raleway != null) s.setSpan(CaratterePersonalizzato(raleway), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val carattere = androidx.core.content.res.ResourcesCompat.getFont(ctx, R.font.outfit_bold)
+        if (carattere != null) s.setSpan(CaratterePersonalizzato(carattere), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         else s.setSpan(StyleSpan(Typeface.BOLD), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (dopo.isNotEmpty()) s.setSpan(ForegroundColorSpan(nero), inizio + 6, testo.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         return s
