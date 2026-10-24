@@ -25,7 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Impostazioni come la bozza: Profilo, ricevitore/token, tre interruttori, intervallo, invio dell'ultima circolare. */
+/** Impostazioni come la bozza, in due schede: "funzioni" (profilo, ricevitore/token, interruttori, intervallo) e "orario". */
 class ImpostazioniFragment : Fragment() {
 
     private val nero = 0xFF111111.toInt()
@@ -159,7 +159,189 @@ class ImpostazioniFragment : Fragment() {
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(4) })
         aggiornaOre(imp.controlloAutomatico)
 
-        return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
+        // --- due schede in alto: "funzioni" (tutto quello che c'era) e "orario"
+        val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
+        val orario = vistaOrario(ctx)
+        val schede = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            setPadding(ctx.dp(15), ctx.dp(8), ctx.dp(15), ctx.dp(4))
+        }
+        val schedaFunzioni = schedaPillola(ctx, "funzioni")
+        val schedaOrario = schedaPillola(ctx, "orario")
+        fun mostraScheda(primaScheda: Boolean) {
+            stilePillola(ctx, schedaFunzioni, primaScheda)
+            stilePillola(ctx, schedaOrario, !primaScheda)
+            funzioni.visibility = if (primaScheda) View.VISIBLE else View.GONE
+            orario.visibility = if (primaScheda) View.GONE else View.VISIBLE
+            if (!primaScheda && insegnamenti.isEmpty() && !caricamento) caricaInsegnamenti(ctx, avvisa = false)
+        }
+        schedaFunzioni.setOnClickListener { mostraScheda(true) }
+        schedaOrario.setOnClickListener { mostraScheda(false) }
+        schede.addView(schedaFunzioni, LinearLayout.LayoutParams(0, ctx.dp(38), 1f))
+        schede.addView(schedaOrario, LinearLayout.LayoutParams(0, ctx.dp(38), 1f).apply { leftMargin = ctx.dp(10) })
+        mostraScheda(true)
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+            addView(schede, piena())
+            addView(FrameLayout(ctx).apply {
+                addView(funzioni, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                addView(orario, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+    }
+
+    // ---------------- scheda "orario"
+
+    private var insegnamenti: List<Insegnamento> = emptyList()
+    private var caricamento = false
+    private var rispostaClassi = ""
+    private var giornoScelto = 0
+    private var aggiornaOrario: () -> Unit = {}
+
+    /** Pillola delle schede, come "le mie classi" / "tutte le classi" nel registro. */
+    private fun schedaPillola(ctx: android.content.Context, s: String) = TextView(ctx).apply {
+        text = s; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+    }
+
+    private fun stilePillola(ctx: android.content.Context, v: TextView, attiva: Boolean) {
+        val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        v.background = GradientDrawable().apply { cornerRadius = ctx.dp(19).toFloat(); setColor(if (attiva) azzurro else 0xFFF0F0F0.toInt()) }
+        v.setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
+    }
+
+    /** Orario come su classeviva: giorni da lunedì a venerdì in alto, sotto le 8 ore; toccando un'ora si sceglie classe e materia. */
+    private fun vistaOrario(ctx: android.content.Context): View {
+        val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        val orario = Orario(ctx)
+        val oggi = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
+        giornoScelto = if (oggi in java.util.Calendar.MONDAY..java.util.Calendar.FRIDAY) oggi - java.util.Calendar.MONDAY else 0
+
+        val giorni = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(6)) }
+        val pillole = Orario.GIORNI.mapIndexed { i, g ->
+            TextView(ctx).apply {
+                text = g; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+                setOnClickListener { giornoScelto = i; aggiornaOrario() }
+            }.also { giorni.addView(it, LinearLayout.LayoutParams(0, ctx.dp(36), 1f).apply { if (i > 0) leftMargin = ctx.dp(6) }) }
+        }
+
+        val ore = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(15), ctx.dp(2), ctx.dp(15), ctx.dp(12)) }
+        val caselle = (1..Orario.ORE).map { ora ->
+            val classe = TextView(ctx).apply { textSize = 17f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; maxLines = 2 }
+            val materia = TextView(ctx).apply { textSize = 13f; setTextColor(0xFF4E4E4E.toInt()); gravity = Gravity.CENTER; maxLines = 2 }
+            val centro = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
+                addView(classe, piena()); addView(materia, piena())
+            }
+            ore.addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = ctx.dp(64)
+                setPadding(ctx.dp(16), ctx.dp(8), ctx.dp(12), ctx.dp(8))
+                background = GradientDrawable().apply {
+                    setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(14).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
+                }
+                addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 17f; setTextColor(nero) }, LinearLayout.LayoutParams(ctx.dp(70), ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(centro, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_matita); contentDescription = "modifica" },
+                    LinearLayout.LayoutParams(ctx.dp(24), ctx.dp(24)).apply { leftMargin = ctx.dp(8) })
+                setOnClickListener { scegli(ctx, orario, ora) }
+            }, piena().apply { topMargin = ctx.dp(8) })
+            classe to materia
+        }
+        ore.addView(TextView(ctx).apply {
+            text = "copia la risposta di classeviva (se mancano classi o materie)"
+            textSize = 13f; setTextColor(azzurro); gravity = Gravity.CENTER
+            setPadding(0, ctx.dp(14), 0, ctx.dp(6))
+            setOnClickListener { copiaRispostaClassi(ctx) }
+        }, piena())
+
+        aggiornaOrario = {
+            pillole.forEachIndexed { i, p ->
+                p.background = GradientDrawable().apply { cornerRadius = ctx.dp(18).toFloat(); setColor(if (i == giornoScelto) azzurro else 0xFFF0F0F0.toInt()) }
+                p.setTextColor(if (i == giornoScelto) Color.WHITE else 0xFF333333.toInt())
+                p.setTypeface(null, if (i == giornoScelto) Typeface.BOLD else Typeface.NORMAL)
+            }
+            caselle.forEachIndexed { i, (classe, materia) ->
+                val c = orario.casella(giornoScelto + 1, i + 1)
+                classe.text = c?.classe ?: "nessuna materia"
+                classe.setTextColor(if (c == null) 0xFFA8A8A8.toInt() else azzurro)
+                materia.text = c?.materia.orEmpty()
+                materia.visibility = if (c?.materia.isNullOrEmpty()) View.GONE else View.VISIBLE
+            }
+        }
+        aggiornaOrario()
+
+        return LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.WHITE)
+            addView(giorni, piena())
+            addView(ScrollView(ctx).apply { addView(ore) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+    }
+
+    private fun fileClassi(ctx: android.content.Context) = java.io.File(ctx.filesDir, "classi_mie.json")
+
+    /** Classi e materie del docente da "le mie classi" di classeviva; intanto si usa l'ultima risposta salvata. */
+    private fun caricaInsegnamenti(ctx: android.content.Context, avvisa: Boolean, poi: () -> Unit = {}) {
+        if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
+        val imp = Impostazioni(ctx)
+        if (!imp.pronta) { poi(); return }
+        caricamento = true
+        if (avvisa) messaggio("carico classi e materie…")
+        viewLifecycleOwner.lifecycleScope.launch {
+            val esito = withContext(Dispatchers.IO) { runCatching { imp.client().also { it.login() }.classiGrezze(false) } }
+            caricamento = false
+            if (!isAdded) return@launch
+            esito.onSuccess { (codice, testo) ->
+                rispostaClassi = "HTTP $codice\n$testo"
+                if (codice == 200) {
+                    val nuovi = leggiInsegnamenti(testo)
+                    if (nuovi.isNotEmpty()) {
+                        insegnamenti = nuovi
+                        runCatching { fileClassi(ctx).writeText(testo) }
+                    }
+                }
+            }.onFailure { rispostaClassi = "Errore: ${it.message}" }
+            poi()
+        }
+    }
+
+    /** Scelta di classe e materia per un'ora del giorno selezionato. */
+    private fun scegli(ctx: android.content.Context, orario: Orario, ora: Int) {
+        if (insegnamenti.isEmpty()) {
+            if (caricamento) { messaggio("carico classi e materie…"); return }
+            caricaInsegnamenti(ctx, avvisa = true) {
+                if (insegnamenti.isEmpty()) messaggio("nessuna classe trovata: usa \"copia la risposta di classeviva\" in fondo.")
+                else scegli(ctx, orario, ora)
+            }
+            return
+        }
+        val giorno = giornoScelto + 1
+        val voci = insegnamenti.map { if (it.materia.isEmpty()) it.classe else "${it.classe} · ${it.materia}" }.toTypedArray()
+        val attuale = orario.casella(giorno, ora)
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("${Orario.GIORNI[giornoScelto]}, $ora° ora")
+            .setSingleChoiceItems(voci, insegnamenti.indexOfFirst { it == attuale }) { d, i ->
+                orario.imposta(giorno, ora, insegnamenti[i])
+                aggiornaOrario()
+                d.dismiss()
+            }
+            .setNeutralButton("svuota") { _, _ -> orario.imposta(giorno, ora, null); aggiornaOrario() }
+            .setNegativeButton("annulla", null)
+            .show()
+    }
+
+    /** Testo esatto di "le mie classi", da incollare se classi o materie non compaiono. */
+    private fun copiaRispostaClassi(ctx: android.content.Context) {
+        fun copia() {
+            val testo = rispostaClassi.ifEmpty { runCatching { "HTTP 200 (salvata)\n" + fileClassi(ctx).readText() }.getOrDefault("") }
+            if (testo.isEmpty()) { messaggio("nessuna risposta di classeviva disponibile."); return }
+            val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+            cm.setPrimaryClip(android.content.ClipData.newPlainText("risposta", testo))
+            messaggio("risposta di classeviva copiata.")
+        }
+        if (rispostaClassi.isEmpty() && !caricamento) caricaInsegnamenti(ctx, avvisa = true) { copia() } else copia()
     }
 
     /** Pulsante a pillola azzurro. */

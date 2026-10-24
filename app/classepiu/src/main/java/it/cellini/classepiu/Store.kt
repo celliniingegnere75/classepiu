@@ -142,3 +142,28 @@ object Diario {
         return if (f.exists()) f.readLines().reversed().joinToString("\n") else "Nessuna attività registrata."
     }
 }
+
+/** Orario settimanale del docente, solo sul telefono: per ogni giorno (1 = lunedì … 5 = venerdì) e ora (1…8) una classe e una materia. */
+class Orario(ctx: Context) {
+    private val file = File(ctx.filesDir, "orario.json")
+
+    private fun leggi(): JSONObject = try { if (file.exists()) JSONObject(file.readText()) else JSONObject() } catch (e: Exception) { JSONObject() }
+
+    fun casella(giorno: Int, ora: Int): Insegnamento? {
+        val o = leggi().optJSONObject("$giorno-$ora") ?: return null
+        val classe = o.optString("classe")
+        return if (classe.isEmpty()) null else Insegnamento(classe, o.optString("materia"))
+    }
+
+    fun imposta(giorno: Int, ora: Int, valore: Insegnamento?) {
+        val j = leggi()
+        if (valore == null) j.remove("$giorno-$ora")
+        else j.put("$giorno-$ora", JSONObject().put("classe", valore.classe).put("materia", valore.materia))
+        file.writeText(j.toString())
+    }
+
+    companion object {
+        val GIORNI = listOf("lun", "mar", "mer", "gio", "ven")
+        const val ORE = 8
+    }
+}

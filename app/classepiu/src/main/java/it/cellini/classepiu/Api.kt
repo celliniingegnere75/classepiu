@@ -335,3 +335,54 @@ fun leggiClassi(grezzo: String): List<Classe> {
     }
     return visti.values.sortedWith(compareBy({ it.nome.firstOrNull()?.digitToIntOrNull() ?: 9 }, { it.nome }))
 }
+
+/** Una classe con una materia che il docente vi insegna (una riga di classes/mine). */
+data class Insegnamento(val classe: String, val materia: String) {
+    val chiave get() = "$classe|$materia"
+}
+
+/**
+ * Coppie classe/materia dalla risposta di "le mie classi": ClasseViva ripete la classe una volta per materia.
+ * I nomi dei campi della materia non sono documentati: si provano i più probabili, anche dentro "subject".
+ */
+fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
+    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyList() }
+    val array = trovaArrayGenerico(radice, listOf("classes", "classrooms", "items", "data", "classi")) ?: return emptyList()
+    fun JSONObject.testo(vararg chiavi: String): String {
+        for (k in chiavi) {
+            val v = opt(k)
+            if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                val t = v.toString().trim()
+                if (t.isNotEmpty() && t != "null") return t
+            }
+        }
+        return ""
+    }
+    val campiMateria = arrayOf("subjectDesc", "subjectDescription", "subjectName", "subjectCode", "materia", "description", "desc", "name")
+    fun materieDi(o: JSONObject): List<String> {
+        val dirette = o.testo("subjectDesc", "subjectDescription", "subjectName", "subject", "materia", "subjectCode")
+        if (dirette.isNotEmpty()) return listOf(dirette)
+        o.optJSONObject("subject")?.let { s -> s.testo(*campiMateria).takeIf { it.isNotEmpty() }?.let { return listOf(it) } }
+        val elenco = o.optJSONArray("subjects") ?: return emptyList()
+        return (0 until elenco.length()).mapNotNull { i ->
+            when (val v = elenco.opt(i)) {
+                is JSONObject -> v.testo(*campiMateria).ifEmpty { null }
+                is String -> v.trim().ifEmpty { null }
+                else -> null
+            }
+        }
+    }
+    val visti = LinkedHashSet<Insegnamento>()
+    for (i in 0 until array.length()) {
+        val o = array.optJSONObject(i) ?: continue
+        val c = o.optJSONObject("classroom") ?: o.optJSONObject("class") ?: o
+        fun t(vararg k: String) = c.testo(*k).ifEmpty { o.testo(*k) }
+        var nome = t("className", "classroomName", "name", "classCode")
+        if (nome.isEmpty()) nome = t("classLevel", "classRealLevel", "level") + t("classAddr", "classAddress", "address") + t("classSection", "section")
+        if (nome.isEmpty()) continue
+        val materie = materieDi(o).ifEmpty { if (c !== o) materieDi(c) else emptyList() }
+        if (materie.isEmpty()) visti += Insegnamento(nome.uppercase(), "")
+        else materie.forEach { visti += Insegnamento(nome.uppercase(), it) }
+    }
+    return visti.sortedWith(compareBy({ it.classe.firstOrNull()?.digitToIntOrNull() ?: 9 }, { it.classe }, { it.materia }))
+}
