@@ -105,6 +105,14 @@ class Impostazioni(ctx: Context) {
     /** Descrizione di dove vanno le mail, per i messaggi all'utente. */
     val doveVanno get() = if (invioGoogle) destinatariEffettivi.joinToString(", ") else if (usaRicevitore) "ricevitore Apps Script" else destinatariEffettivi.joinToString(", ")
 
+    /** Spiega cosa manca per poter inviare, quando mailPronta è falso (manca sempre qualcosa di preciso). */
+    val coseMancanti: String
+        get() = if (invioGoogle) {
+            if (!googleAccount.contains('@')) "manca l'accesso con google: in opzioni, funzioni, premi \"accedi con google\"."
+            else "manca il destinatario: in opzioni, funzioni, scrivi un'email nel campo destinatario."
+        } else if (usaRicevitore) "manca l'indirizzo o il codice del ricevitore: in opzioni, funzioni."
+        else "manca gmail o la password per le app: in opzioni, funzioni."
+
     fun client() = ClasseViva(utente, password)
 }
 
