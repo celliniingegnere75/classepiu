@@ -160,13 +160,14 @@ data class Lezione(val giorno: Int, val ora: Int, val fascia: Fascia, val classe
 
 /**
  * Orario settimanale del docente, solo sul telefono, in un unico file orario.json:
- * {"v":2, "fasce":[[480,540],…], "celle":{"1-1":{"c":"4ETA","m":"ELETTROTECNICA…","a":"LAB1"},…}}
+ * {"v":2, "fasce":[[480,540],…], "fissate":[1,3], "celle":{"1-1":{"c":"4ETA","m":"ELETTROTECNICA…","a":"LAB1"},…}}
  * Giorni 1 = lunedì … 5 = venerdì, ore 1…ORE. Le fasce orarie valgono per tutti i giorni.
  * Il file si legge una volta sola e in memoria i dati stanno in due array a indice fisso.
  */
 class Orario(ctx: Context) {
     private val file = File(ctx.filesDir, "orario.json")
     private val fasce = Array(ORE) { Fascia.predefinita(it + 1) }
+    private val fissate = BooleanArray(ORE) // true = orario scelto dall'utente: la cascata non lo tocca
     private val celle = arrayOfNulls<Lezione>(GIORNI.size * ORE) // solo classe/materia/aula; giorno, ora e fascia si ricavano
 
     private fun i(giorno: Int, ora: Int) = (giorno - 1) * ORE + (ora - 1)
@@ -177,6 +178,7 @@ class Orario(ctx: Context) {
             j.optJSONArray("fasce")?.let { a ->
                 for (k in 0 until minOf(a.length(), ORE)) a.optJSONArray(k)?.let { fasce[k] = Fascia(it.optInt(0), it.optInt(1)) }
             }
+            j.optJSONArray("fissate")?.let { a -> for (k in 0 until a.length()) a.optInt(k).let { o -> if (o in 1..ORE) fissate[o - 1] = true } }
             j.optJSONObject("celle")?.let { c ->
                 for (k in c.keys()) {
                     val (g, o) = k.split("-").mapNotNull { it.toIntOrNull() }.takeIf { it.size == 2 } ?: continue
@@ -205,7 +207,9 @@ class Orario(ctx: Context) {
         }
         val f = org.json.JSONArray()
         fasce.forEach { f.put(org.json.JSONArray().put(it.inizio).put(it.fine)) }
-        file.writeText(JSONObject().put("v", 2).put("fasce", f).put("celle", c).toString())
+        val fx = org.json.JSONArray()
+        fissate.forEachIndexed { k, si -> if (si) fx.put(k + 1) }
+        file.writeText(JSONObject().put("v", 2).put("fasce", f).put("fissate", fx).put("celle", c).toString())
     }
 
     private fun cambia(giorno: Int, ora: Int, nuova: (Lezione) -> Lezione) {
@@ -229,10 +233,15 @@ class Orario(ctx: Context) {
 
     fun fascia(ora: Int): Fascia = fasce[ora - 1]
 
-    /** Cambia l'ora indicata e, a cascata, fa iniziare ogni ora successiva quando finisce la precedente (durata invariata). */
+    /**
+     * Cambia l'ora indicata (che da quel momento resta come l'ha scelta l'utente) e, a cascata, fa iniziare
+     * le ore successive quando finisce la precedente (durata invariata); la cascata si ferma alla prima ora già scelta dall'utente.
+     */
     fun impostaFascia(ora: Int, f: Fascia) {
         fasce[ora - 1] = f
+        fissate[ora - 1] = true
         for (k in ora until ORE) {
+            if (fissate[k]) break
             val durata = fasce[k].fine - fasce[k].inizio
             fasce[k] = Fascia(fasce[k - 1].fine, fasce[k - 1].fine + durata)
         }
