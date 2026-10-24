@@ -241,6 +241,12 @@ class ImpostazioniFragment : Fragment() {
         val caselle = (1..Orario.ORE).map { ora ->
             val classe = meta(ora, true)
             val materia = meta(ora, false)
+            val aulaView = TextView(ctx).apply {
+                textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(azzurro)
+                gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+                paintFlags = paintFlags or android.graphics.Paint.UNDERLINE_TEXT_FLAG
+                setOnClickListener { scegliAula(ctx, orario, ora) }
+            }
             val destra = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(classe, piena())
@@ -254,11 +260,19 @@ class ImpostazioniFragment : Fragment() {
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(14).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
-                addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero) }, LinearLayout.LayoutParams(ctx.dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
+                // colonna sinistra: numero dell'ora, "aula" piccolo e sotto la sigla dell'aula (segno da toccare)
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    gravity = Gravity.CENTER_HORIZONTAL
+                    addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero); includeFontPadding = false; gravity = Gravity.CENTER })
+                    addView(TextView(ctx).apply { text = "aula"; textSize = 10f; setTextColor(0xFF777777.toInt()); includeFontPadding = false; gravity = Gravity.CENTER },
+                        LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(3) })
+                    addView(aulaView, LinearLayout.LayoutParams(ctx.dp(56), ctx.dp(24)))
+                }, LinearLayout.LayoutParams(ctx.dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(View(ctx).apply { setBackgroundColor(0xFFE6E6E6.toInt()) }, LinearLayout.LayoutParams(ctx.dp(1), ViewGroup.LayoutParams.MATCH_PARENT))
                 addView(destra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }, piena().apply { topMargin = ctx.dp(6) })
-            classe to materia
+            Triple(classe, materia, aulaView)
         }
         ore.addView(TextView(ctx).apply {
             text = "copia la risposta di classeviva (se mancano classi o materie)"
@@ -273,13 +287,14 @@ class ImpostazioniFragment : Fragment() {
                 p.setTextColor(if (i == giornoScelto) Color.WHITE else 0xFF333333.toInt())
                 p.setTypeface(null, if (i == giornoScelto) Typeface.BOLD else Typeface.NORMAL)
             }
-            caselle.forEachIndexed { i, (classe, materia) ->
+            caselle.forEachIndexed { i, (classe, materia, aulaView) ->
                 val c = orario.casella(giornoScelto + 1, i + 1)
                 classe.text = c?.classe ?: "classe"
                 classe.setTypeface(null, if (c == null) Typeface.NORMAL else Typeface.BOLD)
                 classe.setTextColor(if (c == null) 0xFFA8A8A8.toInt() else azzurro)
                 materia.text = c?.materia?.ifEmpty { null } ?: "materia"
                 materia.setTextColor(if (c?.materia.isNullOrEmpty()) 0xFFA8A8A8.toInt() else nero)
+                aulaView.text = orario.aula(giornoScelto + 1, i + 1).ifEmpty { "   " } // vuota: resta il solo segno sottolineato
             }
         }
         aggiornaOrario()
@@ -341,6 +356,26 @@ class ImpostazioniFragment : Fragment() {
                     (v as? TextView)?.minHeight = ctx.dp(52)
                 }
         }
+
+    /** Inserimento della sigla dell'aula (massimo 5 caratteri). */
+    private fun scegliAula(ctx: android.content.Context, orario: Orario, ora: Int) {
+        val giorno = giornoScelto + 1
+        val campo = EditText(ctx).apply {
+            setText(orario.aula(giorno, ora))
+            hint = "aula"
+            setSingleLine(true)
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
+            filters = arrayOf(android.text.InputFilter.LengthFilter(Orario.AULA_MAX), android.text.InputFilter.AllCaps())
+            setSelection(text.length)
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("aula, ${titolo(ora)}")
+            .setView(FrameLayout(ctx).apply { setPadding(ctx.dp(24), ctx.dp(8), ctx.dp(24), 0); addView(campo) })
+            .setPositiveButton("ok") { _, _ -> orario.impostaAula(giorno, ora, campo.text.toString()); aggiornaOrario() }
+            .setNeutralButton("cancella") { _, _ -> orario.impostaAula(giorno, ora, ""); aggiornaOrario() }
+            .setNegativeButton("annulla", null)
+            .show()
+    }
 
     private fun titolo(ora: Int) = "${GIORNI_INTERI[giornoScelto]}, $ora° ora"
 

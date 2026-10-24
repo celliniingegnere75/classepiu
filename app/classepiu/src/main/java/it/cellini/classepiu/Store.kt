@@ -155,6 +155,16 @@ class Orario(ctx: Context) {
         return if (classe.isEmpty()) null else Insegnamento(classe, o.optString("materia"))
     }
 
+    /** Sigla dell'aula dell'ora (fino a 5 caratteri), indipendente da classe e materia. */
+    fun aula(giorno: Int, ora: Int): String = leggi().optString("$giorno-$ora-aula")
+
+    fun impostaAula(giorno: Int, ora: Int, sigla: String) {
+        val j = leggi()
+        val s = sigla.trim().uppercase().take(AULA_MAX)
+        if (s.isEmpty()) j.remove("$giorno-$ora-aula") else j.put("$giorno-$ora-aula", s)
+        file.writeText(j.toString())
+    }
+
     fun imposta(giorno: Int, ora: Int, valore: Insegnamento?) {
         val j = leggi()
         if (valore == null) j.remove("$giorno-$ora")
@@ -165,5 +175,6 @@ class Orario(ctx: Context) {
     companion object {
         val GIORNI = listOf("lun", "mar", "mer", "gio", "ven")
         const val ORE = 8
+        const val AULA_MAX = 5
     }
 }
