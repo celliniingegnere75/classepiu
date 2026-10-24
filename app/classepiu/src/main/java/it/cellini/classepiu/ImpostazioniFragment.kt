@@ -204,7 +204,7 @@ class ImpostazioniFragment : Fragment() {
         val fasceView = ArrayList<TextView>() // inizio-fine sotto il numero dell'ora
         val caselle = (1..Orario.ORE).map { ora ->
             val classe = meta(ora, true)
-            val materia = meta(ora, false)
+            val materia = meta(ora, false).apply { textSize = 12f } // materia un po' più piccola della classe
             val aulaView = TextView(ctx).apply {
                 textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(azzurro)
                 gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
@@ -220,7 +220,7 @@ class ImpostazioniFragment : Fragment() {
             ore.addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(ctx.dp(14), ctx.dp(2), ctx.dp(6), ctx.dp(2))
+                setPadding(ctx.dp(6), ctx.dp(2), ctx.dp(6), ctx.dp(2))
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(14).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
@@ -228,7 +228,7 @@ class ImpostazioniFragment : Fragment() {
                 addView(LinearLayout(ctx).apply {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_HORIZONTAL
-                    setPadding(0, 0, ctx.dp(8), 0) // numero, orario, "aula" e sigla un po' più a sinistra, lontani dalla linea
+                    setPadding(0, 0, ctx.dp(6), 0) // numero, orario, "aula" e sigla un po' più a sinistra, lontani dalla linea
                     // "1° ora" e sotto inizio-fine: toccandoli si cambia l'orario di quell'ora
                     addView(LinearLayout(ctx).apply {
                         orientation = LinearLayout.VERTICAL
@@ -242,7 +242,7 @@ class ImpostazioniFragment : Fragment() {
                     addView(TextView(ctx).apply { text = "aula"; textSize = 10f; setTextColor(0xFF777777.toInt()); includeFontPadding = false; gravity = Gravity.CENTER },
                         LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(3) })
                     addView(aulaView, LinearLayout.LayoutParams(ctx.dp(52), ctx.dp(24)))
-                }, LinearLayout.LayoutParams(ctx.dp(80), ViewGroup.LayoutParams.WRAP_CONTENT))
+                }, LinearLayout.LayoutParams(ctx.dp(90), ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(View(ctx).apply { setBackgroundColor(0xFFE6E6E6.toInt()) }, LinearLayout.LayoutParams(ctx.dp(1), ViewGroup.LayoutParams.MATCH_PARENT))
                 addView(destra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }, piena().apply { topMargin = ctx.dp(6) })
