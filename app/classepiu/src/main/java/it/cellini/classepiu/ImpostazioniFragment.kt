@@ -81,10 +81,10 @@ class ImpostazioniFragment : Fragment() {
         // --- ricevitore e token
         val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
         val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
-        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(8) })
+        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(4) })
         col.addView(token, piena().apply { topMargin = ctx.dp(0) })
-        val salva = pillola(ctx, "salva", 16f, Color.WHITE, azzurro, ctx.dp(38)).apply {
-            setPadding(ctx.dp(28), ctx.dp(6), ctx.dp(28), ctx.dp(6))
+        val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
+            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
             setOnClickListener {
                 imp.ricevitoreUrl = ricevitore.text.toString()
                 imp.ricevitoreCodice = token.text.toString()
@@ -93,11 +93,11 @@ class ImpostazioniFragment : Fragment() {
             }
         }
         col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(10)
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(6)
         })
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(14)) { on ->
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(10)) { on ->
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
         }
@@ -363,13 +363,13 @@ class ImpostazioniFragment : Fragment() {
         setTextColor(nero)
         textSize = 15f
         setSingleLine(true)
-        minHeight = ctx.dp(48)
+        minHeight = ctx.dp(40)
         gravity = Gravity.CENTER_VERTICAL
         backgroundTintList = ColorStateList.valueOf(nero)
-        setPadding(ctx.dp(0), ctx.dp(8), ctx.dp(0), ctx.dp(8))
+        setPadding(ctx.dp(0), ctx.dp(4), ctx.dp(0), ctx.dp(4))
         inputType = if (password) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
         // scritta del campo vuoto grande (senza grassetto), testo inserito più piccolo
-        val aggiorna = { textSize = if (text.isNullOrEmpty()) 20f else 14f; setTypeface(null, Typeface.NORMAL) }
+        val aggiorna = { textSize = if (text.isNullOrEmpty()) 17f else 14f; setTypeface(null, Typeface.NORMAL) }
         addTextChangedListener(object : android.text.TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
             override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
