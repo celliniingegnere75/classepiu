@@ -17,7 +17,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -54,20 +53,11 @@ class ImpostazioniFragment : Fragment() {
         imp.invioGoogle = true
         val titoloGoogle = TextView(ctx).apply {
             textSize = 17f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
-        }
-        titoloGoogleView = titoloGoogle
-        val iconaCatenaGoogle = ImageView(ctx).apply { setImageResource(R.drawable.ic_catena) }
-        val rigaTitoloGoogle = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
             isClickable = true; isFocusable = true
             setOnClickListener { accediGoogle() }
-            addView(titoloGoogle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(iconaCatenaGoogle, LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { leftMargin = ctx.dp(6) })
         }
-        col.addView(rigaTitoloGoogle, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(6)
-        })
+        titoloGoogleView = titoloGoogle
+        col.addView(titoloGoogle, piena().apply { topMargin = ctx.dp(6) })
         val contoGoogle = TextView(ctx).apply {
             textSize = 13f; setTextColor(0xFF797979.toInt()); gravity = Gravity.CENTER
             isClickable = true; isFocusable = true
@@ -232,9 +222,24 @@ class ImpostazioniFragment : Fragment() {
         override fun updateMeasureState(paint: android.text.TextPaint) { paint.typeface = tf }
     }
 
-    /** Scritta con "Google" a colori come il logo (carattere Outfit bold), il resto nel colore normale. */
+    private var tfGoogle: Typeface? = null
+
+    /** Outfit, preso prima dagli assets e in seconda battuta dalle risorse (se uno dei due non va). */
+    private fun carattereGoogle(ctx: android.content.Context): Typeface? {
+        tfGoogle?.let { return it }
+        val tf = runCatching { Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf") }.getOrNull()
+            ?: runCatching { androidx.core.content.res.ResourcesCompat.getFont(ctx, R.font.outfit_bold) }.getOrNull()
+        tfGoogle = tf
+        return tf
+    }
+
+    /**
+     * Scritta con "Google" a colori come il logo (carattere Outfit bold) e l'icona della catena in fondo.
+     * L'icona sta dentro al testo, così va a capo insieme alle parole e non finisce mai fuori dallo schermo.
+     */
     private fun scrittaConGoogle(ctx: android.content.Context, prima: String, dopo: String = ""): SpannableString {
-        val testo = "$prima Google$dopo"
+        val segnaposto = "  " // lo spazio unificatore tiene l'icona attaccata alla parola che la precede
+        val testo = "$prima Google$dopo$segnaposto"
         val s = SpannableString(testo)
         val colori = intArrayOf(0xFF4285F4.toInt(), 0xFFEA4335.toInt(), 0xFFFBBC05.toInt(), 0xFF4285F4.toInt(), 0xFF34A853.toInt(), 0xFFEA4335.toInt())
         s.setSpan(ForegroundColorSpan(nero), 0, prima.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
@@ -242,10 +247,17 @@ class ImpostazioniFragment : Fragment() {
         colori.forEachIndexed { i, c ->
             s.setSpan(ForegroundColorSpan(c), inizio + i, inizio + i + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        val carattere = androidx.core.content.res.ResourcesCompat.getFont(ctx, R.font.outfit_bold)
+        val carattere = carattereGoogle(ctx)
         if (carattere != null) s.setSpan(CaratterePersonalizzato(carattere), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         else s.setSpan(StyleSpan(Typeface.BOLD), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        if (dopo.isNotEmpty()) s.setSpan(ForegroundColorSpan(nero), inizio + 6, testo.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        if (dopo.isNotEmpty()) s.setSpan(ForegroundColorSpan(nero), inizio + 6, inizio + 6 + dopo.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val catena = ContextCompat.getDrawable(ctx, R.drawable.ic_catena)
+        if (catena != null) {
+            val lato = ctx.dp(22)
+            catena.setBounds(0, 0, lato, lato)
+            s.setSpan(android.text.style.ImageSpan(catena, android.text.style.ImageSpan.ALIGN_BOTTOM),
+                testo.length - 1, testo.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
         return s
     }
 
@@ -308,21 +320,18 @@ class ImpostazioniFragment : Fragment() {
     }
 
     /**
-     * Revoca il consenso lato Google (non solo in locale, altrimenti Play Services lo riuserebbe
-     * senza più mostrare la scelta dell'account) e poi dimentica l'account in classePiù.
+     * Dimentica l'account google in classePiù. Non revoca il consenso lato Google: farlo via
+     * oauth2/revoke lascia in Play Services un gettone ormai morto che blocca il riaccesso finché
+     * non scade. Per cambiare davvero account serve togliere il permesso da myaccount.google.com.
      */
     private fun scollegaGoogle(ctx: android.content.Context) {
         MaterialAlertDialogBuilder(ctx)
             .setTitle("scollegare l'account google?")
-            .setMessage("classePiù revocherà il permesso e dimenticherà questo account, così la prossima volta potrai sceglierne un altro.")
+            .setMessage("classePiù dimenticherà questo account. Per usarne un altro togli anche il permesso a classePiù da myaccount.google.com/permissions, altrimenti Google rientra da solo con lo stesso account.")
             .setPositiveButton("scollega") { _, _ ->
-                messaggio("scollegamento in corso…")
-                lifecycleScope.launch {
-                    withContext(Dispatchers.IO) { runCatching { GoogleMail.revoca(ctx) } }
-                    Impostazioni(ctx).googleAccount = ""
-                    aggiornaAccount()
-                    messaggio("account google scollegato.")
-                }
+                Impostazioni(ctx).googleAccount = ""
+                aggiornaAccount()
+                messaggio("account google scollegato.")
             }
             .setNegativeButton("annulla", null)
             .show()

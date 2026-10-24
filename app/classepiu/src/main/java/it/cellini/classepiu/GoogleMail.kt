@@ -43,22 +43,18 @@ object GoogleMail {
         return runCatching { org.json.JSONObject(testo).optString("email") }.getOrDefault("")
     }
 
-    fun indirizzoDa(r: AuthorizationResult): String = r.accessToken?.let { indirizzo(it) }.orEmpty()
+    /** Secondo modo per sapere di chi è il gettone, se userinfo non risponde. */
+    private fun indirizzoDaTokeninfo(gettone: String): String = runCatching {
+        val c = URL("https://oauth2.googleapis.com/tokeninfo?access_token=$gettone").openConnection() as HttpURLConnection
+        c.connectTimeout = 30_000; c.readTimeout = 30_000
+        val testo = (if (c.responseCode in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes()) } ?: ""
+        c.disconnect()
+        org.json.JSONObject(testo).optString("email")
+    }.getOrDefault("")
 
-    /**
-     * Revoca davvero il consenso lato Google (non solo in locale): senza questo, Play Services ricorda
-     * il consenso già dato e al prossimo accesso lo riusa senza più mostrare la scelta dell'account.
-     * Va chiamata PRIMA di dimenticare l'account in classePiù, perché serve un gettone ancora valido.
-     */
-    fun revoca(ctx: Context) {
-        val gettone = runCatching { gettone(ctx) }.getOrNull() ?: return
-        runCatching {
-            val c = URL("https://oauth2.googleapis.com/revoke?token=$gettone").openConnection() as HttpURLConnection
-            c.requestMethod = "POST"
-            c.connectTimeout = 15_000; c.readTimeout = 15_000
-            c.responseCode
-            c.disconnect()
-        }
+    fun indirizzoDa(r: AuthorizationResult): String {
+        val gettone = r.accessToken ?: return ""
+        return indirizzo(gettone).ifEmpty { indirizzoDaTokeninfo(gettone) }
     }
 
     /** Spedisce la mail completa di allegati con l'endpoint di caricamento della Gmail API (fino a 35 MB). */
