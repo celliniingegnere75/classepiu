@@ -56,7 +56,7 @@ class ImpostazioniFragment : Fragment() {
         val contoGoogle = TextView(ctx).apply {
             textSize = 13f; setTextColor(0xFF797979.toInt()); gravity = Gravity.CENTER
             isClickable = true; isFocusable = true
-            setOnClickListener { accediGoogle() }
+            setOnClickListener { scollegaGoogle(ctx) }
         }
         contoGoogleView = contoGoogle
         col.addView(contoGoogle, piena().apply { topMargin = ctx.dp(2) })
@@ -249,11 +249,30 @@ class ImpostazioniFragment : Fragment() {
         val autenticato = a.contains('@')
         titoloGoogleView?.text = scrittaConGoogle(ctx, if (autenticato) "autenticato con" else "autenticati con")
         contoGoogleView?.apply {
-            text = if (autenticato) "$a · tocca per cambiare account" else ""
+            text = if (autenticato) "$a · tocca per scollegare" else ""
             visibility = if (autenticato) View.VISIBLE else View.GONE
         }
         destinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         if (!autenticato) salvaDestinatarioView?.visibility = View.GONE
+    }
+
+    /**
+     * Dimentica l'account google in classePiù (così al prossimo giro si può scegliere un altro
+     * account o lo stesso di nuovo). Non revoca il permesso lato Google: Google ricorda il consenso
+     * già dato e la prossima volta riconcede il gettone senza far scegliere l'account, a meno che
+     * l'utente non tolga lui stesso l'accesso da myaccount.google.com/permissions.
+     */
+    private fun scollegaGoogle(ctx: android.content.Context) {
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("scollegare l'account google?")
+            .setMessage("classePiù dimenticherà questo account. Per far apparire la scelta dell'account anche la prossima volta, togli il permesso da myaccount.google.com/permessi (cerca \"classePiù\").")
+            .setPositiveButton("scollega") { _, _ ->
+                Impostazioni(ctx).googleAccount = ""
+                aggiornaAccount()
+                messaggio("account google scollegato.")
+            }
+            .setNegativeButton("annulla", null)
+            .show()
     }
 
     // ---------------- scheda "orario"
