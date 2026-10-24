@@ -176,7 +176,7 @@ class ImpostazioniFragment : Fragment() {
     private var accountView: TextView? = null
 
     /** Schermata di consenso di google (solo la prima volta o se il permesso è stato revocato). */
-    private val consenso = registerForActivityResult(androidx.activity.result.ActivityResultContracts.StartIntentSenderForResult()) { esito ->
+    private val consenso = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()) { esito ->
         val ctx = context ?: return@registerForActivityResult
         runCatching { com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(ctx).getAuthorizationResultFromIntent(esito.data) }
             .onSuccess { accessoRiuscito(it) }
