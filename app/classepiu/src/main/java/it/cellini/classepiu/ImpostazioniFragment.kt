@@ -373,7 +373,6 @@ class ImpostazioniFragment : Fragment() {
             .setTitle("aula, ${titolo(ora)}")
             .setView(FrameLayout(ctx).apply { setPadding(ctx.dp(24), ctx.dp(8), ctx.dp(24), 0); addView(campo) })
             .setPositiveButton("ok") { _, _ -> orario.impostaAula(giorno, ora, campo.text.toString()); aggiornaOrario() }
-            .setNeutralButton("cancella") { _, _ -> orario.impostaAula(giorno, ora, ""); aggiornaOrario() }
             .setNegativeButton("annulla", null)
             .show()
     }
