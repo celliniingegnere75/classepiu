@@ -340,9 +340,8 @@ class ImpostazioniFragment : Fragment() {
             val durata = attuale.fine - attuale.inizio
             android.app.TimePickerDialog(ctx, { _, hF, mF ->
                 val fine = hF * 60 + mF
-                if (fine <= inizio) { messaggio("la fine deve venire dopo l'inizio."); return@TimePickerDialog }
-                orario.impostaFascia(ora, Fascia(inizio, fine))
-                aggiornaOrario()
+                if (fine <= inizio) messaggio("la fine deve venire dopo l'inizio.")
+                else { orario.impostaFascia(ora, Fascia(inizio, fine)); aggiornaOrario() }
             }, (inizio + durata) / 60 % 24, (inizio + durata) % 60, true).apply { setTitle("fine della $ora° ora") }.show()
         }, attuale.inizio / 60, attuale.inizio % 60, true).apply { setTitle("inizio della $ora° ora") }.show()
     }
