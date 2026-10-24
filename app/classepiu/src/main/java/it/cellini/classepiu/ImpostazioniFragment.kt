@@ -164,7 +164,7 @@ class ImpostazioniFragment : Fragment() {
         val orario = vistaOrario(ctx)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(ctx.dp(15), ctx.dp(8), ctx.dp(15), ctx.dp(4))
+            setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(2))
         }
         val schedaFunzioni = schedaPillola(ctx, "funzioni")
         val schedaOrario = schedaPillola(ctx, "orario")
@@ -177,8 +177,8 @@ class ImpostazioniFragment : Fragment() {
         }
         schedaFunzioni.setOnClickListener { mostraScheda(true) }
         schedaOrario.setOnClickListener { mostraScheda(false) }
-        schede.addView(schedaFunzioni, LinearLayout.LayoutParams(0, ctx.dp(38), 1f))
-        schede.addView(schedaOrario, LinearLayout.LayoutParams(0, ctx.dp(38), 1f).apply { leftMargin = ctx.dp(10) })
+        schede.addView(schedaFunzioni, LinearLayout.LayoutParams(0, ctx.dp(32), 1f))
+        schede.addView(schedaOrario, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { leftMargin = ctx.dp(6) })
         mostraScheda(true)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
@@ -201,12 +201,12 @@ class ImpostazioniFragment : Fragment() {
 
     /** Pillola delle schede, come "le mie classi" / "tutte le classi" nel registro. */
     private fun schedaPillola(ctx: android.content.Context, s: String) = TextView(ctx).apply {
-        text = s; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+        text = s; textSize = 14f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
     }
 
     private fun stilePillola(ctx: android.content.Context, v: TextView, attiva: Boolean) {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
-        v.background = GradientDrawable().apply { cornerRadius = ctx.dp(19).toFloat(); setColor(if (attiva) azzurro else 0xFFF0F0F0.toInt()) }
+        v.background = GradientDrawable().apply { cornerRadius = ctx.dp(16).toFloat(); setColor(if (attiva) azzurro else 0xFFF0F0F0.toInt()) }
         v.setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
     }
 
@@ -217,17 +217,17 @@ class ImpostazioniFragment : Fragment() {
         val oggi = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
         giornoScelto = if (oggi in java.util.Calendar.MONDAY..java.util.Calendar.FRIDAY) oggi - java.util.Calendar.MONDAY else 0
 
-        val giorni = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(6)) }
+        val giorni = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(2)) }
         val pillole = Orario.GIORNI.mapIndexed { i, g ->
             TextView(ctx).apply {
-                text = g; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+                text = g; textSize = 14f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
                 setOnClickListener { giornoScelto = i; aggiornaOrario() }
-            }.also { giorni.addView(it, LinearLayout.LayoutParams(0, ctx.dp(36), 1f).apply { if (i > 0) leftMargin = ctx.dp(6) }) }
+            }.also { giorni.addView(it, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { if (i > 0) leftMargin = ctx.dp(6) }) }
         }
 
-        val ore = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(15), ctx.dp(2), ctx.dp(15), ctx.dp(12)) }
+        val ore = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(15), 0, ctx.dp(15), ctx.dp(12)) }
         val caselle = (1..Orario.ORE).map { ora ->
-            val classe = TextView(ctx).apply { textSize = 17f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; maxLines = 2 }
+            val classe = TextView(ctx).apply { textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; maxLines = 2 }
             val materia = TextView(ctx).apply { textSize = 13f; setTextColor(0xFF4E4E4E.toInt()); gravity = Gravity.CENTER; maxLines = 2 }
             val centro = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
@@ -236,17 +236,17 @@ class ImpostazioniFragment : Fragment() {
             ore.addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = ctx.dp(64)
-                setPadding(ctx.dp(16), ctx.dp(8), ctx.dp(12), ctx.dp(8))
+                minimumHeight = ctx.dp(56)
+                setPadding(ctx.dp(14), ctx.dp(6), ctx.dp(12), ctx.dp(6))
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(14).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
-                addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 17f; setTextColor(nero) }, LinearLayout.LayoutParams(ctx.dp(70), ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 16f; setTextColor(nero) }, LinearLayout.LayoutParams(ctx.dp(70), ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(centro, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_matita); contentDescription = "modifica" },
                     LinearLayout.LayoutParams(ctx.dp(24), ctx.dp(24)).apply { leftMargin = ctx.dp(8) })
                 setOnClickListener { scegli(ctx, orario, ora) }
-            }, piena().apply { topMargin = ctx.dp(8) })
+            }, piena().apply { topMargin = ctx.dp(6) })
             classe to materia
         }
         ore.addView(TextView(ctx).apply {
@@ -258,7 +258,7 @@ class ImpostazioniFragment : Fragment() {
 
         aggiornaOrario = {
             pillole.forEachIndexed { i, p ->
-                p.background = GradientDrawable().apply { cornerRadius = ctx.dp(18).toFloat(); setColor(if (i == giornoScelto) azzurro else 0xFFF0F0F0.toInt()) }
+                p.background = GradientDrawable().apply { cornerRadius = ctx.dp(16).toFloat(); setColor(if (i == giornoScelto) azzurro else 0xFFF0F0F0.toInt()) }
                 p.setTextColor(if (i == giornoScelto) Color.WHITE else 0xFF333333.toInt())
                 p.setTypeface(null, if (i == giornoScelto) Typeface.BOLD else Typeface.NORMAL)
             }
