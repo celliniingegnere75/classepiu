@@ -257,7 +257,7 @@ class RegistroFragment : Fragment() {
             val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
             val nome = TextView(ctx).apply {
                 textSize = 30f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
-                gravity = Gravity.CENTER; maxLines = 1; includeFontPadding = false
+                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false // sigla lunga: va a capo come in classeviva (5AN_C / AA)
             }
             val tessera = FrameLayout(ctx).apply {
                 background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
