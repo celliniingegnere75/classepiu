@@ -174,7 +174,7 @@ class Orario(ctx: Context) {
 
     companion object {
         val GIORNI = listOf("lun", "mar", "mer", "gio", "ven")
-        const val ORE = 8
+        const val ORE = 9
         const val AULA_MAX = 5
     }
 }
