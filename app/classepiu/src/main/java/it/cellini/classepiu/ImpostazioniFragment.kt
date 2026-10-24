@@ -7,6 +7,9 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.text.InputType
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -43,14 +46,44 @@ class ImpostazioniFragment : Fragment() {
 
         // invio con gmail dopo l'accesso google (unico modo, il ricevitore Apps Script non c'è più)
         imp.invioGoogle = true
-        val account = pillola(ctx, "accedi con google", 15f, Color.WHITE, azzurro, ctx.dp(36)).apply {
-            setPadding(ctx.dp(16), ctx.dp(4), ctx.dp(16), ctx.dp(4))
+        val titoloGoogle = TextView(ctx).apply {
+            textSize = 17f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
+            isClickable = true; isFocusable = true
             setOnClickListener { accediGoogle() }
         }
-        accountView = account
-        col.addView(account, piena().apply { topMargin = ctx.dp(6) })
+        titoloGoogleView = titoloGoogle
+        col.addView(titoloGoogle, piena().apply { topMargin = ctx.dp(6) })
+        val contoGoogle = TextView(ctx).apply {
+            textSize = 13f; setTextColor(0xFF797979.toInt()); gravity = Gravity.CENTER
+            isClickable = true; isFocusable = true
+            setOnClickListener { accediGoogle() }
+        }
+        contoGoogleView = contoGoogle
+        col.addView(contoGoogle, piena().apply { topMargin = ctx.dp(2) })
         val destinatario = campoSottolineato(ctx, "destinatario (vuoto = te stesso)", password = false).apply { setText(imp.destinatari) }
-        col.addView(destinatario, piena())
+        destinatarioView = destinatario
+        col.addView(destinatario, piena().apply { topMargin = ctx.dp(10) })
+
+        val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
+            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
+            visibility = View.GONE // niente da salvare finché non tocchi il campo
+            setOnClickListener {
+                imp.destinatari = destinatario.text.toString()
+                messaggio("le circolari andranno a: " + imp.destinatariEffettivi.joinToString(", ").ifEmpty { "nessuno (accedi con google)" })
+                visibility = View.GONE
+            }
+        }
+        salvaDestinatarioView = salva
+        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(6)
+        })
+        destinatario.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                salva.visibility = if (s.toString() != imp.destinatari) View.VISIBLE else View.GONE
+            }
+        })
         aggiornaAccount()
         // destinatario vuoto: si prova a prendere l'email registrata su classeviva
         if (imp.destinatari.isBlank() && imp.pronta) lifecycleScope.launch {
@@ -58,19 +91,9 @@ class ImpostazioniFragment : Fragment() {
             if (!isAdded || email.isEmpty() || imp.destinatari.isNotBlank()) return@launch
             imp.destinatari = email
             destinatario.setText(email)
+            salva.visibility = View.GONE
             messaggio("email presa da classeviva: $email")
         }
-
-        val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
-            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
-            setOnClickListener {
-                imp.destinatari = destinatario.text.toString()
-                messaggio("le circolari andranno a: " + imp.destinatariEffettivi.joinToString(", ").ifEmpty { "nessuno (accedi con google)" })
-            }
-        }
-        col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(6)
-        })
 
         // --- interruttori (si salvano da soli)
         riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(10)) { on ->
@@ -140,10 +163,10 @@ class ImpostazioniFragment : Fragment() {
         val orario = vistaOrario(ctx)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(2))
+            setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(16))
         }
         val schedaFunzioni = schedaPillola(ctx, "funzioni")
-        val schedaOrario = schedaPillola(ctx, "orario")
+        val schedaOrario = schedaPillola(ctx, "lezioni")
         fun mostraScheda(primaScheda: Boolean, daClasseviva: Boolean = true) {
             stilePillola(ctx, schedaFunzioni, primaScheda)
             stilePillola(ctx, schedaOrario, !primaScheda)
@@ -173,7 +196,21 @@ class ImpostazioniFragment : Fragment() {
 
     // ---------------- accesso google per l'invio con gmail
 
-    private var accountView: TextView? = null
+    private var titoloGoogleView: TextView? = null
+    private var contoGoogleView: TextView? = null
+    private var destinatarioView: EditText? = null
+    private var salvaDestinatarioView: View? = null
+
+    /** Scritta con "Google" a colori come il logo, il resto nel colore normale. */
+    private fun scrittaConGoogle(ctx: android.content.Context, prima: String): SpannableString {
+        val testo = "$prima Google"
+        val s = SpannableString(testo)
+        val colori = intArrayOf(0xFF4285F4.toInt(), 0xFFEA4335.toInt(), 0xFFFBBC05.toInt(), 0xFF4285F4.toInt(), 0xFF34A853.toInt(), 0xFFEA4335.toInt())
+        s.setSpan(ForegroundColorSpan(nero), 0, testo.length - 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val inizio = testo.length - 6
+        colori.forEachIndexed { i, c -> s.setSpan(ForegroundColorSpan(c), inizio + i, inizio + i + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE) }
+        return s
+    }
 
     /** Schermata di consenso di google (solo la prima volta o se il permesso è stato revocato). */
     private val consenso = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartIntentSenderForResult()) { esito ->
@@ -209,7 +246,14 @@ class ImpostazioniFragment : Fragment() {
     private fun aggiornaAccount() {
         val ctx = context ?: return
         val a = Impostazioni(ctx).googleAccount
-        accountView?.text = if (a.contains('@')) "$a · cambia" else "accedi con google"
+        val autenticato = a.contains('@')
+        titoloGoogleView?.text = scrittaConGoogle(ctx, if (autenticato) "autenticato con" else "autenticati con")
+        contoGoogleView?.apply {
+            text = if (autenticato) "$a · tocca per cambiare account" else ""
+            visibility = if (autenticato) View.VISIBLE else View.GONE
+        }
+        destinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
+        if (!autenticato) salvaDestinatarioView?.visibility = View.GONE
     }
 
     // ---------------- scheda "orario"
@@ -418,8 +462,8 @@ class ImpostazioniFragment : Fragment() {
             setText(orario.aula(giorno, ora))
             hint = "aula"
             setSingleLine(true)
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS
-            filters = arrayOf(android.text.InputFilter.LengthFilter(Orario.AULA_MAX), android.text.InputFilter.AllCaps())
+            inputType = InputType.TYPE_CLASS_TEXT
+            filters = arrayOf(android.text.InputFilter.LengthFilter(Orario.AULA_MAX))
             setSelection(text.length)
         }
         MaterialAlertDialogBuilder(ctx)
