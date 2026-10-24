@@ -10,11 +10,12 @@ import android.widget.LinearLayout
 import android.widget.TextView
 
 /**
- * Animazione di apertura: il logo bianco classePiù compare sul fondo azzurro, sotto appare
- * la frase scherzosa "è intelligente ma si applica!"; dopo 3 secondi tutto sfuma.
+ * Animazione di apertura: il logo bianco classePiù compare sul fondo azzurro, poi tutto sfuma.
+ * Con [conFrase] (solo alla schermata di accesso, al primo avvio) sotto il logo appare anche
+ * la frase scherzosa "è intelligente ma si applica!" e l'animazione dura 3 secondi in più.
  */
 object Splash {
-    fun mostra(a: Activity) {
+    fun mostra(a: Activity, conFrase: Boolean = false) {
         val radice = a.findViewById<ViewGroup>(android.R.id.content) ?: return
         val frase = TextView(a).apply {
             text = "è intelligente ma si applica!"
@@ -37,15 +38,15 @@ object Splash {
                     adjustViewBounds = true
                     scaleX = .6f; scaleY = .6f; alpha = 0f
                     animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(450)
-                        .withEndAction { frase.animate().alpha(1f).translationY(0f).setDuration(400).start() }.start()
+                        .withEndAction { if (conFrase) frase.animate().alpha(1f).translationY(0f).setDuration(400).start() }.start()
                 }, LinearLayout.LayoutParams(a.dp(190), ViewGroup.LayoutParams.WRAP_CONTENT))
-                addView(frase, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(14) })
+                if (conFrase) addView(frase, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = a.dp(14) })
             }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
         }
         radice.addView(velo, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-        // 450 ms di logo, poi la frase resta 3 secondi prima che tutto sfumi
+        // senza frase: logo per 900 ms; con frase resta 3 secondi dopo la comparsa del logo (450 ms)
         velo.postDelayed({
             velo.animate().alpha(0f).setDuration(350).withEndAction { radice.removeView(velo) }.start()
-        }, 450L + 3000L)
+        }, if (conFrase) 450L + 3000L else 900L)
     }
 }
