@@ -11,7 +11,6 @@ import android.text.Spannable
 import android.text.SpannableString
 import android.text.style.ForegroundColorSpan
 import android.text.style.StyleSpan
-import android.text.style.TypefaceSpan
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -216,7 +215,13 @@ class ImpostazioniFragment : Fragment() {
     private var destinatarioView: EditText? = null
     private var salvaDestinatarioView: View? = null
 
-    /** Scritta con "Google" a colori come il logo (con font sans-serif-medium), il resto nel colore normale. */
+    /** Applica un Typeface personalizzato (compatibile da API 21, non solo da 28 come TypefaceSpan(Typeface)). */
+    private class CaratterePersonalizzato(private val tf: Typeface) : android.text.style.MetricAffectingSpan() {
+        override fun updateDrawState(ds: android.text.TextPaint) { ds.typeface = tf }
+        override fun updateMeasureState(paint: android.text.TextPaint) { paint.typeface = tf }
+    }
+
+    /** Scritta con "Google" a colori come il logo (carattere Raleway bold), il resto nel colore normale. */
     private fun scrittaConGoogle(ctx: android.content.Context, prima: String, dopo: String = ""): SpannableString {
         val testo = "$prima Google$dopo"
         val s = SpannableString(testo)
@@ -226,8 +231,9 @@ class ImpostazioniFragment : Fragment() {
         colori.forEachIndexed { i, c ->
             s.setSpan(ForegroundColorSpan(c), inizio + i, inizio + i + 1, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         }
-        s.setSpan(TypefaceSpan("sans-serif-medium"), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
-        s.setSpan(StyleSpan(Typeface.BOLD), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        val raleway = androidx.core.content.res.ResourcesCompat.getFont(ctx, R.font.raleway_bold)
+        if (raleway != null) s.setSpan(CaratterePersonalizzato(raleway), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+        else s.setSpan(StyleSpan(Typeface.BOLD), inizio, inizio + 6, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         if (dopo.isNotEmpty()) s.setSpan(ForegroundColorSpan(nero), inizio + 6, testo.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
         return s
     }
