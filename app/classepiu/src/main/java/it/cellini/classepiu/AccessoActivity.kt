@@ -123,7 +123,7 @@ class AccessoActivity : AppCompatActivity() {
                 aggiornaPulsante()
                 r.onSuccess {
                     configura(u, p)
-                    startActivity(Intent(this@AccessoActivity, MainActivity::class.java))
+                    startActivity(Intent(this@AccessoActivity, MainActivity::class.java).putExtra(MainActivity.EXTRA_SENZA_ANIMAZIONE, true))
                     finish()
                 }.onFailure {
                     esito.text = "errore nelle credenziali!"

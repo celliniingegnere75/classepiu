@@ -116,7 +116,8 @@ class MainActivity : AppCompatActivity() {
             permessoNotifiche.launch(Manifest.permission.POST_NOTIFICATIONS)
         } else chiediBatteria()
         gestisci(intent)
-        if (savedInstanceState == null) Splash.mostra(this)
+        // dopo l'ingresso con le credenziali si entra subito, senza animazione
+        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) Splash.mostra(this)
     }
 
     /** Una sola volta: chiede di escludere l'app dall'ottimizzazione batteria, così i controlli partono a orario. */
@@ -228,5 +229,6 @@ class MainActivity : AppCompatActivity() {
         const val TAB_IMPOSTAZIONI = 3
         const val TAB_HOME = 4
         const val EXTRA_REGISTRO = "apri_registro"
+        const val EXTRA_SENZA_ANIMAZIONE = "senza_animazione"
     }
 }
