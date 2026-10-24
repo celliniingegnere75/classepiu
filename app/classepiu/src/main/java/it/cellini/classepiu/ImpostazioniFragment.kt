@@ -163,7 +163,7 @@ class ImpostazioniFragment : Fragment() {
         val orario = vistaOrario(ctx)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(16))
+            setPadding(ctx.dp(15), 0, ctx.dp(15), ctx.dp(16))
         }
         val schedaFunzioni = schedaPillola(ctx, "funzioni")
         val schedaOrario = schedaPillola(ctx, "lezioni")
