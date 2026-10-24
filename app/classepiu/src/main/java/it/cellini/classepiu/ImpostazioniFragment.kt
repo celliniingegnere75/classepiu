@@ -35,6 +35,9 @@ class ImpostazioniFragment : Fragment() {
 
     private val nero = 0xFF111111.toInt()
     private var aggiornaOre: (Boolean) -> Unit = {}
+    private var segnaLetteRow: View? = null
+    private var controlloPeriodicoRow: View? = null
+    private var gruppoIntervallo: View? = null
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
@@ -104,20 +107,21 @@ class ImpostazioniFragment : Fragment() {
         }
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(28)) { on ->
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(28), false) { on ->
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
+            aggiornaVisibilitaControlli()
         }
-        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12)) { on ->
+        segnaLetteRow = riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12), true) { on ->
             imp.segnaLette = on
             messaggio(if (on) "le circolari inviate verranno segnate come lette." else "le circolari inviate resteranno da leggere.")
-        }
-        riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(10)) { on ->
+        } as View
+        controlloPeriodicoRow = riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(10), true) { on ->
             imp.controlloAutomatico = on
             Controllo.pianifica(ctx)
             aggiornaOre(on)
             messaggio(if (on) "controllo periodico attivato." else "controllo periodico disattivato.")
-        }
+        } as View
 
         // --- intervallo: 2, 4, 8, 24 ore (grigio e non selezionabile se il controllo periodico è spento)
         // scelte disegnate a mano (cerchio, punto, scritta) con spazi flessibili tra l'una e l'altra:
@@ -163,8 +167,10 @@ class ImpostazioniFragment : Fragment() {
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         aggiornaOre = { acceso -> oreAttive = acceso; ridisegna() }
+        gruppoIntervallo = gruppo
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(4) })
         aggiornaOre(imp.controlloAutomatico)
+        aggiornaVisibilitaControlli()
 
         // --- due schede in alto: "orario" e "funzioni" (tutto quello che c'era)
         val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
@@ -269,6 +275,14 @@ class ImpostazioniFragment : Fragment() {
         titoloDestinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         destinatarioView?.visibility = if (autenticato) View.VISIBLE else View.GONE
         if (!autenticato) salvaDestinatarioView?.visibility = View.GONE
+    }
+
+    private fun aggiornaVisibilitaControlli() {
+        val imp = Impostazioni(context ?: return)
+        val visibile = imp.invioMail
+        segnaLetteRow?.visibility = if (visibile) View.VISIBLE else View.GONE
+        controlloPeriodicoRow?.visibility = if (visibile) View.VISIBLE else View.GONE
+        gruppoIntervallo?.visibility = if (visibile) View.VISIBLE else View.GONE
     }
 
     /**
@@ -593,8 +607,8 @@ class ImpostazioniFragment : Fragment() {
         aggiorna()
     }
 
-    /** Riga con testo a sinistra e interruttore azzurro a destra; si salva appena lo tocchi. */
-    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, cambia: (Boolean) -> Unit): androidx.appcompat.widget.SwitchCompat {
+    /** Riga con testo a sinistra e interruttore azzurro a destra; si salva appena lo tocchi. Restituisce il row container (LinearLayout) se storeRow=true, altrimenti il switch. */
+    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, storeRow: Boolean = false, cambia: (Boolean) -> Unit): Any {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
         fun pillola(colore: Int) = GradientDrawable().apply {
             setColor(colore); cornerRadius = ctx.dp(15).toFloat(); setSize(ctx.dp(52), ctx.dp(30))
@@ -618,14 +632,15 @@ class ImpostazioniFragment : Fragment() {
         val t = TextView(ctx).apply {
             text = testo; textSize = 16f; setTextColor(nero) // va a capo se lo spazio non basta
         }
-        col.addView(LinearLayout(ctx).apply {
+        val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(sw, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(12) })
             setOnClickListener { sw.toggle() }
-        }, piena().apply { topMargin = sopra })
-        return sw
+        }
+        col.addView(row, piena().apply { topMargin = sopra })
+        return if (storeRow) row else sw
     }
 
     private fun messaggio(s: String) {
