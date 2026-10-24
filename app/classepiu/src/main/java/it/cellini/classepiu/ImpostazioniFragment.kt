@@ -104,11 +104,11 @@ class ImpostazioniFragment : Fragment() {
         }
 
         // --- interruttori (si salvano da soli)
-        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(10)) { on ->
+        riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(28)) { on ->
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
         }
-        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(10)) { on ->
+        riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12)) { on ->
             imp.segnaLette = on
             messaggio(if (on) "le circolari inviate verranno segnate come lette." else "le circolari inviate resteranno da leggere.")
         }
