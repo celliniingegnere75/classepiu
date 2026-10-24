@@ -25,7 +25,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Impostazioni come la bozza, in due schede: "funzioni" (profilo, ricevitore/token, interruttori, intervallo) e "orario". */
+/** Impostazioni in due schede: "funzioni" (accesso google per l'invio, interruttori, intervallo) e "orario". */
 class ImpostazioniFragment : Fragment() {
 
     private val nero = 0xFF111111.toInt()
@@ -41,59 +41,23 @@ class ImpostazioniFragment : Fragment() {
             setPadding(ctx.dp(15), ctx.dp(4), ctx.dp(15), ctx.dp(10))
         }
 
-        // --- come si inviano le mail: con il ricevitore Apps Script oppure con gmail dopo l'accesso google
-        val sceltaRicevitore = schedaPillola(ctx, "ricevitore")
-        val sceltaGoogle = schedaPillola(ctx, "google")
-        col.addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            addView(TextView(ctx).apply { text = "invia con:"; textSize = 15f; setTextColor(nero) })
-            addView(sceltaRicevitore, LinearLayout.LayoutParams(0, ctx.dp(30), 1f).apply { leftMargin = ctx.dp(10) })
-            addView(sceltaGoogle, LinearLayout.LayoutParams(0, ctx.dp(30), 1f).apply { leftMargin = ctx.dp(6) })
-        }, piena().apply { topMargin = ctx.dp(6) })
-
-        // ricevitore e token
-        val ricevitore = campoSottolineato(ctx, "ricevitore", password = false).apply { setText(imp.ricevitoreUrlPersonale) }
-        val token = campoSottolineato(ctx, "token", password = true).apply { setText(imp.ricevitoreCodicePersonale) }
-        col.addView(ricevitore, piena().apply { topMargin = ctx.dp(2) })
-        col.addView(token, piena().apply { topMargin = ctx.dp(0) })
-
-        // google: account con cui si è dato il consenso e destinatario (vuoto = lo stesso account)
+        // invio con gmail dopo l'accesso google (unico modo, il ricevitore Apps Script non c'è più)
+        imp.invioGoogle = true
         val account = pillola(ctx, "accedi con google", 15f, Color.WHITE, azzurro, ctx.dp(36)).apply {
             setPadding(ctx.dp(16), ctx.dp(4), ctx.dp(16), ctx.dp(4))
             setOnClickListener { accediGoogle() }
         }
         accountView = account
-        col.addView(account, piena().apply { topMargin = ctx.dp(8) })
+        col.addView(account, piena().apply { topMargin = ctx.dp(6) })
         val destinatario = campoSottolineato(ctx, "destinatario (vuoto = te stesso)", password = false).apply { setText(imp.destinatari) }
         col.addView(destinatario, piena())
-
-        fun mostraModo() {
-            val g = imp.invioGoogle
-            stilePillola(ctx, sceltaRicevitore, !g)
-            stilePillola(ctx, sceltaGoogle, g)
-            ricevitore.visibility = if (g) View.GONE else View.VISIBLE
-            token.visibility = if (g) View.GONE else View.VISIBLE
-            account.visibility = if (g) View.VISIBLE else View.GONE
-            destinatario.visibility = if (g) View.VISIBLE else View.GONE
-            aggiornaAccount()
-        }
-        sceltaRicevitore.setOnClickListener { imp.invioGoogle = false; mostraModo() }
-        sceltaGoogle.setOnClickListener { imp.invioGoogle = true; mostraModo(); if (!imp.googleAccount.contains('@')) accediGoogle() }
-        mostraModo()
+        aggiornaAccount()
 
         val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
             setOnClickListener {
-                if (imp.invioGoogle) {
-                    imp.destinatari = destinatario.text.toString()
-                    messaggio("le circolari andranno a: " + imp.destinatariEffettivi.joinToString(", ").ifEmpty { "nessuno (accedi con google)" })
-                    return@setOnClickListener
-                }
-                imp.ricevitoreUrl = ricevitore.text.toString()
-                imp.ricevitoreCodice = token.text.toString()
-                imp.usaRicevitore = true
-                messaggio(if (ricevitore.text.isBlank() && token.text.isBlank()) "salvato: si usa il ricevitore già inserito nell'app." else "credenziali del ricevitore salvate.")
+                imp.destinatari = destinatario.text.toString()
+                messaggio("le circolari andranno a: " + imp.destinatariEffettivi.joinToString(", ").ifEmpty { "nessuno (accedi con google)" })
             }
         }
         col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
