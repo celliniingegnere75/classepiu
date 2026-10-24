@@ -159,7 +159,7 @@ class ImpostazioniFragment : Fragment() {
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(4) })
         aggiornaOre(imp.controlloAutomatico)
 
-        // --- due schede in alto: "funzioni" (tutto quello che c'era) e "orario"
+        // --- due schede in alto: "orario" e "funzioni" (tutto quello che c'era)
         val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
         val orario = vistaOrario(ctx)
         val schede = LinearLayout(ctx).apply {
@@ -168,18 +168,22 @@ class ImpostazioniFragment : Fragment() {
         }
         val schedaFunzioni = schedaPillola(ctx, "funzioni")
         val schedaOrario = schedaPillola(ctx, "orario")
-        fun mostraScheda(primaScheda: Boolean) {
+        fun mostraScheda(primaScheda: Boolean, daClasseviva: Boolean = true) {
             stilePillola(ctx, schedaFunzioni, primaScheda)
             stilePillola(ctx, schedaOrario, !primaScheda)
             funzioni.visibility = if (primaScheda) View.VISIBLE else View.GONE
             orario.visibility = if (primaScheda) View.GONE else View.VISIBLE
-            if (!primaScheda && insegnamenti.isEmpty() && !caricamento) caricaInsegnamenti(ctx, avvisa = false)
+            // all'apertura dell'app basta l'ultima risposta salvata: classeviva si chiede solo quando serve
+            if (!primaScheda && insegnamenti.isEmpty() && !caricamento) {
+                if (daClasseviva) caricaInsegnamenti(ctx, avvisa = false)
+                else runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
+            }
         }
         schedaFunzioni.setOnClickListener { mostraScheda(true) }
         schedaOrario.setOnClickListener { mostraScheda(false) }
-        schede.addView(schedaFunzioni, LinearLayout.LayoutParams(0, ctx.dp(32), 1f))
-        schede.addView(schedaOrario, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { leftMargin = ctx.dp(6) })
-        mostraScheda(true)
+        schede.addView(schedaOrario, LinearLayout.LayoutParams(0, ctx.dp(32), 1f))
+        schede.addView(schedaFunzioni, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { leftMargin = ctx.dp(6) })
+        mostraScheda(false, daClasseviva = false)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
@@ -226,26 +230,33 @@ class ImpostazioniFragment : Fragment() {
         }
 
         val ore = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(ctx.dp(15), 0, ctx.dp(15), ctx.dp(12)) }
+        // ogni ora divisa in due metà: sopra la classe, sotto la materia, ognuna con la sua tendina
+        fun meta(ora: Int, primaMeta: Boolean): TextView = TextView(ctx).apply {
+            textSize = 14f; maxLines = 2; gravity = Gravity.CENTER_VERTICAL
+            setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(6), ctx.dp(4))
+            minHeight = ctx.dp(30)
+            setCompoundDrawablesWithIntrinsicBounds(null, null, ContextCompat.getDrawable(ctx, R.drawable.ic_tendina), null)
+            setOnClickListener { if (primaMeta) scegliClasse(ctx, orario, ora) else scegliMateria(ctx, orario, ora) }
+        }
         val caselle = (1..Orario.ORE).map { ora ->
-            val classe = TextView(ctx).apply { textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER; maxLines = 2 }
-            val materia = TextView(ctx).apply { textSize = 13f; setTextColor(0xFF4E4E4E.toInt()); gravity = Gravity.CENTER; maxLines = 2 }
-            val centro = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                addView(classe, piena()); addView(materia, piena())
+            val classe = meta(ora, true)
+            val materia = meta(ora, false)
+            val destra = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(classe, piena())
+                addView(View(ctx).apply { setBackgroundColor(0xFFE6E6E6.toInt()) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(1)))
+                addView(materia, piena())
             }
             ore.addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                minimumHeight = ctx.dp(56)
-                setPadding(ctx.dp(14), ctx.dp(6), ctx.dp(12), ctx.dp(6))
+                setPadding(ctx.dp(14), ctx.dp(2), ctx.dp(6), ctx.dp(2))
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(14).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
-                addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 16f; setTextColor(nero) }, LinearLayout.LayoutParams(ctx.dp(70), ViewGroup.LayoutParams.WRAP_CONTENT))
-                addView(centro, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_matita); contentDescription = "modifica" },
-                    LinearLayout.LayoutParams(ctx.dp(24), ctx.dp(24)).apply { leftMargin = ctx.dp(8) })
-                setOnClickListener { scegli(ctx, orario, ora) }
+                addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero) }, LinearLayout.LayoutParams(ctx.dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(View(ctx).apply { setBackgroundColor(0xFFE6E6E6.toInt()) }, LinearLayout.LayoutParams(ctx.dp(1), ViewGroup.LayoutParams.MATCH_PARENT))
+                addView(destra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             }, piena().apply { topMargin = ctx.dp(6) })
             classe to materia
         }
@@ -264,10 +275,11 @@ class ImpostazioniFragment : Fragment() {
             }
             caselle.forEachIndexed { i, (classe, materia) ->
                 val c = orario.casella(giornoScelto + 1, i + 1)
-                classe.text = c?.classe ?: "nessuna materia"
+                classe.text = c?.classe ?: "classe"
+                classe.setTypeface(null, if (c == null) Typeface.NORMAL else Typeface.BOLD)
                 classe.setTextColor(if (c == null) 0xFFA8A8A8.toInt() else azzurro)
-                materia.text = c?.materia.orEmpty()
-                materia.visibility = if (c?.materia.isNullOrEmpty()) View.GONE else View.VISIBLE
+                materia.text = c?.materia?.ifEmpty { null } ?: "materia"
+                materia.setTextColor(if (c?.materia.isNullOrEmpty()) 0xFFA8A8A8.toInt() else nero)
             }
         }
         aggiornaOrario()
@@ -307,27 +319,54 @@ class ImpostazioniFragment : Fragment() {
         }
     }
 
-    /** Scelta di classe e materia per un'ora del giorno selezionato. */
-    private fun scegli(ctx: android.content.Context, orario: Orario, ora: Int) {
-        if (insegnamenti.isEmpty()) {
-            if (caricamento) { messaggio("carico classi e materie…"); return }
-            caricaInsegnamenti(ctx, avvisa = true) {
-                if (insegnamenti.isEmpty()) messaggio("nessuna classe trovata: usa \"copia la risposta di classeviva\" in fondo.")
-                else scegli(ctx, orario, ora)
-            }
-            return
+    /** Prima carica classi e materie (se mancano), poi apre la tendina. */
+    private fun conInsegnamenti(ctx: android.content.Context, poi: () -> Unit) {
+        if (insegnamenti.isNotEmpty()) { poi(); return }
+        if (caricamento) { messaggio("carico classi e materie…"); return }
+        caricaInsegnamenti(ctx, avvisa = true) {
+            if (insegnamenti.isEmpty()) messaggio("nessuna classe trovata: usa \"copia la risposta di classeviva\" in fondo.")
+            else poi()
         }
+    }
+
+    /** Classi e materie senza educazione civica, che non è una materia ordinaria. */
+    private fun ordinari() = insegnamenti.filterNot { it.materia.lowercase().contains("civica") }
+
+    private fun titolo(ora: Int) = "${GIORNI_INTERI[giornoScelto]}, $ora° ora"
+
+    /** Tendina della classe: cambiando classe la materia resta solo se la si insegna anche lì (o se è l'unica). */
+    private fun scegliClasse(ctx: android.content.Context, orario: Orario, ora: Int) = conInsegnamenti(ctx) {
         val giorno = giornoScelto + 1
-        val voci = insegnamenti.map { if (it.materia.isEmpty()) it.classe else "${it.classe} · ${it.materia}" }.toTypedArray()
+        val classi = ordinari().map { it.classe }.distinct()
         val attuale = orario.casella(giorno, ora)
         MaterialAlertDialogBuilder(ctx)
-            .setTitle("${Orario.GIORNI[giornoScelto]}, $ora° ora")
-            .setSingleChoiceItems(voci, insegnamenti.indexOfFirst { it == attuale }) { d, i ->
-                orario.imposta(giorno, ora, insegnamenti[i])
+            .setTitle(titolo(ora))
+            .setSingleChoiceItems(classi.toTypedArray(), attuale?.let { classi.indexOf(it.classe) } ?: -1) { d, i ->
+                val materie = ordinari().filter { it.classe == classi[i] && it.materia.isNotEmpty() }.map { it.materia }
+                val materia = attuale?.materia?.takeIf { it in materie } ?: materie.singleOrNull().orEmpty()
+                orario.imposta(giorno, ora, Insegnamento(classi[i], materia))
                 aggiornaOrario()
                 d.dismiss()
             }
             .setNeutralButton("svuota") { _, _ -> orario.imposta(giorno, ora, null); aggiornaOrario() }
+            .setNegativeButton("annulla", null)
+            .show()
+    }
+
+    /** Tendina della materia: solo le materie che il docente insegna nella classe scelta. */
+    private fun scegliMateria(ctx: android.content.Context, orario: Orario, ora: Int) = conInsegnamenti(ctx) {
+        val giorno = giornoScelto + 1
+        val attuale = orario.casella(giorno, ora)
+        if (attuale == null) { messaggio("scegli prima la classe."); return@conInsegnamenti }
+        val materie = ordinari().filter { it.classe == attuale.classe && it.materia.isNotEmpty() }.map { it.materia }.distinct()
+        if (materie.isEmpty()) { messaggio("nessuna materia trovata per ${attuale.classe}."); return@conInsegnamenti }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle(titolo(ora))
+            .setSingleChoiceItems(materie.toTypedArray(), materie.indexOf(attuale.materia)) { d, i ->
+                orario.imposta(giorno, ora, Insegnamento(attuale.classe, materie[i]))
+                aggiornaOrario()
+                d.dismiss()
+            }
             .setNegativeButton("annulla", null)
             .show()
     }
@@ -433,5 +472,6 @@ class ImpostazioniFragment : Fragment() {
 
     companion object {
         val ORE = listOf(2, 4, 8, 24)
+        val GIORNI_INTERI = listOf("lunedì", "martedì", "mercoledì", "giovedì", "venerdì")
     }
 }
