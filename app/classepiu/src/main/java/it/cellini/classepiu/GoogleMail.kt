@@ -23,12 +23,17 @@ object GoogleMail {
     private const val INVIO = "https://www.googleapis.com/auth/gmail.send"
     private const val EMAIL = "email"
 
-    fun richiesta(): AuthorizationRequest =
-        AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(INVIO), Scope(EMAIL))).build()
+    /** Con l'account indicato google usa proprio quello, invece dell'ultimo a cui aveva già dato il permesso. */
+    fun richiesta(account: String = ""): AuthorizationRequest {
+        val b = AuthorizationRequest.builder().setRequestedScopes(listOf(Scope(INVIO), Scope(EMAIL)))
+        if (account.contains('@')) b.setAccount(android.accounts.Account(account, "com.google"))
+        return b.build()
+    }
 
     /** Gettone valido, anche in background: se il consenso manca o è stato revocato serve ripassare da opzioni. */
     private fun gettone(ctx: Context): String {
-        val r: AuthorizationResult = Tasks.await(Identity.getAuthorizationClient(ctx).authorize(richiesta()), 60, TimeUnit.SECONDS)
+        val account = Impostazioni(ctx).googleAccount
+        val r: AuthorizationResult = Tasks.await(Identity.getAuthorizationClient(ctx).authorize(richiesta(account)), 60, TimeUnit.SECONDS)
         if (r.hasResolution()) throw IllegalStateException("accesso google da rinnovare: apri classePiù, opzioni, funzioni e premi \"accedi con google\".")
         return r.accessToken ?: throw IllegalStateException("google non ha dato il permesso di invio.")
     }

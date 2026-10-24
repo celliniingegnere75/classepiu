@@ -269,9 +269,24 @@ class ImpostazioniFragment : Fragment() {
             .onFailure { messaggio("accesso google annullato.") }
     }
 
+    /** Account scelto nel selettore di Android, in attesa che google confermi il permesso. */
+    private var accountScelto = ""
+
+    /** Selettore degli account google del telefono, mostrato sempre (anche con un solo account, e con "aggiungi account"). */
+    @Suppress("DEPRECATION")
+    private val sceltaAccount = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.StartActivityForResult()) { esito ->
+        val nome = esito.data?.getStringExtra(android.accounts.AccountManager.KEY_ACCOUNT_NAME).orEmpty()
+        if (nome.contains('@')) { accountScelto = nome; autorizza(nome) } else messaggio("nessun account scelto.")
+    }
+
+    @Suppress("DEPRECATION")
     private fun accediGoogle() {
+        sceltaAccount.launch(android.accounts.AccountManager.newChooseAccountIntent(null, null, arrayOf("com.google"), true, null, null, null, null))
+    }
+
+    private fun autorizza(account: String) {
         val ctx = context ?: return
-        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(ctx).authorize(GoogleMail.richiesta())
+        com.google.android.gms.auth.api.identity.Identity.getAuthorizationClient(ctx).authorize(GoogleMail.richiesta(account))
             .addOnSuccessListener { r ->
                 val pi = r.pendingIntent
                 if (r.hasResolution() && pi != null) consenso.launch(androidx.activity.result.IntentSenderRequest.Builder(pi.intentSender).build())
@@ -283,7 +298,8 @@ class ImpostazioniFragment : Fragment() {
     private fun accessoRiuscito(r: com.google.android.gms.auth.api.identity.AuthorizationResult) {
         val ctx = context ?: return
         viewLifecycleOwner.lifecycleScope.launch {
-            val email = withContext(Dispatchers.IO) { runCatching { GoogleMail.indirizzoDa(r) }.getOrDefault("") }
+            val letta = withContext(Dispatchers.IO) { runCatching { GoogleMail.indirizzoDa(r) }.getOrDefault("") }
+            val email = letta.ifEmpty { accountScelto } // se google non lo dice, vale l'account scelto nel selettore
             val imp = Impostazioni(ctx)
             if (email.contains('@')) imp.googleAccount = email
             imp.invioGoogle = true
@@ -320,14 +336,13 @@ class ImpostazioniFragment : Fragment() {
     }
 
     /**
-     * Dimentica l'account google in classePiù. Non revoca il consenso lato Google: farlo via
-     * oauth2/revoke lascia in Play Services un gettone ormai morto che blocca il riaccesso finché
-     * non scade. Per cambiare davvero account serve togliere il permesso da myaccount.google.com.
+     * Dimentica l'account google in classePiù; al prossimo accesso il selettore di Android fa scegliere
+     * l'account. Non si revoca via oauth2/revoke: lascerebbe in Play Services un gettone morto.
      */
     private fun scollegaGoogle(ctx: android.content.Context) {
         MaterialAlertDialogBuilder(ctx)
             .setTitle("scollegare l'account google?")
-            .setMessage("classePiù dimenticherà questo account. Per usarne un altro togli anche il permesso a classePiù da myaccount.google.com/permissions, altrimenti Google rientra da solo con lo stesso account.")
+            .setMessage("classePiù dimenticherà questo account. Al prossimo accesso potrai scegliere quello che preferisci.")
             .setPositiveButton("scollega") { _, _ ->
                 Impostazioni(ctx).googleAccount = ""
                 aggiornaAccount()
