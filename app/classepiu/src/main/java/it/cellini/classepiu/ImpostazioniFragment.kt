@@ -201,6 +201,7 @@ class ImpostazioniFragment : Fragment() {
             setCompoundDrawablesWithIntrinsicBounds(null, null, ContextCompat.getDrawable(ctx, R.drawable.ic_tendina), null)
             setOnClickListener { if (primaMeta) scegliClasse(ctx, orario, ora) else scegliMateria(ctx, orario, ora) }
         }
+        val fasceView = ArrayList<TextView>() // inizio-fine sotto il numero dell'ora
         val caselle = (1..Orario.ORE).map { ora ->
             val classe = meta(ora, true)
             val materia = meta(ora, false)
@@ -228,7 +229,16 @@ class ImpostazioniFragment : Fragment() {
                     orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER_HORIZONTAL
                     setPadding(0, 0, ctx.dp(12), 0) // numero, "aula" e sigla un po' più a sinistra, lontani dalla linea
-                    addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero); includeFontPadding = false; gravity = Gravity.CENTER })
+                    // "1° ora" e sotto inizio-fine: toccandoli si cambia l'orario di quell'ora
+                    addView(LinearLayout(ctx).apply {
+                        orientation = LinearLayout.VERTICAL
+                        gravity = Gravity.CENTER_HORIZONTAL
+                        addView(TextView(ctx).apply { text = "$ora° ora"; textSize = 15f; setTextColor(nero); includeFontPadding = false; gravity = Gravity.CENTER })
+                        addView(TextView(ctx).apply {
+                            textSize = 10f; setTextColor(azzurro); includeFontPadding = false; gravity = Gravity.CENTER; setSingleLine(true)
+                        }.also { fasceView.add(it) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(1) })
+                        setOnClickListener { scegliFascia(ctx, orario, ora) }
+                    })
                     addView(TextView(ctx).apply { text = "aula"; textSize = 10f; setTextColor(0xFF777777.toInt()); includeFontPadding = false; gravity = Gravity.CENTER },
                         LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(3) })
                     addView(aulaView, LinearLayout.LayoutParams(ctx.dp(52), ctx.dp(24)))
@@ -251,6 +261,7 @@ class ImpostazioniFragment : Fragment() {
                 p.setTextColor(if (i == giornoScelto) Color.WHITE else 0xFF333333.toInt())
                 p.setTypeface(null, if (i == giornoScelto) Typeface.BOLD else Typeface.NORMAL)
             }
+            fasceView.forEachIndexed { i, v -> v.text = orario.fascia(i + 1).toString() }
             caselle.forEachIndexed { i, (classe, materia, aulaView) ->
                 val c = orario.casella(giornoScelto + 1, i + 1)
                 classe.text = c?.classe ?: "classe"
@@ -320,6 +331,21 @@ class ImpostazioniFragment : Fragment() {
                     (v as? TextView)?.minHeight = ctx.dp(52)
                 }
         }
+
+    /** Inizio e fine di un'ora (uguali per tutti i giorni): prima si sceglie l'inizio, poi la fine. */
+    private fun scegliFascia(ctx: android.content.Context, orario: Orario, ora: Int) {
+        val attuale = orario.fascia(ora)
+        android.app.TimePickerDialog(ctx, { _, hI, mI ->
+            val inizio = hI * 60 + mI
+            val durata = attuale.fine - attuale.inizio
+            android.app.TimePickerDialog(ctx, { _, hF, mF ->
+                val fine = hF * 60 + mF
+                if (fine <= inizio) { messaggio("la fine deve venire dopo l'inizio."); return@TimePickerDialog }
+                orario.impostaFascia(ora, Fascia(inizio, fine))
+                aggiornaOrario()
+            }, (inizio + durata) / 60 % 24, (inizio + durata) % 60, true).apply { setTitle("fine della $ora° ora") }.show()
+        }, attuale.inizio / 60, attuale.inizio % 60, true).apply { setTitle("inizio della $ora° ora") }.show()
+    }
 
     /** Inserimento della sigla dell'aula (massimo 5 caratteri). */
     private fun scegliAula(ctx: android.content.Context, orario: Orario, ora: Int) {

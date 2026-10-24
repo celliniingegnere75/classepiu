@@ -143,33 +143,108 @@ object Diario {
     }
 }
 
-/** Orario settimanale del docente, solo sul telefono: per ogni giorno (1 = lunedì … 5 = venerdì) e ora (1…8) una classe e una materia. */
+/** Inizio e fine di un'ora di lezione, in minuti dalla mezzanotte (8:00 = 480). */
+data class Fascia(val inizio: Int, val fine: Int) {
+    fun contiene(minuto: Int) = minuto in inizio until fine
+    override fun toString() = "${hhmm(inizio)}-${hhmm(fine)}"
+
+    companion object {
+        fun hhmm(m: Int) = "%d:%02d".format(m / 60, m % 60)
+        /** Valore di partenza: la 1ª ora 8:00-9:00, la 2ª 9:00-10:00 e così via. */
+        fun predefinita(ora: Int) = Fascia(420 + ora * 60, 480 + ora * 60)
+    }
+}
+
+/** Una casella dell'orario completa: quando (giorno, ora, fascia), dove (aula), con chi e cosa (classe, materia). */
+data class Lezione(val giorno: Int, val ora: Int, val fascia: Fascia, val classe: String, val materia: String, val aula: String)
+
+/**
+ * Orario settimanale del docente, solo sul telefono, in un unico file orario.json:
+ * {"v":2, "fasce":[[480,540],…], "celle":{"1-1":{"c":"4ETA","m":"ELETTROTECNICA…","a":"LAB1"},…}}
+ * Giorni 1 = lunedì … 5 = venerdì, ore 1…ORE. Le fasce orarie valgono per tutti i giorni.
+ * Il file si legge una volta sola e in memoria i dati stanno in due array a indice fisso.
+ */
 class Orario(ctx: Context) {
     private val file = File(ctx.filesDir, "orario.json")
+    private val fasce = Array(ORE) { Fascia.predefinita(it + 1) }
+    private val celle = arrayOfNulls<Lezione>(GIORNI.size * ORE) // solo classe/materia/aula; giorno, ora e fascia si ricavano
 
-    private fun leggi(): JSONObject = try { if (file.exists()) JSONObject(file.readText()) else JSONObject() } catch (e: Exception) { JSONObject() }
+    private fun i(giorno: Int, ora: Int) = (giorno - 1) * ORE + (ora - 1)
 
-    fun casella(giorno: Int, ora: Int): Insegnamento? {
-        val o = leggi().optJSONObject("$giorno-$ora") ?: return null
-        val classe = o.optString("classe")
-        return if (classe.isEmpty()) null else Insegnamento(classe, o.optString("materia"))
+    init {
+        val j = try { if (file.exists()) JSONObject(file.readText()) else JSONObject() } catch (e: Exception) { JSONObject() }
+        if (j.optInt("v") == 2) {
+            j.optJSONArray("fasce")?.let { a ->
+                for (k in 0 until minOf(a.length(), ORE)) a.optJSONArray(k)?.let { fasce[k] = Fascia(it.optInt(0), it.optInt(1)) }
+            }
+            j.optJSONObject("celle")?.let { c ->
+                for (k in c.keys()) {
+                    val (g, o) = k.split("-").mapNotNull { it.toIntOrNull() }.takeIf { it.size == 2 } ?: continue
+                    if (g !in 1..GIORNI.size || o !in 1..ORE) continue
+                    val v = c.getJSONObject(k)
+                    celle[i(g, o)] = Lezione(g, o, fasce[o - 1], v.optString("c"), v.optString("m"), v.optString("a"))
+                }
+            }
+        } else {
+            // formato precedente: chiavi "g-o" {classe, materia} e "g-o-aula"
+            for (g in 1..GIORNI.size) for (o in 1..ORE) {
+                val v = j.optJSONObject("$g-$o")
+                val aula = j.optString("$g-$o-aula")
+                if (v != null || aula.isNotEmpty())
+                    celle[i(g, o)] = Lezione(g, o, fasce[o - 1], v?.optString("classe").orEmpty(), v?.optString("materia").orEmpty(), aula)
+            }
+            if (j.length() > 0) salva()
+        }
     }
+
+    private fun salva() {
+        val c = JSONObject()
+        celle.forEach { l ->
+            if (l != null && (l.classe.isNotEmpty() || l.aula.isNotEmpty()))
+                c.put("${l.giorno}-${l.ora}", JSONObject().put("c", l.classe).put("m", l.materia).put("a", l.aula))
+        }
+        val f = org.json.JSONArray()
+        fasce.forEach { f.put(org.json.JSONArray().put(it.inizio).put(it.fine)) }
+        file.writeText(JSONObject().put("v", 2).put("fasce", f).put("celle", c).toString())
+    }
+
+    private fun cambia(giorno: Int, ora: Int, nuova: (Lezione) -> Lezione) {
+        val vecchia = celle[i(giorno, ora)] ?: Lezione(giorno, ora, fasce[ora - 1], "", "", "")
+        celle[i(giorno, ora)] = nuova(vecchia)
+        salva()
+    }
+
+    fun casella(giorno: Int, ora: Int): Insegnamento? =
+        celle[i(giorno, ora)]?.takeIf { it.classe.isNotEmpty() }?.let { Insegnamento(it.classe, it.materia) }
+
+    /** Classe e materia (null = svuota); l'aula resta. */
+    fun imposta(giorno: Int, ora: Int, valore: Insegnamento?) =
+        cambia(giorno, ora) { it.copy(classe = valore?.classe.orEmpty(), materia = valore?.materia.orEmpty()) }
 
     /** Sigla dell'aula dell'ora (fino a 5 caratteri), indipendente da classe e materia. */
-    fun aula(giorno: Int, ora: Int): String = leggi().optString("$giorno-$ora-aula")
+    fun aula(giorno: Int, ora: Int): String = celle[i(giorno, ora)]?.aula.orEmpty()
 
-    fun impostaAula(giorno: Int, ora: Int, sigla: String) {
-        val j = leggi()
-        val s = sigla.trim().uppercase().take(AULA_MAX)
-        if (s.isEmpty()) j.remove("$giorno-$ora-aula") else j.put("$giorno-$ora-aula", s)
-        file.writeText(j.toString())
+    fun impostaAula(giorno: Int, ora: Int, sigla: String) =
+        cambia(giorno, ora) { it.copy(aula = sigla.trim().uppercase().take(AULA_MAX)) }
+
+    fun fascia(ora: Int): Fascia = fasce[ora - 1]
+
+    fun impostaFascia(ora: Int, f: Fascia) {
+        fasce[ora - 1] = f
+        for (k in celle.indices) celle[k]?.let { if (it.ora == ora) celle[k] = it.copy(fascia = f) }
+        salva()
     }
 
-    fun imposta(giorno: Int, ora: Int, valore: Insegnamento?) {
-        val j = leggi()
-        if (valore == null) j.remove("$giorno-$ora")
-        else j.put("$giorno-$ora", JSONObject().put("classe", valore.classe).put("materia", valore.materia))
-        file.writeText(j.toString())
+    /** Tutte le lezioni con una classe, in ordine di giorno e ora (per gli usi futuri). */
+    fun lezioni(): List<Lezione> = celle.filterNotNull().filter { it.classe.isNotEmpty() }
+
+    /** La lezione in corso in quel momento, se c'è. */
+    fun lezioneAlle(quando: java.util.Calendar = java.util.Calendar.getInstance()): Lezione? {
+        val g = quando.get(java.util.Calendar.DAY_OF_WEEK) - java.util.Calendar.MONDAY + 1
+        if (g !in 1..GIORNI.size) return null
+        val m = quando.get(java.util.Calendar.HOUR_OF_DAY) * 60 + quando.get(java.util.Calendar.MINUTE)
+        val o = fasce.indexOfFirst { it.contiene(m) } + 1
+        return if (o == 0) null else celle[i(g, o)]?.takeIf { it.classe.isNotEmpty() }
     }
 
     companion object {
