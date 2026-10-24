@@ -3,5 +3,6 @@
     <string name="app_name">ClassePiù</string>
     <string name="tab_bacheca">bacheca</string>
     <string name="tab_registro">registro</string>
-    <string name="tab_impostazioni">impostazioni</string>
+    <string name="tab_home">home</string>
+    <string name="tab_impostazioni">opzioni</string>
 </resources>

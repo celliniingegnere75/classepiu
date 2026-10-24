@@ -332,6 +332,16 @@ class ImpostazioniFragment : Fragment() {
     /** Classi e materie senza educazione civica, che non è una materia ordinaria. */
     private fun ordinari() = insegnamenti.filterNot { it.materia.lowercase().contains("civica") }
 
+    /** Voci delle tendine con carattere più piccolo e righe più spaziate (stessa larghezza della finestra). */
+    private fun voci(ctx: android.content.Context, elenco: List<String>) =
+        object : android.widget.ArrayAdapter<String>(ctx, com.google.android.material.R.layout.mtrl_alert_select_dialog_singlechoice, android.R.id.text1, elenco) {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup): View =
+                super.getView(position, convertView, parent).also { v ->
+                    (v as? TextView)?.textSize = 14f
+                    (v as? TextView)?.minHeight = ctx.dp(52)
+                }
+        }
+
     private fun titolo(ora: Int) = "${GIORNI_INTERI[giornoScelto]}, $ora° ora"
 
     /** Tendina della classe: cambiando classe la materia resta solo se la si insegna anche lì (o se è l'unica). */
@@ -341,7 +351,7 @@ class ImpostazioniFragment : Fragment() {
         val attuale = orario.casella(giorno, ora)
         MaterialAlertDialogBuilder(ctx)
             .setTitle(titolo(ora))
-            .setSingleChoiceItems(classi.toTypedArray(), attuale?.let { classi.indexOf(it.classe) } ?: -1) { d, i ->
+            .setSingleChoiceItems(voci(ctx, classi), attuale?.let { classi.indexOf(it.classe) } ?: -1) { d, i ->
                 val materie = ordinari().filter { it.classe == classi[i] && it.materia.isNotEmpty() }.map { it.materia }
                 val materia = attuale?.materia?.takeIf { it in materie } ?: materie.singleOrNull().orEmpty()
                 orario.imposta(giorno, ora, Insegnamento(classi[i], materia))
@@ -362,7 +372,7 @@ class ImpostazioniFragment : Fragment() {
         if (materie.isEmpty()) { messaggio("nessuna materia trovata per ${attuale.classe}."); return@conInsegnamenti }
         MaterialAlertDialogBuilder(ctx)
             .setTitle(titolo(ora))
-            .setSingleChoiceItems(materie.toTypedArray(), materie.indexOf(attuale.materia)) { d, i ->
+            .setSingleChoiceItems(voci(ctx, materie), materie.indexOf(attuale.materia)) { d, i ->
                 orario.imposta(giorno, ora, Insegnamento(attuale.classe, materie[i]))
                 aggiornaOrario()
                 d.dismiss()

@@ -84,7 +84,7 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     fun login() {
-        if (utente.isBlank() || password.isBlank()) throw ClasseVivaException("utente e password classeviva non impostati (vai in impostazioni).")
+        if (utente.isBlank() || password.isBlank()) throw ClasseVivaException("utente e password classeviva non impostati (vai in opzioni).")
         token = ""
         fun prova(profilo: String?): JSONObject {
             val body = JSONObject().put("ident", profilo ?: JSONObject.NULL).put("pass", password).put("uid", utente)

@@ -56,7 +56,7 @@ object Controllo {
         if (!imp.pronta) return Esito(0, 0, false, "credenziali classeviva non impostate.")
         // come cv.py ("Manca il ricevitore"): senza invio configurato non si tocca nulla,
         // così nessuna circolare viene segnata come vista senza essere stata mandata
-        if (imp.invioMail && !imp.mailPronta) throw IllegalStateException("invio mail non configurato: completa le impostazioni.")
+        if (imp.invioMail && !imp.mailPronta) throw IllegalStateException("invio mail non configurato: completa le opzioni.")
         val caricate = archivio.carica()
         val primo = caricate == null
         val viste = caricate ?: mutableMapOf()

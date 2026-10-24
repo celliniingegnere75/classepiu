@@ -144,7 +144,7 @@ class DettaglioActivity : AppCompatActivity() {
 
     private fun inviaOra() {
         val imp = Impostazioni(this)
-        if (!imp.mailPronta) { avviso("imposta prima l'invio delle mail in impostazioni."); return }
+        if (!imp.mailPronta) { avviso("imposta prima l'invio delle mail in opzioni."); return }
         avviso("invio in corso…")
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(applicationContext, c) } }

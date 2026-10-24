@@ -27,7 +27,7 @@ import androidx.fragment.app.Fragment
 
 /**
  * Schermata principale come la bozza: fascia azzurra con la scritta classePiù, contenitore grigio
- * con angoli arrotondati e pannello bianco, barra in basso flottante (Registro, Bacheca, Impostazioni).
+ * con angoli arrotondati e pannello bianco, barra in basso flottante (home, registro, bacheca, opzioni).
  */
 class MainActivity : AppCompatActivity() {
 
@@ -94,6 +94,7 @@ class MainActivity : AppCompatActivity() {
                 .add(contenitoreId, BachecaFragment(), "t$TAB_BACHECA")
                 .add(contenitoreId, RegistroFragment(), "t$TAB_REGISTRO")
                 .add(contenitoreId, ImpostazioniFragment(), "t$TAB_IMPOSTAZIONI")
+                .add(contenitoreId, HomeFragment(), "t$TAB_HOME")
                 .commitNow()
             mostra(TAB_REGISTRO)
             Controllo.pianifica(this)
@@ -142,7 +143,7 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) chiediBatteria()
     }
 
-    /** Barra flottante grigio chiaro con le tre voci; la voce attiva ha l'etichetta più scura. */
+    /** Barra flottante grigio chiaro con le quattro voci; la voce attiva ha l'etichetta più scura. */
     private fun barraInBasso(): LinearLayout {
         val barra = LinearLayout(this).apply {
             orientation = LinearLayout.HORIZONTAL
@@ -151,12 +152,13 @@ class MainActivity : AppCompatActivity() {
                 cornerRadius = dp(33).toFloat()
             }
             elevation = dp(3).toFloat()
-            setPadding(dp(14), 0, dp(14), 0)
+            setPadding(dp(8), 0, dp(8), 0)
         }
         listOf(
+            Triple(TAB_HOME, "home", R.drawable.ic_nav_home),
             Triple(TAB_REGISTRO, "registro", R.drawable.ic_nav_registro),
             Triple(TAB_BACHECA, "bacheca", R.drawable.ic_nav_bacheca),
-            Triple(TAB_IMPOSTAZIONI, "impostazioni", R.drawable.ic_nav_impostazioni),
+            Triple(TAB_IMPOSTAZIONI, "opzioni", R.drawable.ic_nav_impostazioni),
         ).forEach { (tab, nome, icona) ->
             val img = ImageView(this).apply { setImageResource(icona) }
             val riquadro = FrameLayout(this).apply {
@@ -173,7 +175,7 @@ class MainActivity : AppCompatActivity() {
             val voce = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                addView(riquadro, LinearLayout.LayoutParams(dp(62), dp(34)))
+                addView(riquadro, LinearLayout.LayoutParams(dp(54), dp(34)))
                 addView(etichetta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
                 setOnClickListener { mostra(tab) }
             }
@@ -212,7 +214,7 @@ class MainActivity : AppCompatActivity() {
     fun mostra(tab: Int) {
         schedaAttiva = tab
         val t = supportFragmentManager.beginTransaction()
-        for (k in listOf(TAB_BACHECA, TAB_REGISTRO, TAB_IMPOSTAZIONI)) {
+        for (k in listOf(TAB_HOME, TAB_BACHECA, TAB_REGISTRO, TAB_IMPOSTAZIONI)) {
             val f = frammento(k) ?: continue
             if (k == tab) t.show(f) else t.hide(f)
         }
@@ -224,6 +226,7 @@ class MainActivity : AppCompatActivity() {
         const val TAB_BACHECA = 1
         const val TAB_REGISTRO = 2
         const val TAB_IMPOSTAZIONI = 3
+        const val TAB_HOME = 4
         const val EXTRA_REGISTRO = "apri_registro"
     }
 }

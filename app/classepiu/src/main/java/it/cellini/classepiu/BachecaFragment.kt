@@ -133,7 +133,7 @@ class BachecaFragment : Fragment() {
         val imp = Impostazioni(ctx)
         if (!imp.pronta) {
             aggiorna.isRefreshing = false
-            vuoto.text = "inserisci utente e password classeviva nella scheda impostazioni."
+            vuoto.text = "inserisci utente e password classeviva nella scheda opzioni."
             vuoto.visibility = View.VISIBLE
             return
         }
