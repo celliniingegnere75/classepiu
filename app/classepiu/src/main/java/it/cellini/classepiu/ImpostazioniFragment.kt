@@ -52,7 +52,7 @@ class ImpostazioniFragment : Fragment() {
         // invio con gmail dopo l'accesso google (unico modo, il ricevitore Apps Script non c'è più)
         imp.invioGoogle = true
         val titoloGoogle = TextView(ctx).apply {
-            textSize = 17f; setTypeface(null, Typeface.BOLD); gravity = Gravity.CENTER
+            textSize = 17f; typeface = carattereGoogle(ctx) ?: Typeface.DEFAULT_BOLD; gravity = Gravity.CENTER
             isClickable = true; isFocusable = true
             setOnClickListener { accediGoogle() }
         }
@@ -60,6 +60,7 @@ class ImpostazioniFragment : Fragment() {
         col.addView(titoloGoogle, piena().apply { topMargin = ctx.dp(6) })
         val contoGoogle = TextView(ctx).apply {
             textSize = 13f; setTextColor(0xFF797979.toInt()); gravity = Gravity.CENTER
+            carattereNormale(ctx)?.let { typeface = it }
             isClickable = true; isFocusable = true
             setOnClickListener { scollegaGoogle(ctx) }
         }
@@ -223,6 +224,10 @@ class ImpostazioniFragment : Fragment() {
     }
 
     private var tfGoogle: Typeface? = null
+
+    /** Outfit normale (non grassetto), per la riga con l'account. */
+    private fun carattereNormale(ctx: android.content.Context): Typeface? =
+        runCatching { Typeface.createFromAsset(ctx.assets, "outfit_regular.ttf") }.getOrNull()
 
     /** Outfit, preso prima dagli assets e in seconda battuta dalle risorse (se uno dei due non va). */
     private fun carattereGoogle(ctx: android.content.Context): Typeface? {
