@@ -63,6 +63,6 @@ object GoogleMail {
         val codice = c.responseCode
         val risposta = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes()) } ?: ""
         c.disconnect()
-        if (codice !in 200..299) throw RuntimeException("gmail ha risposto (http $codice): ${risposta.take(200)}")
+        if (codice !in 200..299) throw RuntimeException("gmail ha risposto (http $codice): ${risposta.take(800)}")
     }
 }

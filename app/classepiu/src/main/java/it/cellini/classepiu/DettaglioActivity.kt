@@ -149,7 +149,19 @@ class DettaglioActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(applicationContext, c) } }
             r.onSuccess { avviso("inviata (${imp.doveVanno}, allegati $it/${c.allegati.size}).") }
-                .onFailure { avviso("invio non riuscito: ${it.message}") }
+                .onFailure { errore ->
+                    val testo = errore.message ?: errore.toString()
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this@DettaglioActivity)
+                        .setTitle("invio non riuscito")
+                        .setMessage(testo)
+                        .setPositiveButton("copia") { _, _ ->
+                            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            cm.setPrimaryClip(android.content.ClipData.newPlainText("errore", testo))
+                            avviso("errore copiato.")
+                        }
+                        .setNegativeButton("chiudi", null)
+                        .show()
+                }
         }
     }
 
