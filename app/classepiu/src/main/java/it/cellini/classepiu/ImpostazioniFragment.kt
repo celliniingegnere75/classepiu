@@ -387,7 +387,7 @@ class ImpostazioniFragment : Fragment() {
                     })
                     addView(TextView(ctx).apply { text = "aula"; textSize = 10f; setTextColor(0xFF777777.toInt()); includeFontPadding = false; gravity = Gravity.CENTER },
                         LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(3) })
-                    addView(aulaView, LinearLayout.LayoutParams(ctx.dp(52), ctx.dp(24)))
+                    addView(aulaView, LinearLayout.LayoutParams(ctx.dp(65), ctx.dp(24)))
                 }, LinearLayout.LayoutParams(ctx.dp(90), ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(View(ctx).apply { setBackgroundColor(0xFFE6E6E6.toInt()) }, LinearLayout.LayoutParams(ctx.dp(1), ViewGroup.LayoutParams.MATCH_PARENT))
                 addView(destra, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
