@@ -74,7 +74,7 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
  */
 fun Context.sovraimpressione(barra: BarraPagine): FrameLayout = FrameLayout(this).apply {
     // alone verso l'alto che segue l'ovale della barra: lo stesso ovale, sfumato e spostato un poco in su; non riceve tocchi
-    addView(AloneBarra(this), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + SOMBRA_BARRA), Gravity.BOTTOM).apply {
+    addView(AloneBarra(context), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + SOMBRA_BARRA), Gravity.BOTTOM).apply {
         bottomMargin = dp(ALZO_BARRA)
     })
     addView(View(context).apply { setBackgroundColor(ContextCompat.getColor(context, R.color.logo_sfondo)) },
