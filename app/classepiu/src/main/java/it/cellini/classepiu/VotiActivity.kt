@@ -276,7 +276,7 @@ class VotiActivity : AppCompatActivity() {
             valore.setOnClickListener(null); valore.isClickable = false
             data.setOnClickListener(null); data.isClickable = false
             nota.isEnabled = false
-            corpo.addView(TextView(ctx).apply { text = "voto di un altro docente: non modificabile"; textSize = 12f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(8), 0, 0) }, 1)
+            corpo.addView(TextView(ctx).apply { text = v.docente.ifEmpty { "altro docente" }; textSize = 12f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(8), 0, 0) }, 1)
         }
         finestra = MaterialAlertDialogBuilder(ctx).setView(corpo).create()
         finestra.show()

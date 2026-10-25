@@ -535,7 +535,7 @@ fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
 fun siglaClasse(nome: String): String = nome.trim().substringBefore(' ')
 
 /** Un voto di uno studente: tipo di prova (orale, scritto/grafico, test…), valore mostrato, data e annotazioni per la famiglia. */
-data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String, val grezzo: String = "", val materia: String = "", val autore: String = "", val faMedia: Boolean = true)
+data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String, val grezzo: String = "", val materia: String = "", val autore: String = "", val faMedia: Boolean = true, val docente: String = "")
 
 /** Voti per id studente dalla risposta di ClasseViva (campi dedotti, lettura tollerante, sia voti annidati nello studente sia elenco piatto). */
 fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
@@ -564,7 +564,7 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
                         val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
                         val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
                         out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString(), materiaCorrente.ifEmpty { v.t("subjectDesc") }, v.t("authorId", "teacherId", "teacher_id"), // non fa media: peso 0 oppure valore decimale assente (nei dati di classeviva sono i voti "blu", per esempio superati da un recupero)
-            (v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true) && v.opt("decimalValue") != JSONObject.NULL))
+            (v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true) && v.opt("decimalValue") != JSONObject.NULL, v.t("teacherName", "authorName")))
                     }
                 } else {
                     val sid = propri.ifEmpty { idStudente }
