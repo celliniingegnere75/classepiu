@@ -77,15 +77,24 @@ class ImpostazioniFragment : Fragment() {
         destinatarioView = destinatario
         col.addView(destinatario, piena().apply { topMargin = ctx.dp(2) })
 
-        val salva = pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
+        // "annulla" e "salva" compaiono insieme solo quando il destinatario è stato cambiato
+        val salva = LinearLayout(ctx).apply { visibility = View.GONE } // niente da salvare finché non tocchi il campo
+        salva.addView(pillola(ctx, "annulla", 15f, azzurro, Color.WHITE, ctx.dp(32)).apply {
+            setPadding(ctx.dp(24), ctx.dp(4), ctx.dp(24), ctx.dp(4))
+            (background as? GradientDrawable)?.setStroke(ctx.dp(1), azzurro)
+            setOnClickListener {
+                destinatario.setText(imp.destinatari) // torna com'era: il controllo del testo nasconde i pulsanti
+                destinatario.clearFocus()
+            }
+        })
+        salva.addView(pillola(ctx, "salva", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
-            visibility = View.GONE // niente da salvare finché non tocchi il campo
             setOnClickListener {
                 imp.destinatari = destinatario.text.toString()
                 messaggio("le circolari andranno a: " + imp.destinatariEffettivi.joinToString(", ").ifEmpty { "nessuno (accedi con google)" })
-                visibility = View.GONE
+                salva.visibility = View.GONE
             }
-        }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(12) })
         salvaDestinatarioView = salva
         col.addView(salva, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(6)
