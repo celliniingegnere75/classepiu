@@ -82,6 +82,30 @@ fun Activity.conBarra(contenuto: View, attiva: Int, scegli: ((Int) -> Unit)? = n
     return barra
 }
 
+/**
+ * Le liste che arrivano in fondo al [contenitore] scorrono fin sotto la barra: spazio in fondo alla lista (non al contenitore)
+ * e niente taglio sul bordo, così l'ultima casella resta coperta solo dalla barra. Va richiamata quando le pagine cambiano.
+ */
+fun ViewGroup.listeSottoLaBarra() {
+    if (height == 0) return
+    val fondo = IntArray(2).also { getLocationInWindow(it) }[1] + height
+    fun cerca(v: View) {
+        val scorre = v is android.widget.ScrollView || v is android.widget.AbsListView || v is androidx.core.view.ScrollingView
+        if (scorre && v.getTag(R.id.spazio_barra) == null && v.height > v.context.dp(120)) {
+            val sotto = IntArray(2).also { v.getLocationInWindow(it) }[1] + v.height
+            // solo le liste verticali che arrivano al fondo della pagina
+            if (sotto >= fondo - v.context.dp(4)) {
+                v.setTag(R.id.spazio_barra, true)
+                v.setPadding(v.paddingLeft, v.paddingTop, v.paddingRight, v.paddingBottom + v.context.dp(SPAZIO_BARRA))
+                (v as ViewGroup).clipToPadding = false
+                return
+            }
+        }
+        if (v is ViewGroup) for (i in 0 until v.childCount) cerca(v.getChildAt(i))
+    }
+    cerca(this)
+}
+
 /** Torna alla schermata principale sulla pagina scelta, chiudendo le schede aperte sopra. */
 fun Activity.vaiAllaPagina(tab: Int) {
     startActivity(Intent(this, MainActivity::class.java)

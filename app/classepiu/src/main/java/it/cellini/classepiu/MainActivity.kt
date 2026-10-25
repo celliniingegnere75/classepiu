@@ -83,7 +83,8 @@ class MainActivity : AppCompatActivity() {
         //     in fondo la fascia azzurra e, appoggiata sopra, la barra delle pagine (la stessa di tutte le schermate)
         val pannello = FrameLayout(this).apply {
             id = contenitoreId; setBackgroundColor(Color.WHITE)
-            setPadding(0, 0, 0, dp(SPAZIO_BARRA)) // le pagine finiscono sopra la barra
+            // le liste delle pagine scorrono fin sotto la barra, coperte solo da lei
+            viewTreeObserver.addOnGlobalLayoutListener { listeSottoLaBarra() }
         }
         val contenitore = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL

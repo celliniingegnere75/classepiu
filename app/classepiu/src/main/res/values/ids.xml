@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- segna le liste che hanno già lo spazio in fondo per la barra delle pagine -->
+    <item name="spazio_barra" type="id" />
+</resources>
