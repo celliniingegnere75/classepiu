@@ -34,7 +34,7 @@ class VotiActivity : AppCompatActivity() {
     private class Livello(val codice: String, val scritta: String, val decimale: Double)
     private var livelli: List<Livello> = emptyList()
     private var rispostaVoti = ""
-    private var materiaScelta = ""
+    private var mioId = ""
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
     private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
@@ -78,6 +78,7 @@ class VotiActivity : AppCompatActivity() {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val c = Impostazioni(this@VotiActivity).client()
+                    mioId = c.idDocente()
                     c.studentiGrezzi(tipo, classeId) to c.votiGrezzi(tipo, classeId)
                 }
             }
@@ -113,22 +114,7 @@ class VotiActivity : AppCompatActivity() {
 
     private fun mostra(studenti: List<Studente>, tuttiVoti: Map<String, List<Voto>>) {
         lista.removeAllViews()
-        // una linguetta per materia (ed. civica separata dalle altre), se i voti arrivano da più materie
-        val materie = tuttiVoti.values.flatten().map { it.materia }.filter { it.isNotEmpty() }.distinct().sorted()
-        if (materiaScelta !in materie) materiaScelta = materie.firstOrNull() ?: ""
-        val voti = if (materie.size > 1) tuttiVoti.mapValues { (_, l) -> l.filter { it.materia == materiaScelta } } else tuttiVoti
-        if (materie.size > 1) lista.addView(LinearLayout(this).apply {
-            materie.forEachIndexed { i, m ->
-                val attiva = m == materiaScelta
-                addView(TextView(context).apply {
-                    text = m.lowercase(); textSize = 13f; gravity = Gravity.CENTER; setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END
-                    setPadding(dp(8), 0, dp(8), 0)
-                    background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(if (attiva) azzurro else 0xFFFFFFFF.toInt()) }
-                    setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
-                    setOnClickListener { materiaScelta = m; mostra(elenco, tutti) }
-                }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { if (i > 0) leftMargin = dp(8) })
-            }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
+        val voti = tuttiVoti
         lista.addView(TextView(this).apply {
             text = "copia la risposta dei voti"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
             setOnClickListener {
@@ -148,7 +134,10 @@ class VotiActivity : AppCompatActivity() {
         }
         val ordine = listOf("orale", "scritto", "pratico", "test")
         studenti.forEach { s ->
-            val suoi = (voti[s.id] ?: emptyList()).groupBy { gruppo(it.tipo) }
+            val dello = voti[s.id] ?: emptyList()
+            // ed. civica: riga a parte con i voti di tutti i docenti
+            val civica = dello.filter { it.materia.contains("civic", ignoreCase = true) }
+            val suoi = (dello - civica.toSet()).groupBy { gruppo(it.tipo) }
             val scatola = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(16), dp(12), dp(16), dp(12))
@@ -156,21 +145,23 @@ class VotiActivity : AppCompatActivity() {
                 addView(TextView(ctx).apply { text = s.nome; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END })
             }
             val righe = ordine.filter { suoi.containsKey(it) } + suoi.keys.filter { it !in ordine }
-            if (righe.isEmpty()) scatola.addView(TextView(ctx).apply { text = "nessun voto"; textSize = 13f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(4), 0, 0) })
-            righe.forEach { g ->
+            if (righe.isEmpty() && civica.isEmpty()) scatola.addView(TextView(ctx).apply { text = "nessun voto"; textSize = 13f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(4), 0, 0) })
+            fun riga(etichetta: String, colore: Int, elenco: List<Voto>) {
                 // intestazione fissa a sinistra, voti che scorrono a destra sulla stessa riga
                 val chip = LinearLayout(ctx)
-                suoi[g].orEmpty().sortedBy { it.data }.forEach { v ->
+                elenco.sortedBy { it.data }.forEach { v ->
                     chip.addView(chipVoto(modificato(v)), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply { rightMargin = dp(8) })
                 }
                 scatola.addView(LinearLayout(ctx).apply {
                     gravity = Gravity.CENTER_VERTICAL
-                    addView(TextView(ctx).apply { text = g; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colorePerRiga(g)) },
-                        LinearLayout.LayoutParams(dp(58), ViewGroup.LayoutParams.WRAP_CONTENT))
+                    addView(TextView(ctx).apply { text = etichetta; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore) },
+                        LinearLayout.LayoutParams(dp(64), ViewGroup.LayoutParams.WRAP_CONTENT))
                     addView(HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(chip) },
                         LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             }
+            righe.forEach { g -> riga(g, colorePerRiga(g), suoi[g].orEmpty()) }
+            if (civica.isNotEmpty()) riga("ed. civica", 0xFFE57399.toInt(), civica)
             lista.addView(scatola, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
     }
@@ -197,7 +188,7 @@ class VotiActivity : AppCompatActivity() {
         text = v.valore; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER
         setPadding(dp(14), 0, dp(14), 0); minWidth = dp(46)
         background = GradientDrawable().apply { setColor(coloreVoto(v.numero)); cornerRadius = dp(12).toFloat() }
-        setOnClickListener { apriVoto(v) }
+        setOnClickListener { apriVoto(v, v.autore.isEmpty() || mioId.isEmpty() || v.autore == mioId) }
     }
 
     /** Data e annotazioni modificate a mano sono tenute sul telefono (non vengono scritte su classeviva). */
@@ -208,7 +199,7 @@ class VotiActivity : AppCompatActivity() {
         nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
     )
 
-    private fun apriVoto(v: Voto) {
+    private fun apriVoto(v: Voto, modificabile: Boolean) {
         val ctx = this
         fun campo(valore: String, suggerimento: String, righe: Int) = EditText(ctx).apply {
             setText(valore); hint = suggerimento; textSize = 15f
@@ -253,9 +244,9 @@ class VotiActivity : AppCompatActivity() {
         // annulla all'estremo sinistro, salva all'estremo destro della finestra
         val pulsanti = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(pulsante("annulla") { finestra.dismiss() })
+            addView(pulsante(if (modificabile) "annulla" else "chiudi") { finestra.dismiss() })
             addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
-            addView(pulsante("salva") {
+            if (modificabile) addView(pulsante("salva") {
                 val dataApi = scelta?.let { fApi.format(it) } ?: v.data
                 salvaSuClasseviva(v, valoreScelto, dataApi, nota.text.toString())
                 memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|data", dataApi).putString("${v.chiave}|nota", nota.text.toString()).apply()
@@ -275,6 +266,13 @@ class VotiActivity : AppCompatActivity() {
             })
             addView(etichetta("annotazioni per la famiglia")); addView(nota)
             addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+        }
+        if (!modificabile) {
+            // voto di un altro docente: solo in lettura
+            valore.setOnClickListener(null); valore.isClickable = false
+            data.setOnClickListener(null); data.isClickable = false
+            nota.isEnabled = false
+            corpo.addView(TextView(ctx).apply { text = "voto di un altro docente: non modificabile"; textSize = 12f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(8), 0, 0) }, 1)
         }
         finestra = MaterialAlertDialogBuilder(ctx).setView(corpo).create()
         finestra.show()
