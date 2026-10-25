@@ -186,7 +186,7 @@ class VotiActivity : AppCompatActivity() {
             setText(valore); hint = suggerimento; textSize = 15f
             if (righe > 1) { minLines = righe; gravity = Gravity.TOP; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
         }
-        fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(2)) }
+        fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(14), 0, dp(4)) }
         // voto scelto da elenco, come sul registro: 5, 5+, 5½, 6- (il mezzo punto si scrive ½, il 5,75 è 6-)
         var valoreScelto = v.valore
         val valore = TextView(ctx).apply {
@@ -215,24 +215,35 @@ class VotiActivity : AppCompatActivity() {
                 d.show()
             }
         }
-        val nota = campo(v.nota, "annotazioni per la famiglia", 3)
-        val corpo = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(8), dp(22), 0)
-            addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
-            addView(etichetta("voto")); addView(valore)
-            addView(etichetta("data")); addView(data)
-            addView(etichetta("annotazioni per la famiglia")); addView(nota)
+        val nota = campo(v.nota, "", 3) // l'etichetta sopra basta: niente testo d'esempio
+        lateinit var finestra: androidx.appcompat.app.AlertDialog
+        fun pulsante(t: String, azione: () -> Unit) = TextView(ctx).apply {
+            text = t; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(azzurro); setPadding(dp(8), dp(12), dp(8), dp(12))
+            setOnClickListener { azione() }
         }
-        MaterialAlertDialogBuilder(ctx)
-            .setView(corpo)
-            .setNegativeButton("annulla", null)
-            .setPositiveButton("salva") { _, _ ->
+        // annulla all'estremo sinistro, salva all'estremo destro della finestra
+        val pulsanti = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(pulsante("annulla") { finestra.dismiss() })
+            addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
+            addView(pulsante("salva") {
                 val dataApi = scelta?.let { fApi.format(it) } ?: v.data
                 salvaSuClasseviva(v, valoreScelto, dataApi, nota.text.toString())
                 memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|data", dataApi).putString("${v.chiave}|nota", nota.text.toString()).apply()
                 mostra(elenco, tutti)
-            }
-            .show()
+                finestra.dismiss()
+            })
+        }
+        val corpo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(8))
+            addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
+            addView(etichetta("voto")); addView(valore)
+            addView(etichetta("data")); addView(data)
+            addView(etichetta("annotazioni per la famiglia")); addView(nota)
+            addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+        }
+        finestra = MaterialAlertDialogBuilder(ctx).setView(corpo).create()
+        finestra.show()
     }
 
     /** Prova a scrivere la modifica su classeviva; se non riesce resta salvata sul telefono e lo si dice. */
