@@ -7,7 +7,6 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
-import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
@@ -25,14 +24,10 @@ import java.util.Locale
 class StudentiActivity : AppCompatActivity() {
     private val azzurro = 0xFF69BCE8.toInt()
     private lateinit var lista: LinearLayout
-    private lateinit var data: TextView
-    private var striscia: HorizontalScrollView? = null
-    private val celle = ArrayList<Pair<TextView, Calendar>>()
+    private lateinit var striscia: StrisciaGiorni
     private var studenti: List<Studente> = emptyList()
-    private var selezionato: Calendar = Calendar.getInstance()
+    private val selezionato: Calendar get() = striscia.selezionato
     private var lavoro: Job? = null
-    private var indiceCorrente = 120
-    private var indiceCaricato = 120
     private var tipo = ""
     private var classeId = ""
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
@@ -56,79 +51,26 @@ class StudentiActivity : AppCompatActivity() {
             addView(View(ctx), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
 
-        data = TextView(ctx).apply { textSize = 15f; setTextColor(Color.WHITE); gravity = Gravity.CENTER }
-
-        // striscia dei giorni scorrevole: a destra le date precedenti, a sinistra le successive
-        val larghezzaCella = resources.displayMetrics.widthPixels / 7
-        val sigle = "DLMMGVS"
-        val riga = LinearLayout(ctx).apply { gravity = Gravity.CENTER; setPadding(3 * larghezzaCella, 0, 3 * larghezzaCella, 0) }
-        val oggi = Calendar.getInstance()
-        val inizio = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -120) }
-        val giorniTotali = 120 + 60
-        var cellaOggi: View? = null
-        for (i in 0..giorniTotali) {
-            val g = (inizio.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, i) }
-            val numero = TextView(ctx).apply {
-                text = g.get(Calendar.DAY_OF_MONTH).toString(); setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, 24f); gravity = Gravity.CENTER
-            }
-            val cella = LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER
-                addView(TextView(ctx).apply { text = sigle[g.get(Calendar.DAY_OF_WEEK) - 1].toString(); textSize = 13f; setTextColor(Color.WHITE); gravity = Gravity.CENTER })
-                numero.minHeight = dp(40)
-                addView(numero, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(4) })
-                setOnClickListener { striscia?.smoothScrollTo(i * larghezzaCella, 0) }
-            }
-            celle.add(numero to g)
-            riga.addView(cella, LinearLayout.LayoutParams(larghezzaCella, ViewGroup.LayoutParams.WRAP_CONTENT))
-            if (i == 120) cellaOggi = cella
+        // striscia dei giorni scorrevole: quando si ferma su un altro giorno si caricano le presenze di quel giorno
+        val striscia = StrisciaGiorni(ctx) {
+            mostra(emptyMap(), caricamento = true)
+            caricaStato()
         }
-        val striscia = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(riga) }
         this.striscia = striscia
-        // il giorno al centro della striscia è quello selezionato: la data in alto si aggiorna mentre si scorre
-        val assesta = Runnable {
-            striscia.smoothScrollTo(indiceCorrente * larghezzaCella, 0)
-            if (indiceCorrente != indiceCaricato) {
-                indiceCaricato = indiceCorrente
-                mostra(emptyMap(), caricamento = true)
-                caricaStato()
-            }
-        }
-        striscia.setOnScrollChangeListener { v, x, _, _, _ ->
-            val idx = ((x + larghezzaCella / 2) / larghezzaCella).coerceIn(0, giorniTotali)
-            if (idx != indiceCorrente) { indiceCorrente = idx; colora(celle[idx].second) }
-            v.removeCallbacks(assesta)
-            v.postDelayed(assesta, 150)
-        }
 
-        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(16), dp(14), dp(16)) }
+        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(16), dp(14), dp(16 + SPAZIO_BARRA)) }
         val pannello = ScrollView(ctx).apply {
             addView(lista)
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
-        setContentView(LinearLayout(ctx).apply {
+        conBarra(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
-            addView(data, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(6) })
-            addView(striscia, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(10); bottomMargin = dp(14) })
+            striscia.aggiungiA(this)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        })
-        // oggi selezionato e al centro della striscia
-        striscia.post { striscia.scrollTo(120 * larghezzaCella, 0) }
-        colora(oggi)
+        }, MainActivity.TAB_REGISTRO)
         carica()
-    }
-
-    private fun colora(g: Calendar) {
-        selezionato = g
-        data.text = SimpleDateFormat("EEEE d MMMM yyyy", Locale.ITALIAN).format(g.time)
-        celle.forEach { (t, c) ->
-            val sel = c.get(Calendar.DAY_OF_YEAR) == g.get(Calendar.DAY_OF_YEAR) && c.get(Calendar.YEAR) == g.get(Calendar.YEAR)
-            t.setTextColor(Color.WHITE)
-            // in dp (non in sp): con il carattere di sistema grande Android non scala in modo lineare e il rapporto non sarebbe 1,5
-            t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_DIP, if (sel) 36f else 24f)
-            t.setTypeface(null, if (sel) Typeface.BOLD else Typeface.NORMAL)
-        }
     }
 
     /** Carica l'elenco studenti una volta, poi le presenze del giorno. */

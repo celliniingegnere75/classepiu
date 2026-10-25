@@ -71,7 +71,7 @@ class VotiActivity : AppCompatActivity() {
             addView(titolo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(android.view.View(ctx), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(16)) }
+        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(16 + SPAZIO_BARRA)) }
         // linguette delle materie, ferme in alto; i voti scorrono sotto
         linguette = LinearLayout(ctx).apply { setPadding(dp(14), dp(14), dp(14), dp(6)) }
         val barraMaterie = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; isFillViewport = true; addView(linguette) }
@@ -82,11 +82,11 @@ class VotiActivity : AppCompatActivity() {
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
-        setContentView(LinearLayout(ctx).apply {
+        conBarra(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
-        })
+        }, MainActivity.TAB_REGISTRO)
         carica()
     }
 

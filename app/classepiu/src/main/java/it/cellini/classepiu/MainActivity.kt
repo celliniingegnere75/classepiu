@@ -4,7 +4,6 @@ import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.net.Uri
@@ -27,14 +26,13 @@ import androidx.fragment.app.Fragment
 
 /**
  * Schermata principale come la bozza: fascia azzurra con la scritta classePiù, contenitore grigio
- * con angoli arrotondati e pannello bianco, barra in basso flottante (home, registro, bacheca, opzioni).
+ * con angoli arrotondati e pannello bianco, barra delle pagine appoggiata alla fascia azzurra in basso (home, registro, bacheca, setting).
  */
 class MainActivity : AppCompatActivity() {
 
     private val contenitoreId = View.generateViewId()
     private var schedaAttiva = TAB_REGISTRO
-    private val voci = mutableMapOf<Int, Pair<View, TextView>>() // tab -> (riquadro icona, etichetta)
-    private val icone = mutableMapOf<Int, ImageView>()
+    private var barra: BarraPagine? = null
 
     private val permessoNotifiche = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -82,13 +80,10 @@ class MainActivity : AppCompatActivity() {
         }
 
         // --- pannello bianco con angoli superiori arrotondati, da bordo a bordo (come la bozza);
-        //     sotto, fascia grigia con la barra flottante
-        val pannello = FrameLayout(this).apply { id = contenitoreId; setBackgroundColor(Color.WHITE) }
-        val barra = barraInBasso()
-        val fondo = FrameLayout(this).apply {
-            setBackgroundColor(ContextCompat.getColor(this@MainActivity, R.color.grigio_contenitore))
-            setPadding(dp(18), dp(12), dp(18), dp(4))
-            addView(barra, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(66)))
+        //     in fondo la fascia azzurra e, appoggiata sopra, la barra delle pagine (la stessa di tutte le schermate)
+        val pannello = FrameLayout(this).apply {
+            id = contenitoreId; setBackgroundColor(Color.WHITE)
+            setPadding(0, 0, 0, dp(SPAZIO_BARRA)) // le pagine finiscono sopra la barra
         }
         val contenitore = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -100,14 +95,13 @@ class MainActivity : AppCompatActivity() {
             clipToOutline = true
             setPadding(0, dp(14), 0, 0)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-            addView(fondo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
-        setContentView(LinearLayout(this).apply {
+        barra = conBarra(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(azzurro)
             addView(testa, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(contenitore, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = -dp(12); leftMargin = dp(1); rightMargin = dp(1) })
-        })
+        }, schedaAttiva) { mostra(it) }
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
@@ -137,7 +131,7 @@ class MainActivity : AppCompatActivity() {
         } else chiediBatteria()
         gestisci(intent)
         // dopo l'ingresso con le credenziali si entra subito, senza animazione
-        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) Splash.mostra(this)
+        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false) && !intent.hasExtra(EXTRA_SCHEDA)) Splash.mostra(this)
     }
 
     /** Stessa uscita del pulsante in opzioni: toglie la password, ferma il controllo e torna all'accesso. */
@@ -184,58 +178,6 @@ class MainActivity : AppCompatActivity() {
             ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) chiediBatteria()
     }
 
-    /** Barra flottante grigio chiaro con le quattro voci; la voce attiva ha l'etichetta più scura. */
-    private fun barraInBasso(): LinearLayout {
-        val barra = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            background = GradientDrawable().apply {
-                setColor(ContextCompat.getColor(this@MainActivity, R.color.grigio_barra))
-                cornerRadius = dp(33).toFloat()
-            }
-            elevation = dp(3).toFloat()
-            setPadding(dp(8), 0, dp(8), 0)
-        }
-        listOf(
-            Triple(TAB_HOME, "home", R.drawable.ic_nav_home),
-            Triple(TAB_REGISTRO, "registro", R.drawable.ic_nav_registro),
-            Triple(TAB_BACHECA, "bacheca", R.drawable.ic_nav_bacheca),
-            Triple(TAB_IMPOSTAZIONI, "setting", R.drawable.ic_nav_impostazioni),
-        ).forEach { (tab, nome, icona) ->
-            val img = ImageView(this).apply { setImageResource(icona) }
-            val riquadro = FrameLayout(this).apply {
-                addView(img, FrameLayout.LayoutParams(dp(30), dp(30), Gravity.CENTER))
-            }
-            val etichetta = TextView(this).apply {
-                text = nome
-                textSize = 12f
-                maxLines = 1
-                setSingleLine(true)
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-            }
-            val voce = LinearLayout(this).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER
-                addView(riquadro, LinearLayout.LayoutParams(dp(54), dp(34)))
-                addView(etichetta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
-                setOnClickListener { mostra(tab) }
-            }
-            barra.addView(voce, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
-            voci[tab] = riquadro to etichetta
-            icone[tab] = img
-        }
-        return barra
-    }
-
-    private fun aggiornaBarra() {
-        voci.forEach { (tab, v) ->
-            val (_, etichetta) = v
-            val attiva = tab == schedaAttiva
-            icone[tab]?.imageTintList = ColorStateList.valueOf(0xFF3F3F3F.toInt())
-            etichetta.setTextColor(if (attiva) 0xFF111111.toInt() else 0xFF4A4A4A.toInt())
-        }
-    }
-
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         gestisci(intent)
@@ -243,6 +185,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun gestisci(i: Intent?) {
         if (i?.getBooleanExtra(EXTRA_REGISTRO, false) == true) mostra(TAB_REGISTRO)
+        // dalla barra delle pagine di un'altra schermata
+        i?.getIntExtra(EXTRA_SCHEDA, 0)?.takeIf { it != 0 }?.let { mostra(it) }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -260,7 +204,7 @@ class MainActivity : AppCompatActivity() {
             if (k == tab) t.show(f) else t.hide(f)
         }
         t.commitNowAllowingStateLoss()
-        aggiornaBarra()
+        barra?.attiva(tab)
     }
 
     companion object {
@@ -270,5 +214,6 @@ class MainActivity : AppCompatActivity() {
         const val TAB_HOME = 4
         const val EXTRA_REGISTRO = "apri_registro"
         const val EXTRA_SENZA_ANIMAZIONE = "senza_animazione"
+        const val EXTRA_SCHEDA = "scheda"
     }
 }

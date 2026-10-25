@@ -27,9 +27,10 @@ class ListaActivity : AppCompatActivity() {
     private var cosa = ""
     private var tipo = ""
     private var classeId = ""
-    private var giorno: Calendar = Calendar.getInstance()
-    private lateinit var testata: LinearLayout
-    private lateinit var dataGiorno: TextView
+    /** Lezioni: striscia dei giorni come nell'elenco degli alunni; il giorno scelto è quello al centro. */
+    private var striscia: StrisciaGiorni? = null
+    private val giorno: Calendar get() = striscia?.selezionato ?: Calendar.getInstance()
+    private var mioId = ""
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,38 +51,25 @@ class ListaActivity : AppCompatActivity() {
             addView(titolo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(android.view.View(ctx), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(16), dp(14), dp(16)) }
+        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(16), dp(14), dp(16 + SPAZIO_BARRA)) }
         val pannello = ScrollView(ctx).apply {
             addView(lista)
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
-        // lezioni: giorno con frecce per scorrere ai giorni prima e dopo
-        fun freccia(t: String, passo: Int) = TextView(ctx).apply {
-            text = t; textSize = 28f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
-            setOnClickListener { giorno.add(Calendar.DAY_OF_MONTH, passo); carica() }
-        }
-        dataGiorno = TextView(ctx).apply { textSize = 16f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD) }
-        testata = LinearLayout(ctx).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            visibility = if (cosa == "lezioni") android.view.View.VISIBLE else android.view.View.GONE
-            addView(freccia("‹", -1), LinearLayout.LayoutParams(dp(56), dp(44)))
-            addView(dataGiorno, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(freccia("›", 1), LinearLayout.LayoutParams(dp(56), dp(44)))
-        }
-        setContentView(LinearLayout(ctx).apply {
+        if (cosa == "lezioni") striscia = StrisciaGiorni(ctx) { carica() }
+        conBarra(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
-            addView(testata)
-            addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
-        })
+            striscia?.aggiungiA(this)
+            addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { if (striscia == null) topMargin = dp(10) })
+        }, MainActivity.TAB_REGISTRO)
         onBackPressedDispatcher.addCallback(this, indietro)
         carica()
     }
 
     private fun carica() {
         testo("carico $cosa…")
-        dataGiorno.text = SimpleDateFormat("EEEE d MMMM yyyy", Locale.ITALIAN).format(giorno.time)
         val f = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
         val oggi = Calendar.getInstance()
         val inizio = Calendar.getInstance().apply { set(if (oggi.get(Calendar.MONTH) >= Calendar.SEPTEMBER) oggi.get(Calendar.YEAR) else oggi.get(Calendar.YEAR) - 1, Calendar.SEPTEMBER, 1) }
@@ -89,6 +77,7 @@ class ListaActivity : AppCompatActivity() {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val c = Impostazioni(this@ListaActivity).client()
+                    mioId = c.idDocente()
                     // grandezza della classe: serve a riconoscere le note di classe (uguali per quasi tutti gli alunni)
                     // le note arrivano con l'id dell'alunno: i nomi vengono dall'elenco studenti
                     if (cosa == "note") runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second) }.getOrDefault(emptyList()).let { st ->
@@ -107,7 +96,9 @@ class ListaActivity : AppCompatActivity() {
         }
     }
 
-    private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "", val ordine: Int = 0)
+    /** Una nota o una lezione; per le lezioni [grezzo] è l'oggetto di classeviva e [mia] dice se l'ho firmata io. */
+    private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "", val ordine: Int = 0,
+                       val grezzo: String = "", val mia: Boolean = false)
     private var grezzo = ""
     private var dimClasse = 0
     private var nomi: Map<String, String> = emptyMap()
@@ -142,7 +133,9 @@ class ListaActivity : AppCompatActivity() {
                             val stati = v.optJSONArray("studentStatus")
                             val assenti = stati?.let { a -> (0 until a.length()).count { a.optJSONObject(it)?.optString("status", "")?.startsWith("HAB") == true } } ?: 0
                             val riga = listOfNotNull(if (firma.isNotEmpty()) "firmata da $firma" else null, tipoLezione?.lowercase(), if (assenti > 0) "$assenti assent${if (assenti == 1) "e" else "i"}" else null).joinToString(" · ")
-                            out.add(Voce(data.ifEmpty { "" }, (if (ora.isNotEmpty()) "${ora}ª ora · " else "") + materia, corpo.ifEmpty { "nessun argomento" }, "", riga, ora.toIntOrNull() ?: 99))
+                            val mia = mioId.isNotEmpty() && v.t("authorId", "teacherId") == mioId
+                            out.add(Voce(data.ifEmpty { "" }, (if (ora.isNotEmpty()) "${ora}ª ora · " else "") + materia, corpo.ifEmpty { "nessun argomento" }, "", riga, ora.toIntOrNull() ?: 99,
+                                v.toString(), mia))
                         } else for (k in v.keys()) cammina(v.opt(k), livello + 1)
                         return
                     }
@@ -183,6 +176,11 @@ class ListaActivity : AppCompatActivity() {
             addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
             if (v.tipo.isNotEmpty()) addView(TextView(ctx).apply { text = v.tipo; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore); setPadding(0, dp(2), 0, 0) })
             addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
+            // solo la mia firma si può modificare
+            if (v.mia) {
+                addView(TextView(ctx).apply { text = "tocca per modificare la firma"; textSize = 12f; setTextColor(azzurro); setPadding(0, dp(6), 0, 0) })
+                setOnClickListener { modificaFirma(v) }
+            }
             return@apply
         }
         if (v.tipo.isNotEmpty() && cosa == "note") addView(TextView(ctx).apply { text = v.tipo; textSize = 13f; setTextColor(0xFF777777.toInt()) })
@@ -268,6 +266,43 @@ class ListaActivity : AppCompatActivity() {
             }
         }
         lista.addView(copiaRisposta())
+    }
+
+    /** Finestra per cambiare l'argomento della mia lezione; salva subito su classeviva e ricarica il giorno. */
+    private fun modificaFirma(v: Voce) {
+        val ctx = this
+        val argomento = android.widget.EditText(ctx).apply {
+            setText(if (v.testo == "nessun argomento") "" else v.testo); textSize = 15f; minLines = 3; gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val corpo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), 0)
+            addView(TextView(ctx).apply { text = v.titolo; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
+            addView(TextView(ctx).apply { text = "argomento della lezione"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, 0) })
+            addView(argomento)
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setView(corpo)
+            .setNegativeButton("annulla", null)
+            .setPositiveButton("salva") { _, _ ->
+                val testo = argomento.text.toString().trim()
+                lifecycleScope.launch {
+                    val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().salvaFirma(v.grezzo, testo) } }
+                    val (codice, risposta) = r.getOrElse { android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}", android.widget.Toast.LENGTH_LONG).show(); return@launch }
+                    if (codice in 200..299) {
+                        android.widget.Toast.makeText(ctx, "firma salvata su classeviva", android.widget.Toast.LENGTH_SHORT).show()
+                        carica()
+                    } else {
+                        // per sistemare la scrittura serve la risposta di classeviva
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                            .setMessage("classeviva non ha accettato la modifica (http $codice).")
+                            .setNegativeButton("chiudi", null)
+                            .setPositiveButton("copia la risposta") { _, _ ->
+                                getSystemService(android.content.ClipboardManager::class.java)
+                                    .setPrimaryClip(android.content.ClipData.newPlainText("risposta", "HTTP $codice\n$risposta\n\ninviato:\n${v.grezzo}"))
+                            }.show()
+                    }
+                }
+            }.show()
     }
 
     private fun testo(s: String, corpo: String = "") {

@@ -104,13 +104,15 @@ class DettaglioActivity : AppCompatActivity() {
             col.addView(aderisci, piena())
         }
 
+        // in fondo spazio per la barra delle pagine, che resta sopra al testo
+        col.setPadding(col.paddingLeft, col.paddingTop, col.paddingRight, col.paddingBottom + dp(SPAZIO_BARRA))
         val scroll = ScrollView(this).apply { addView(col) }
-        setContentView(LinearLayout(this).apply {
+        conBarra(LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xFFF5F5F5.toInt())
             addView(barra)
             addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        })
+        }, MainActivity.TAB_BACHECA)
     }
 
     private fun avviso(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()

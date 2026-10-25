@@ -279,6 +279,19 @@ class ClasseViva(private val utente: String, private val password: String) {
         return r.codice to r.testo
     }
 
+    /**
+     * Modifica una mia firma (lezione): rimanda l'oggetto della lezione con il nuovo argomento, come fa l'app ufficiale
+     * (PUT su lessons/sigs). Le presenze degli alunni non fanno parte della firma e vengono tolte. Da verificare sui dati veri.
+     */
+    fun salvaFirma(grezzo: String, argomento: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val o = JSONObject(grezzo)
+        o.remove("studentStatus")
+        o.put("lessonArg", argomento)
+        val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
+        return r.codice to r.testo
+    }
+
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
     fun cancellaVoto(grezzo: String): Pair<Int, String> {
         if (token.isEmpty()) login()
