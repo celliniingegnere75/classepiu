@@ -260,7 +260,8 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
-    fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String): Pair<Int, String> {
+    fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String,
+                  componente: JSONObject? = null): Pair<Int, String> {
         if (token.isEmpty()) login()
         val o = JSONObject(grezzo)
         // valore e livello scelti dalla tabella di classeviva; "non fa media" è decimalValue assente
@@ -273,6 +274,13 @@ class ClasseViva(private val utente: String, private val password: String) {
         }
         if (!media) o.put("decimalValue", JSONObject.NULL) else if (decimale != null) o.put("decimalValue", decimale)
         componentiTipo[tipo]?.let { (desc, pos) -> o.put("componentDesc", desc); o.put("componentPos", pos) }
+        // il voto letto non ha componentId: senza, classeviva può ignorare il cambio di tipo; si mette quello del periodo giusto
+        if (componente != null) {
+            o.put("componentId", componente.optString("componentId"))
+            o.put("componentCode", componente.optString("componentCode"))
+            o.put("componentPos", componente.optInt("position", o.optInt("componentPos")))
+            o.put("componentDesc", componente.optString("componentName"))
+        }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", o)

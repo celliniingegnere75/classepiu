@@ -34,6 +34,9 @@ class VotiScheda : Scheda() {
     /** Livello di voto della tabella di classeviva: codice, scritta mostrata e valore decimale. */
     private class Livello(val codice: String, val scritta: String, val decimale: Double)
     private var livelli: List<Livello> = emptyList()
+    /** Componenti (scritto/orale/pratico) per periodo, come in evaluations/components, e codice del periodo per periodPos ("Q1", "Q3"). */
+    private var componenti: List<org.json.JSONObject> = emptyList()
+    private var codiciPeriodo: Map<Int, String> = emptyMap()
     private var mioId = ""
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
@@ -110,10 +113,25 @@ class VotiScheda : Scheda() {
                         }.filter { it.scritta.isNotEmpty() }
                     }
                     val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
+                    // componenti: oggetti con componentId ovunque nella risposta (Q1:S1_2:ORL:0 = orale del 1° quadrimestre)
+                    val trovati = ArrayList<org.json.JSONObject>()
+                    fun cerca(x: Any?, liv: Int) {
+                        if (liv > 5) return
+                        when (x) {
+                            is org.json.JSONObject -> if (x.has("componentId") && x.has("componentName")) trovati.add(x) else x.keys().forEach { cerca(x.opt(it), liv + 1) }
+                            is org.json.JSONArray -> for (k in 0 until x.length()) cerca(x.opt(k), liv + 1)
+                        }
+                    }
+                    cerca(o, 0)
+                    componenti = trovati
                     o.optJSONArray("periods")?.let { a ->
-                        // come l'app ufficiale: periodi con dateStart/dateEnd, posizione e "isFinal" (lo scrutinio finale non è un quadrimestre)
+                        codiciPeriodo = (0 until a.length()).mapNotNull { a.optJSONObject(it) }.filter { it.has("periodPos") }
+                            .associate { it.optInt("periodPos") to it.optString("periodCode") }
+                    }
+                    o.optJSONArray("periods")?.let { a ->
+                        // come l'app ufficiale: periodi con dateStart/dateEnd; "isFinal" è vero anche per il 2° quadrimestre (periodo dello scrutinio finale)
                         val periodi = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
-                            .filter { it.optString("dateStart").length >= 10 && !it.optBoolean("isFinal", false) }.sortedBy { it.optString("dateStart") }
+                            .filter { it.optString("dateStart").length >= 10 }.sortedBy { it.optString("dateStart") }
                         periodi.firstOrNull()?.let {
                             primoGiorno.time = f.parse(it.optString("dateStart").take(10))!!
                             context?.let { c -> Scuola.salva(c, primoGiorno) } // le altre schede non vanno prima di questo giorno
@@ -436,15 +454,42 @@ class VotiScheda : Scheda() {
     private fun salvaSuClasseviva(v: Voto, valore: String, tipo: String, media: Boolean, data: String, nota: String) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
+            val ctx = requireContext()
             val livello = livelli.firstOrNull { it.scritta == valore }
+            val vecchio = runCatching { org.json.JSONObject(v.grezzo) }.getOrNull()
+            // componente del nuovo tipo nello stesso periodo del voto
+            val periodo = codiciPeriodo[vecchio?.optInt("periodPos") ?: 0]
+            val componente = componenti.firstOrNull { it.optString("componentName").lowercase() == tipo && (periodo == null || it.optString("periodCode") == periodo) }
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    Impostazioni(requireContext()).client().salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota)
+                    val c = Impostazioni(ctx).client()
+                    val esito = c.salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota, componente)
+                    // controllo: si rilegge il voto da classeviva e si guarda se il tipo è cambiato davvero
+                    val dopo = if (esito.first in 200..299) runCatching {
+                        val id = vecchio?.opt("evtId")?.toString()
+                        val tutto = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId).second
+                        Regex("\\{[^{}]*\"evtId\":\\s*$id[,}][^{}]*\\}").find(tutto)?.value
+                    }.getOrNull() else null
+                    Triple(esito.first, esito.second, dopo)
                 }
             }
-            val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
-                ?: "non riuscito: ${r.exceptionOrNull()?.message}; resta sul telefono"
-            android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_LONG).show()
+            val (codice, risposta, dopo) = r.getOrElse {
+                android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}; resta sul telefono", android.widget.Toast.LENGTH_LONG).show(); return@launch
+            }
+            val tipoDopo = dopo?.let { runCatching { org.json.JSONObject(it).optString("componentDesc").lowercase() }.getOrNull() }
+            if (codice in 200..299 && (tipoDopo == null || tipoDopo == tipo)) {
+                android.widget.Toast.makeText(ctx, "salvato su classeviva", android.widget.Toast.LENGTH_LONG).show()
+            } else {
+                // non accettato, o accettato ma il tipo non è cambiato: si può copiare tutto per sistemare la scrittura
+                val messaggio = if (codice in 200..299) "classeviva ha risposto ok, ma il voto risulta ancora \"$tipoDopo\" invece di \"$tipo\"."
+                    else "classeviva non ha accettato (http $codice); la modifica resta sul telefono."
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setMessage(messaggio)
+                    .setNegativeButton("chiudi", null)
+                    .setPositiveButton("copia la risposta") { _, _ ->
+                        ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta",
+                            "HTTP $codice\n$risposta\n\nprima:\n${v.grezzo}\n\ncomponente scelta:\n$componente\n\ndopo:\n$dopo"))
+                    }.show()
+            }
         }
     }
 
