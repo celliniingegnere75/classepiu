@@ -27,6 +27,9 @@ class VotiActivity : AppCompatActivity() {
     private lateinit var lista: LinearLayout
     private var tipo = ""
     private var classeId = ""
+    private var primoGiorno: java.util.Calendar = java.util.Calendar.getInstance().apply { // se le lezioni non si leggono: 1 settembre
+        val o = java.util.Calendar.getInstance(); set(if (o.get(java.util.Calendar.MONTH) >= java.util.Calendar.SEPTEMBER) o.get(java.util.Calendar.YEAR) else o.get(java.util.Calendar.YEAR) - 1, java.util.Calendar.SEPTEMBER, 1)
+    }
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
     private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
@@ -71,6 +74,16 @@ class VotiActivity : AppCompatActivity() {
                 runCatching {
                     val c = Impostazioni(this@VotiActivity).client()
                     c.studentiGrezzi(tipo, classeId) to c.votiGrezzi(tipo, classeId)
+                }
+            }
+            // primo giorno di scuola: la prima lezione registrata dall'inizio di settembre
+            launch(Dispatchers.IO) {
+                runCatching {
+                    val f = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ITALIAN)
+                    val oggi = java.util.Calendar.getInstance()
+                    val (c, t) = Impostazioni(this@VotiActivity).client().lezioniGrezze(f.format(primoGiorno.time), f.format(oggi.time))
+                    if (c == 200) Regex("\"evtDate\"\\s*:\\s*\"(\\d{4})-(\\d{2})-(\\d{2})").findAll(t)
+                        .map { it.groupValues.drop(1).joinToString("") }.minOrNull()?.let { primoGiorno.time = f.parse(it)!! }
                 }
             }
             val (st, vt) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
@@ -149,7 +162,22 @@ class VotiActivity : AppCompatActivity() {
         }
         fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(2)) }
         val valore = campo(v.valore, "voto", 1)
-        val data = campo(v.data, "data", 1)
+        val fIt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALIAN)
+        val fApi = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
+        var scelta: java.util.Date? = runCatching { fApi.parse(v.data.take(10)) }.getOrNull()
+        val data = TextView(ctx).apply {
+            text = scelta?.let { fIt.format(it) } ?: "scegli la data"; textSize = 15f; setTextColor(Color.BLACK)
+            setPadding(dp(4), dp(10), dp(4), dp(10))
+            setOnClickListener {
+                val c = java.util.Calendar.getInstance().apply { time = scelta ?: java.util.Date() }
+                val d = android.app.DatePickerDialog(ctx, { _, a, m, g ->
+                    scelta = java.util.Calendar.getInstance().apply { set(a, m, g) }.time
+                    text = fIt.format(scelta!!)
+                }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH))
+                d.datePicker.minDate = primoGiorno.timeInMillis // non prima del primo giorno di scuola
+                d.show()
+            }
+        }
         val nota = campo(v.nota, "annotazioni per la famiglia", 3)
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(8), dp(22), 0)
@@ -162,8 +190,9 @@ class VotiActivity : AppCompatActivity() {
             .setView(corpo)
             .setNegativeButton("annulla", null)
             .setPositiveButton("salva") { _, _ ->
-                salvaSuClasseviva(v, valore.text.toString(), data.text.toString(), nota.text.toString())
-                memoria.edit().putString("${v.chiave}|valore", valore.text.toString()).putString("${v.chiave}|data", data.text.toString()).putString("${v.chiave}|nota", nota.text.toString()).apply()
+                val dataApi = scelta?.let { fApi.format(it) } ?: v.data
+                salvaSuClasseviva(v, valore.text.toString(), dataApi, nota.text.toString())
+                memoria.edit().putString("${v.chiave}|valore", valore.text.toString()).putString("${v.chiave}|data", dataApi).putString("${v.chiave}|nota", nota.text.toString()).apply()
                 mostra(elenco, tutti)
             }
             .show()
