@@ -161,7 +161,7 @@ class VotiActivity : AppCompatActivity() {
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             }
             righe.forEach { g -> riga(g, colorePerRiga(g), suoi[g].orEmpty()) }
-            if (civica.isNotEmpty()) riga("ed. civica", 0xFFE57399.toInt(), civica)
+            if (civica.isNotEmpty()) riga("civica", 0xFFE57399.toInt(), civica)
             lista.addView(scatola, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
     }
