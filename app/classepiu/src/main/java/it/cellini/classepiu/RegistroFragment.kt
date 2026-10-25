@@ -51,6 +51,7 @@ class RegistroFragment : Fragment() {
     private lateinit var schedaMie: TextView
     private lateinit var schedaTutte: TextView
     private lateinit var lente: ImageView
+    private lateinit var rigaCerca: LinearLayout
     private lateinit var campoCerca: EditText
     private val adattatore = Adattatore()
 
@@ -80,12 +81,12 @@ class RegistroFragment : Fragment() {
                 if (campoCerca.visibility == View.GONE) campoCerca.setText("") else campoCerca.requestFocus()
             }
         }
-        val titolo = LinearLayout(ctx).apply {
+        // lente e campo di ricerca stanno sotto le linguette e solo su "tutte le classi"
+        rigaCerca = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            addView(TextView(ctx).apply {
-                text = "Classi"; textSize = 26f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt())
-            }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            visibility = View.GONE
+            addView(campoCerca, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(lente, LinearLayout.LayoutParams(ctx.dp(44), ctx.dp(44)))
         }
 
@@ -139,10 +140,9 @@ class RegistroFragment : Fragment() {
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
-            setPadding(ctx.dp(14), ctx.dp(10), ctx.dp(14), 0)
-            addView(titolo)
-            addView(campoCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(8); bottomMargin = ctx.dp(8) })
+            setPadding(ctx.dp(14), ctx.dp(6), ctx.dp(14), 0)
+            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = ctx.dp(8) })
+            addView(rigaCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(corpo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
@@ -171,7 +171,7 @@ class RegistroFragment : Fragment() {
         stile(schedaMie, mie)
         stile(schedaTutte, !mie)
         // la ricerca serve solo su "tutte le classi"
-        lente.visibility = if (mie) View.GONE else View.VISIBLE
+        rigaCerca.visibility = if (mie) View.GONE else View.VISIBLE
         if (mie) { campoCerca.visibility = View.GONE; campoCerca.setText("") }
     }
 
