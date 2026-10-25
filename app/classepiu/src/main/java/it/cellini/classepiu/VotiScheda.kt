@@ -362,8 +362,12 @@ class VotiScheda : Scheda() {
         }
 
         // riga 3: cancella (solo sui propri voti)
+        // pulsante rosso al centro, stessa grandezza di carattere di annulla e salva; il riquadro segue la scritta con pochi px in più
         val cancella = TextView(ctx).apply {
-            text = "cancella"; textSize = 14f; setTextColor(0xFFE53935.toInt()); setPadding(dp(2), dp(8), dp(12), dp(8))
+            text = "cancella"; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            includeFontPadding = false; gravity = Gravity.CENTER
+            setPadding(dp(5), dp(5), dp(5), dp(5))
+            background = GradientDrawable().apply { setColor(0xFFE53935.toInt()); cornerRadius = dp(10).toFloat() }
             if (modificabile) {
                 setOnClickListener {
                     MaterialAlertDialogBuilder(ctx).setMessage("cancellare questo voto da classeviva?")
@@ -375,7 +379,10 @@ class VotiScheda : Scheda() {
                 visibility = android.view.View.GONE
             }
         }
-        val riga3 = LinearLayout(ctx).apply { addView(cancella) }
+        val riga3 = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(cancella, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8); bottomMargin = dp(4) })
+        }
 
         // annotazioni: etichetta quasi attaccata al campo di testo
         val etichetta = TextView(ctx).apply { text = "annotazioni per la famiglia"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, 0) }
