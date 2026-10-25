@@ -237,8 +237,13 @@ class VotiActivity : AppCompatActivity() {
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(8))
             addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
-            addView(etichetta("voto")); addView(valore)
-            addView(etichetta("data")); addView(data)
+            // voto a sinistra, data (senza etichetta) in alto a destra sulla stessa riga
+            addView(etichetta("voto"))
+            addView(LinearLayout(ctx).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(valore, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                addView(data.apply { gravity = Gravity.END; setTypeface(typeface, Typeface.BOLD) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            })
             addView(etichetta("annotazioni per la famiglia")); addView(nota)
             addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
         }
