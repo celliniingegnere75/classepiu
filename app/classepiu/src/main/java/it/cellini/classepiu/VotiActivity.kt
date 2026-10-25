@@ -113,16 +113,21 @@ class VotiActivity : AppCompatActivity() {
                     }
                     val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
                     o.optJSONArray("periods")?.let { a ->
+                        // come l'app ufficiale: periodi con dateStart/dateEnd, posizione e "isFinal" (lo scrutinio finale non è un quadrimestre)
                         val periodi = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
-                            .filter { it.optString("dateStart").length >= 10 }.sortedBy { it.optString("dateStart") }
+                            .filter { it.optString("dateStart").length >= 10 && !it.optBoolean("isFinal", false) }.sortedBy { it.optString("dateStart") }
                         periodi.firstOrNull()?.let { primoGiorno.time = f.parse(it.optString("dateStart").take(10))!! }
-                        // periodo in corso: quello che contiene oggi (dopo l'ultimo resta l'ultimo)
+                        // periodo in corso: quello che contiene oggi; fuori dalle date resta il più vicino già iniziato
                         val oggi = f.format(java.util.Date())
-                        val i = periodi.indexOfLast { it.optString("dateStart").take(10) <= oggi }
+                        val i = periodi.indexOfFirst { it.optString("dateStart").take(10) <= oggi && it.optString("dateEnd").let { e -> e.length < 10 || oggi <= e.take(10) } }
+                            .takeIf { it >= 0 } ?: periodi.indexOfLast { it.optString("dateStart").take(10) <= oggi }
                         if (i >= 0) {
-                            val nome = periodi[i].optString("periodDesc").lowercase().replace(Regex("[^a-zàèéìòù ]"), " ").trim()
+                            val p = periodi[i]
+                            // posizione per ordine di date: il codice del 2° quadrimestre è "Q3", quindi non si usa il codice
+                            val pos = i + 1
+                            val nome = p.optString("periodDesc").lowercase().replace(Regex("[^a-zàèéìòù ]"), " ").trim()
                                 .split(" ").lastOrNull { it.isNotEmpty() } ?: ""
-                            quadrimestre = listOf("I°", "II°", "III°", "IV°").getOrElse(i) { "${i + 1}°" } + " " + nome.ifEmpty { "quadrimestre" }
+                            quadrimestre = listOf("I°", "II°", "III°", "IV°").getOrElse(pos - 1) { "$pos°" } + " " + nome.ifEmpty { "quadrimestre" }
                             titolo.post { aggiornaTitolo() }
                         }
                     }
