@@ -283,11 +283,50 @@ class ClasseViva(private val utente: String, private val password: String) {
      * Modifica una mia firma (lezione): rimanda l'oggetto della lezione con il nuovo argomento, come fa l'app ufficiale
      * (PUT su lessons/sigs). Le presenze degli alunni non fanno parte della firma e vengono tolte. Da verificare sui dati veri.
      */
-    fun salvaFirma(grezzo: String, argomento: String): Pair<Int, String> {
+    /** Un tipo di lezione ammesso (Lezione, Supplenza, Compresenza...): [codice] come lo vuole classeviva, [nome] da mostrare. */
+    data class TipoLezione(val codice: String, val nome: String)
+
+    /**
+     * Tipi di lezione per la firma, come nella tendina dell'app ufficiale (_st/lessontypes e _st/sctelessontypes).
+     * La forma della risposta non è ancora nota: si cercano gli elenchi e i campi più probabili. [grezzo] serve da copiare.
+     */
+    fun tipiLezione(): Pair<List<TipoLezione>, String> {
+        if (token.isEmpty()) login()
+        fun JSONObject.t(vararg ks: String): String {
+            for (k in ks) { val v = opt(k); if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray && v.toString().isNotBlank()) return v.toString().trim() }
+            return ""
+        }
+        val tipi = LinkedHashMap<String, TipoLezione>()
+        val grezzo = StringBuilder()
+        for (percorso in listOf("lessontypes", "sctelessontypes")) {
+            val r = http("GET", "$BASE/teachers/$id/_st/$percorso")
+            grezzo.append("$percorso: HTTP ${r.codice}\n${r.testo}\n\n")
+            if (r.codice != 200) continue
+            val radice = try { org.json.JSONTokener(r.testo).nextValue() } catch (e: Exception) { continue }
+            val a = trovaArrayGenerico(radice, listOf("lessonTypes", "lessontypes", "sctelessontypes", "items", "data")) ?: continue
+            for (i in 0 until a.length()) {
+                val o = a.optJSONObject(i)
+                val tipo = if (o == null) a.optString(i).takeIf { it.isNotBlank() }?.let { TipoLezione(it, it) } else {
+                    val nome = o.t("lessonTypeDesc", "desc", "description", "lessonType", "name", "label", "title", "code")
+                    val codice = o.t("lessonTypeCode", "code", "lessonTypeId", "id").ifEmpty { nome }
+                    nome.takeIf { it.isNotEmpty() }?.let { TipoLezione(codice, it) }
+                }
+                if (tipo != null && tipo.nome !in tipi) tipi[tipo.nome] = tipo
+            }
+        }
+        return tipi.values.toList() to grezzo.toString()
+    }
+
+    fun salvaFirma(grezzo: String, argomento: String, tipo: TipoLezione? = null): Pair<Int, String> {
         if (token.isEmpty()) login()
         val o = JSONObject(grezzo)
         o.remove("studentStatus")
         o.put("lessonArg", argomento)
+        if (tipo != null) {
+            // il nome va in lessonType; il codice nei campi che la lezione ha già (non si sa ancora quale usa classeviva)
+            o.put("lessonType", tipo.nome)
+            for (k in listOf("lessonTypeCode", "lessonTypeId", "lessonTypeDesc")) if (o.has(k)) o.put(k, if (k == "lessonTypeDesc") tipo.nome else tipo.codice)
+        }
         val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
         return r.codice to r.testo
     }

@@ -266,16 +266,51 @@ class ListaScheda : Scheda() {
         lista.addView(copiaRisposta())
     }
 
-    /** Finestra per cambiare l'argomento della mia lezione; salva subito su classeviva e ricarica il giorno. */
+    /** Finestra per cambiare argomento e tipo della mia lezione; salva subito su classeviva e ricarica il giorno. */
     private fun modificaFirma(v: Voce) {
         val ctx = requireContext()
         val argomento = android.widget.EditText(ctx).apply {
             setText(if (v.testo == "nessun argomento") "" else v.testo); textSize = 15f; minLines = 3; gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
+        // tipo di lezione: si parte da quello della firma; l'elenco dei tipi ammessi si legge da classeviva
+        val tipoAttuale = runCatching { org.json.JSONObject(v.grezzo).optString("lessonType") }.getOrDefault("").ifEmpty { "Lezione" }
+        var tipoScelto: ClasseViva.TipoLezione? = null
+        var tipi: List<ClasseViva.TipoLezione> = emptyList()
+        var rispostaTipi = ""
+        val tipo = TextView(ctx).apply {
+            text = "$tipoAttuale  ▾"; textSize = 15f; setTextColor(0xFF111111.toInt()); setPadding(dp(12), dp(10), dp(12), dp(10))
+            background = GradientDrawable().apply { setColor(0xFFF2F2F2.toInt()); cornerRadius = dp(10).toFloat() }
+            setOnClickListener {
+                if (tipi.isEmpty()) {
+                    // elenco non letto: si può copiare la risposta per sistemare la lettura
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                        .setMessage(if (rispostaTipi.isEmpty()) "sto leggendo i tipi di lezione da classeviva..." else "non riesco a leggere i tipi di lezione.")
+                        .setNegativeButton("chiudi", null)
+                        .apply {
+                            if (rispostaTipi.isNotEmpty()) setPositiveButton("copia la risposta") { _, _ ->
+                                ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", rispostaTipi))
+                            }
+                        }.show()
+                    return@setOnClickListener
+                }
+                val nomi = tipi.map { it.nome }.toTypedArray()
+                val corrente = nomi.indexOfFirst { it.equals(tipoScelto?.nome ?: tipoAttuale, ignoreCase = true) }
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setTitle("tipo di lezione")
+                    .setSingleChoiceItems(nomi, corrente) { d, i ->
+                        tipoScelto = tipi[i]; text = "${tipi[i].nome}  ▾"; d.dismiss()
+                    }.show()
+            }
+        }
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().tipiLezione() } }
+            r.onSuccess { (l, g) -> tipi = l; rispostaTipi = g }.onFailure { rispostaTipi = "errore: ${it.message}" }
+        }
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), 0)
             addView(TextView(ctx).apply { text = v.titolo; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
+            addView(TextView(ctx).apply { text = "tipo di lezione"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, dp(4)) })
+            addView(tipo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(TextView(ctx).apply { text = "argomento della lezione"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, 0) })
             addView(argomento)
         }
@@ -283,8 +318,9 @@ class ListaScheda : Scheda() {
             .setNegativeButton("annulla", null)
             .setPositiveButton("salva") { _, _ ->
                 val testo = argomento.text.toString().trim()
+                val nuovoTipo = tipoScelto?.takeIf { !it.nome.equals(tipoAttuale, ignoreCase = true) }
                 lifecycleScope.launch {
-                    val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().salvaFirma(v.grezzo, testo) } }
+                    val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().salvaFirma(v.grezzo, testo, nuovoTipo) } }
                     val (codice, risposta) = r.getOrElse { android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}", android.widget.Toast.LENGTH_LONG).show(); return@launch }
                     if (codice in 200..299) {
                         android.widget.Toast.makeText(ctx, "firma salvata su classeviva", android.widget.Toast.LENGTH_SHORT).show()
