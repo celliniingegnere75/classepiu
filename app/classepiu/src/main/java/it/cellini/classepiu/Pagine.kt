@@ -20,8 +20,8 @@ import androidx.fragment.app.Fragment
 const val ALTEZZA_BARRA = 66
 const val FASCIA_BLU = 14
 const val ALZO_BARRA = 5
-/** Altezza della sfumatura d'ombra sopra la barra (dp): l'ombra di Android scende sempre in basso, questa sale. */
-const val SOMBRA_BARRA = 3
+/** Spazio sopra la barra per l'alone d'ombra (dp): l'ombra di Android scende sempre in basso, questa sale e segue l'ovale. */
+const val SOMBRA_BARRA = 6
 /** Spazio da lasciare in fondo alle liste perché l'ultima voce si possa portare sopra la barra (dp). */
 const val SPAZIO_BARRA = ALTEZZA_BARRA + ALZO_BARRA + 12
 
@@ -73,17 +73,33 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
  * le pagine e le schede scorrono sotto, lei resta ferma. La barra è alzata di [ALZO_BARRA] per lasciar vedere il blu.
  */
 fun Context.sovraimpressione(barra: BarraPagine): FrameLayout = FrameLayout(this).apply {
-    // ombra verso l'alto: una sfumatura trasparente in cima e scura sul bordo della barra; non riceve tocchi
-    addView(View(context).apply {
-        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, 0x33000000))
-    }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(SOMBRA_BARRA), Gravity.BOTTOM).apply {
-        bottomMargin = dp(ALTEZZA_BARRA + ALZO_BARRA)
+    // alone verso l'alto che segue l'ovale della barra: lo stesso ovale, sfumato e spostato un poco in su; non riceve tocchi
+    addView(AloneBarra(this), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + SOMBRA_BARRA), Gravity.BOTTOM).apply {
+        bottomMargin = dp(ALZO_BARRA)
     })
     addView(View(context).apply { setBackgroundColor(ContextCompat.getColor(context, R.color.logo_sfondo)) },
         FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(FASCIA_BLU), Gravity.BOTTOM))
     addView(barra.vista, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA), Gravity.BOTTOM).apply {
         leftMargin = dp(18); rightMargin = dp(18); bottomMargin = dp(ALZO_BARRA)
     })
+}
+
+/** Ombra della barra: l'ovale della barra in nero trasparente, sfocato di 4 dp e alzato di 1,5 dp, così sporge solo sopra e ai lati. */
+private class AloneBarra(ctx: Context) : View(ctx) {
+    private val pennello = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0x46000000
+        maskFilter = android.graphics.BlurMaskFilter(ctx.dp(4).toFloat(), android.graphics.BlurMaskFilter.Blur.NORMAL)
+    }
+    private val ovale = android.graphics.RectF()
+
+    init { setLayerType(LAYER_TYPE_SOFTWARE, null) } // la sfocatura si disegna solo così
+
+    override fun onDraw(canvas: android.graphics.Canvas) {
+        val su = context.dp(3) / 2f
+        ovale.set(context.dp(18).toFloat(), context.dp(SOMBRA_BARRA) - su, width - context.dp(18).toFloat(), height - su)
+        val r = context.dp(33).toFloat()
+        canvas.drawRoundRect(ovale, r, r, pennello)
+    }
 }
 
 /**
