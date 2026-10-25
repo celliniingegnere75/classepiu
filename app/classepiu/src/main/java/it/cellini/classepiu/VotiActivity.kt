@@ -35,10 +35,16 @@ class VotiActivity : AppCompatActivity() {
     /** Livello di voto della tabella di classeviva: codice, scritta mostrata e valore decimale. */
     private class Livello(val codice: String, val scritta: String, val decimale: Double)
     private var livelli: List<Livello> = emptyList()
-    private var rispostaVoti = ""
     private var mioId = ""
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
+    private lateinit var titolo: TextView
+    private lateinit var linguette: LinearLayout
+    private var nomeClasse = ""
+    private var quadrimestre = ""
+    /** Materia della linguetta aperta e linguette disegnate (materia, vista). */
+    private var materiaScelta = ""
+    private var schede: List<Pair<String, TextView>> = emptyList()
     private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -50,19 +56,29 @@ class VotiActivity : AppCompatActivity() {
         val ctx = this
 
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
-        val titolo = TextView(ctx).apply {
-            text = "voti $nome"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER
+        nomeClasse = nome
+        titolo = TextView(ctx).apply {
+            textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER
             setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END
         }
+        // finché classeviva non dà i periodi: da settembre a gennaio primo quadrimestre, poi secondo
+        val mese = java.util.Calendar.getInstance().get(java.util.Calendar.MONTH)
+        quadrimestre = if (mese >= java.util.Calendar.SEPTEMBER || mese == java.util.Calendar.JANUARY) "I° quadrimestre" else "II° quadrimestre"
+        aggiornaTitolo()
         val barra = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(chiudi, LinearLayout.LayoutParams(dp(48), dp(48)))
             addView(titolo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(android.view.View(ctx), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
-        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(16), dp(14), dp(16)) }
-        val pannello = ScrollView(ctx).apply {
-            addView(lista)
+        lista = LinearLayout(ctx).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(14), dp(8), dp(14), dp(16)) }
+        // linguette delle materie, ferme in alto; i voti scorrono sotto
+        linguette = LinearLayout(ctx).apply { setPadding(dp(14), dp(14), dp(14), dp(6)) }
+        val barraMaterie = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; isFillViewport = true; addView(linguette) }
+        val pannello = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(barraMaterie, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(ScrollView(ctx).apply { addView(lista) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
@@ -97,34 +113,78 @@ class VotiActivity : AppCompatActivity() {
                     }
                     val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
                     o.optJSONArray("periods")?.let { a ->
-                        (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("dateStart")?.takeIf { d -> d.length >= 10 } }.minOrNull()
-                            ?.let { primoGiorno.time = f.parse(it.take(10))!! }
+                        val periodi = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
+                            .filter { it.optString("dateStart").length >= 10 }.sortedBy { it.optString("dateStart") }
+                        periodi.firstOrNull()?.let { primoGiorno.time = f.parse(it.optString("dateStart").take(10))!! }
+                        // periodo in corso: quello che contiene oggi (dopo l'ultimo resta l'ultimo)
+                        val oggi = f.format(java.util.Date())
+                        val i = periodi.indexOfLast { it.optString("dateStart").take(10) <= oggi }
+                        if (i >= 0) {
+                            val nome = periodi[i].optString("periodDesc").lowercase().replace(Regex("[^a-zàèéìòù ]"), " ").trim()
+                                .split(" ").lastOrNull { it.isNotEmpty() } ?: ""
+                            quadrimestre = listOf("I°", "II°", "III°", "IV°").getOrElse(i) { "${i + 1}°" } + " " + nome.ifEmpty { "quadrimestre" }
+                            titolo.post { aggiornaTitolo() }
+                        }
                     }
                 }
             }
             val (st, vt) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
             val studenti = if (st.first == 200) leggiStudenti(st.second) else emptyList()
             if (vt.first != 200) { testo("classeviva non ha dato i voti (http ${vt.first}).", vt.second); return@launch }
-            rispostaVoti = vt.second
             val voti = leggiVoti(vt.second)
             if (studenti.isEmpty()) { testo("nessuno studente riconosciuto.", st.second); return@launch }
             if (voti.isEmpty()) { testo("nessun voto riconosciuto nella risposta.", vt.second); return@launch }
             elenco = studenti; tutti = voti
+            creaLinguette(materieMie(vt.second))
             mostra(studenti, voti)
+        }
+    }
+
+    private fun aggiornaTitolo() {
+        val t = android.text.SpannableString("voti $nomeClasse  $quadrimestre")
+        // il quadrimestre più piccolo, accanto al nome della classe
+        if (quadrimestre.isNotEmpty()) t.setSpan(android.text.style.RelativeSizeSpan(0.65f), t.length - quadrimestre.length, t.length, 0)
+        titolo.text = t
+    }
+
+    /** Materie del docente nella classe, in ordine di risposta; ed. civica ha la sua riga, quindi non ha linguetta (salvo sia l'unica). */
+    private fun materieMie(risposta: String): List<String> {
+        val tutte = runCatching {
+            val a = org.json.JSONArray(risposta)
+            (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("subjectDesc")?.takeIf { s -> s.isNotEmpty() } }.distinct()
+        }.getOrDefault(emptyList())
+        return tutte.filterNot { it.contains("civic", ignoreCase = true) }.ifEmpty { tutte }
+    }
+
+    private fun creaLinguette(materie: List<String>) {
+        linguette.removeAllViews()
+        if (materiaScelta !in materie) materiaScelta = materie.firstOrNull() ?: ""
+        // due linguette riempiono lo schermo; dalla terza in poi si scorre e la terza si vede appena
+        val larga = ((resources.displayMetrics.widthPixels - dp(28)) / 2.3).toInt()
+        schede = materie.map { m ->
+            val t = TextView(this).apply {
+                text = m.lowercase(); textSize = 14f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+                setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(12), 0, dp(12), 0)
+                setOnClickListener { materiaScelta = m; coloraLinguette(); mostra(elenco, tutti) }
+            }
+            val lp = if (materie.size <= 2) LinearLayout.LayoutParams(0, dp(40), 1f) else LinearLayout.LayoutParams(larga, dp(40))
+            linguette.addView(t, lp.apply { rightMargin = dp(8) })
+            m to t
+        }
+        coloraLinguette()
+    }
+
+    private fun coloraLinguette() {
+        schede.forEach { (m, t) ->
+            val scelta = m == materiaScelta
+            t.setTextColor(if (scelta) Color.WHITE else 0xFF555555.toInt())
+            t.background = GradientDrawable().apply { setColor(if (scelta) azzurro else 0xFFFFFFFF.toInt()); cornerRadius = dp(20).toFloat() }
         }
     }
 
     private fun mostra(studenti: List<Studente>, tuttiVoti: Map<String, List<Voto>>) {
         lista.removeAllViews()
         val voti = tuttiVoti
-        lista.addView(TextView(this).apply {
-            text = "copia la risposta dei voti"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
-            setOnClickListener {
-                getSystemService(android.content.ClipboardManager::class.java)
-                    .setPrimaryClip(android.content.ClipData.newPlainText("risposta", rispostaVoti.take(60000)))
-                android.widget.Toast.makeText(this@VotiActivity, "copiata, incollala nella chat", android.widget.Toast.LENGTH_LONG).show()
-            }
-        })
         val ctx = this
         // righe sempre in questo ordine; altri tipi di prova (es. pratico) seguono con il proprio nome
         fun gruppo(t: String) = when {
@@ -139,7 +199,8 @@ class VotiActivity : AppCompatActivity() {
             val dello = voti[s.id] ?: emptyList()
             // ed. civica: riga a parte con i voti di tutti i docenti
             val civica = dello.filter { it.materia.contains("civic", ignoreCase = true) }
-            val suoi = (dello - civica.toSet()).groupBy { gruppo(it.tipo) }
+            // solo i voti della materia della linguetta aperta (se è ed. civica, la riga civica basta)
+            val suoi = (dello - civica.toSet()).filter { materiaScelta.isEmpty() || it.materia.equals(materiaScelta, ignoreCase = true) }.groupBy { gruppo(it.tipo) }
             val scatola = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(16), dp(12), dp(16), dp(12))
