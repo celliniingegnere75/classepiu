@@ -33,6 +33,7 @@ class VotiActivity : AppCompatActivity() {
     /** Livello di voto della tabella di classeviva: codice, scritta mostrata e valore decimale. */
     private class Livello(val codice: String, val scritta: String, val decimale: Double)
     private var livelli: List<Livello> = emptyList()
+    private var rispostaVoti = ""
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
     private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
@@ -100,6 +101,7 @@ class VotiActivity : AppCompatActivity() {
             val (st, vt) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
             val studenti = if (st.first == 200) leggiStudenti(st.second) else emptyList()
             if (vt.first != 200) { testo("classeviva non ha dato i voti (http ${vt.first}).", vt.second); return@launch }
+            rispostaVoti = vt.second
             val voti = leggiVoti(vt.second)
             if (studenti.isEmpty()) { testo("nessuno studente riconosciuto.", st.second); return@launch }
             if (voti.isEmpty()) { testo("nessun voto riconosciuto nella risposta.", vt.second); return@launch }
@@ -111,14 +113,11 @@ class VotiActivity : AppCompatActivity() {
     private fun mostra(studenti: List<Studente>, voti: Map<String, List<Voto>>) {
         lista.removeAllViews()
         lista.addView(TextView(this).apply {
-            text = "copia i voti ammessi"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
+            text = "copia la risposta dei voti"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
             setOnClickListener {
-                lifecycleScope.launch {
-                    val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().componentiGrezzi(tipo, classeId) } }
-                    getSystemService(android.content.ClipboardManager::class.java)
-                        .setPrimaryClip(android.content.ClipData.newPlainText("risposta", r.getOrElse { "non riuscito: ${it.message}" }))
-                    android.widget.Toast.makeText(this@VotiActivity, if (r.isSuccess) "copiata, incollala nella chat" else "non riuscito", android.widget.Toast.LENGTH_LONG).show()
-                }
+                getSystemService(android.content.ClipboardManager::class.java)
+                    .setPrimaryClip(android.content.ClipData.newPlainText("risposta", rispostaVoti.take(60000)))
+                android.widget.Toast.makeText(this@VotiActivity, "copiata, incollala nella chat", android.widget.Toast.LENGTH_LONG).show()
             }
         })
         val ctx = this
