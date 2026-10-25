@@ -103,11 +103,12 @@ class VotiActivity : AppCompatActivity() {
         // righe sempre in questo ordine; altri tipi di prova (es. pratico) seguono con il proprio nome
         fun gruppo(t: String) = when {
             t.lowercase().contains("oral") -> "orale"
-            t.lowercase().contains("scritt") || t.lowercase().contains("grafic") -> "scritto/grafico"
+            t.lowercase().contains("scritt") || t.lowercase().contains("grafic") -> "scritto"
+            t.lowercase().contains("pratic") -> "pratico"
             t.lowercase().contains("test") -> "test"
             else -> t.lowercase()
         }
-        val ordine = listOf("orale", "scritto/grafico", "test")
+        val ordine = listOf("orale", "scritto", "pratico", "test")
         studenti.forEach { s ->
             val suoi = (voti[s.id] ?: emptyList()).groupBy { gruppo(it.tipo) }
             val scatola = LinearLayout(ctx).apply {
@@ -119,18 +120,24 @@ class VotiActivity : AppCompatActivity() {
             val righe = ordine.filter { suoi.containsKey(it) } + suoi.keys.filter { it !in ordine }
             if (righe.isEmpty()) scatola.addView(TextView(ctx).apply { text = "nessun voto"; textSize = 13f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(4), 0, 0) })
             righe.forEach { g ->
-                scatola.addView(TextView(ctx).apply { text = g; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colorePerRiga(g)); setPadding(0, dp(8), 0, dp(4)) })
+                // intestazione fissa a sinistra, voti che scorrono a destra sulla stessa riga
                 val chip = LinearLayout(ctx)
                 suoi[g].orEmpty().sortedBy { it.data }.forEach { v ->
                     chip.addView(chipVoto(modificato(v)), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply { rightMargin = dp(8) })
                 }
-                scatola.addView(HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(chip) })
+                scatola.addView(LinearLayout(ctx).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(TextView(ctx).apply { text = g; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colorePerRiga(g)) },
+                        LinearLayout.LayoutParams(dp(58), ViewGroup.LayoutParams.WRAP_CONTENT))
+                    addView(HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(chip) },
+                        LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             }
             lista.addView(scatola, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
     }
 
-    private fun colorePerRiga(g: String) = when (g) { "orale" -> 0xFF4CAF7D.toInt(); "scritto/grafico" -> azzurro; "test" -> 0xFFF0A040.toInt(); else -> 0xFF8E8E8E.toInt() }
+    private fun colorePerRiga(g: String) = when (g) { "orale" -> 0xFF4CAF7D.toInt(); "scritto" -> azzurro; "pratico" -> 0xFF9B7FD4.toInt(); "test" -> 0xFFF0A040.toInt(); else -> 0xFF8E8E8E.toInt() }
 
     private fun coloreVoto(n: Double?) = when {
         n == null -> 0xFF8E8E8E.toInt()
