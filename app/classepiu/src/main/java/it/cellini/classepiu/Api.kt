@@ -271,9 +271,6 @@ class ClasseViva(private val utente: String, private val password: String) {
                 if (o.has("levelCode")) o.put("levelCode", livelloCodice)
                 if (o.has("levelId")) o.put("levelId", "$livelloCodice:0")
             }
-            // le sigle (i, s, m, ms, +, -, g…) non fanno media: peso 0; un voto numerico riprende peso 1 se prima era 0
-            val numerico = valore.trim().firstOrNull()?.isDigit() == true
-            if (!numerico) o.put("weightFactor", 0) else if (o.optDouble("weightFactor", 1.0) == 0.0) o.put("weightFactor", 1)
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
