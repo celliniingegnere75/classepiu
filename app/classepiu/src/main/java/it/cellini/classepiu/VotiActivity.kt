@@ -99,6 +99,17 @@ class VotiActivity : AppCompatActivity() {
 
     private fun mostra(studenti: List<Studente>, voti: Map<String, List<Voto>>) {
         lista.removeAllViews()
+        lista.addView(TextView(this).apply {
+            text = "copia i voti ammessi"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
+            setOnClickListener {
+                lifecycleScope.launch {
+                    val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().componentiGrezzi(tipo, classeId) } }
+                    getSystemService(android.content.ClipboardManager::class.java)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("risposta", r.getOrElse { "non riuscito: ${it.message}" }))
+                    android.widget.Toast.makeText(this@VotiActivity, if (r.isSuccess) "copiata, incollala nella chat" else "non riuscito", android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        })
         val ctx = this
         // righe sempre in questo ordine; altri tipi di prova (es. pratico) seguono con il proprio nome
         fun gruppo(t: String) = when {

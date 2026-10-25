@@ -196,6 +196,23 @@ class ClasseViva(private val utente: String, private val password: String) {
         return if (unite.length() > 0) 200 to unite.toString() else 404 to esiti.toString().ifEmpty { "nessuna materia con voti" }
     }
 
+    /** Componenti e livelli di voto di ogni materia della classe (evaluations/components), risposte grezze una dopo l'altra. */
+    fun componentiGrezzi(tipo: String, classeId: String): String {
+        if (token.isEmpty()) login()
+        val t = tipo.ifEmpty { "ordinary" }
+        val m = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
+        val sb = StringBuilder("subjects/list HTTP ${m.codice}\n${m.testo.take(3000)}\n")
+        val radice = try { org.json.JSONTokener(m.testo).nextValue() } catch (e: Exception) { return sb.toString() }
+        val materie = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return sb.toString()
+        for (i in 0 until minOf(materie.length(), 3)) {
+            val o = materie.optJSONObject(i) ?: continue
+            val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString() } ?: continue
+            val r = http("GET", "$BASE/teachers/$id/evaluations/components/$t/$classeId/$sid")
+            sb.append("\ncomponents/$sid HTTP ${r.codice}\n${r.testo.take(12000)}\n")
+        }
+        return sb.toString()
+    }
+
     /** Note disciplinari della classe nell'intervallo (yyyyMMdd), risposta grezza. */
     fun noteGrezze(tipo: String, classeId: String, da: String, a: String): Pair<Int, String> {
         if (token.isEmpty()) login()
