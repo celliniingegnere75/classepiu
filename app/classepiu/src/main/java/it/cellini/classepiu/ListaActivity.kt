@@ -107,7 +107,7 @@ class ListaActivity : AppCompatActivity() {
         }
     }
 
-    private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "")
+    private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "", val ordine: Int = 0)
     private var grezzo = ""
     private var dimClasse = 0
     private var nomi: Map<String, String> = emptyMap()
@@ -138,7 +138,11 @@ class ListaActivity : AppCompatActivity() {
                         val firma = v.t("authorName", "teacherName", "signedBy", "teacher")
                         if (materia.isNotEmpty() && (corpo.isNotEmpty() || firma.isNotEmpty() || v.t("evtHPos", "hourPos", "evtHour").isNotEmpty())) {
                             val ora = v.t("evtHPos", "hourPos", "evtHour", "hour")
-                            out.add(Voce(data.ifEmpty { "" }, (if (ora.isNotEmpty()) "${ora}ª ora · " else "") + materia, corpo.ifEmpty { "nessun argomento" }, "", if (firma.isNotEmpty()) "firmata da $firma" else ""))
+                            val tipoLezione = v.t("lessonType").takeIf { it.isNotEmpty() && !it.equals("Lezione", ignoreCase = true) }
+                            val stati = v.optJSONArray("studentStatus")
+                            val assenti = stati?.let { a -> (0 until a.length()).count { a.optJSONObject(it)?.optString("status", "")?.startsWith("HAB") == true } } ?: 0
+                            val riga = listOfNotNull(if (firma.isNotEmpty()) "firmata da $firma" else null, tipoLezione?.lowercase(), if (assenti > 0) "$assenti assent${if (assenti == 1) "e" else "i"}" else null).joinToString(" · ")
+                            out.add(Voce(data.ifEmpty { "" }, (if (ora.isNotEmpty()) "${ora}ª ora · " else "") + materia, corpo.ifEmpty { "nessun argomento" }, "", riga, ora.toIntOrNull() ?: 99))
                         } else for (k in v.keys()) cammina(v.opt(k), livello + 1)
                         return
                     }
@@ -163,7 +167,7 @@ class ListaActivity : AppCompatActivity() {
             }
         }
         cammina(radice, 0)
-        return out.sortedByDescending { it.data }
+        return if (cosa == "lezioni") out.sortedBy { it.ordine } else out.sortedByDescending { it.data }
     }
 
     private fun formatta(d: String): String {
