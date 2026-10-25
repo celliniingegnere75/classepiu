@@ -47,6 +47,7 @@ class VotiScheda : Scheda() {
     private val memoria by lazy { requireContext().getSharedPreferences("voti_modificati", android.content.Context.MODE_PRIVATE) }
 
     override fun crea(savedInstanceState: Bundle?) {
+        primoGiorno = Scuola.primoGiorno(requireContext()) // poi si aggiorna con i periodi letti da classeviva
         val nome = intent.getStringExtra("nome") ?: ""
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
@@ -113,7 +114,10 @@ class VotiScheda : Scheda() {
                         // come l'app ufficiale: periodi con dateStart/dateEnd, posizione e "isFinal" (lo scrutinio finale non è un quadrimestre)
                         val periodi = (0 until a.length()).mapNotNull { a.optJSONObject(it) }
                             .filter { it.optString("dateStart").length >= 10 && !it.optBoolean("isFinal", false) }.sortedBy { it.optString("dateStart") }
-                        periodi.firstOrNull()?.let { primoGiorno.time = f.parse(it.optString("dateStart").take(10))!! }
+                        periodi.firstOrNull()?.let {
+                            primoGiorno.time = f.parse(it.optString("dateStart").take(10))!!
+                            Scuola.salva(requireContext(), primoGiorno) // le altre schede non vanno prima di questo giorno
+                        }
                         // periodo in corso: quello che contiene oggi; fuori dalle date resta il più vicino già iniziato
                         val oggi = f.format(java.util.Date())
                         val i = periodi.indexOfFirst { it.optString("dateStart").take(10) <= oggi && it.optString("dateEnd").let { e -> e.length < 10 || oggi <= e.take(10) } }

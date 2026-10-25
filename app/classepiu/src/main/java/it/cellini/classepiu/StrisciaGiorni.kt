@@ -19,6 +19,14 @@ import java.util.Locale
  */
 class StrisciaGiorni(ctx: Context, private val alCambio: (Calendar) -> Unit) {
     private val celle = ArrayList<Pair<TextView, Calendar>>()
+    /** Il primo giorno della striscia: mai prima del primo giorno di scuola, e al più 120 giorni fa. */
+    private val oggi = Calendar.getInstance()
+    private val inizio: Calendar = Scuola.primoGiorno(ctx).let { primo ->
+        val daOggi = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -MAX_INDIETRO) }
+        if (primo.after(daOggi)) primo else daOggi
+    }
+    /** Quanti giorni la striscia va indietro rispetto a oggi: oggi sta in questa posizione. */
+    private val PRIMA: Int = java.time.temporal.ChronoUnit.DAYS.between(giornoDi(inizio), giornoDi(oggi)).toInt().coerceAtLeast(0)
     private var indiceCorrente = PRIMA
     private var indiceCaricato = PRIMA
     var selezionato: Calendar = Calendar.getInstance()
@@ -32,8 +40,6 @@ class StrisciaGiorni(ctx: Context, private val alCambio: (Calendar) -> Unit) {
         val larghezzaCella = ctx.resources.displayMetrics.widthPixels / 7
         val sigle = "DLMMGVS"
         val riga = LinearLayout(ctx).apply { gravity = Gravity.CENTER; setPadding(3 * larghezzaCella, 0, 3 * larghezzaCella, 0) }
-        val oggi = Calendar.getInstance()
-        val inizio = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -PRIMA) }
         val giorniTotali = PRIMA + DOPO
         vista = HorizontalScrollView(ctx).apply { isHorizontalScrollBarEnabled = false; addView(riga) }
         for (i in 0..giorniTotali) {
@@ -91,7 +97,10 @@ class StrisciaGiorni(ctx: Context, private val alCambio: (Calendar) -> Unit) {
     }
 
     private companion object {
-        const val PRIMA = 120 // giorni prima di oggi
-        const val DOPO = 60   // giorni dopo oggi
+        /** Il giorno del calendario, senza ore: così il conto dei giorni non sbaglia con l'ora legale. */
+        fun giornoDi(c: Calendar) = java.time.LocalDate.of(c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
+
+        const val MAX_INDIETRO = 120 // giorni prima di oggi, al massimo
+        const val DOPO = 60          // giorni dopo oggi
     }
 }
