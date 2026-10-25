@@ -20,6 +20,8 @@ import androidx.fragment.app.Fragment
 const val ALTEZZA_BARRA = 66
 const val FASCIA_BLU = 14
 const val ALZO_BARRA = 5
+/** Altezza della sfumatura d'ombra sopra la barra (dp): l'ombra di Android scende sempre in basso, questa sale. */
+const val SOMBRA_BARRA = 12
 /** Spazio da lasciare in fondo alle liste perché l'ultima voce si possa portare sopra la barra (dp). */
 const val SPAZIO_BARRA = ALTEZZA_BARRA + ALZO_BARRA + 12
 
@@ -32,7 +34,6 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
             setColor(ContextCompat.getColor(ctx, R.color.grigio_barra))
             cornerRadius = ctx.dp(33).toFloat()
         }
-        elevation = ctx.dp(9).toFloat() // ombra più marcata: la barra sta sopra le pagine e le schede che scorrono
         setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
         // la barra prende i tocchi: non passano alla lista che le scorre sotto
         isClickable = true
@@ -72,6 +73,12 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
  * le pagine e le schede scorrono sotto, lei resta ferma. La barra è alzata di [ALZO_BARRA] per lasciar vedere il blu.
  */
 fun Context.sovraimpressione(barra: BarraPagine): FrameLayout = FrameLayout(this).apply {
+    // ombra verso l'alto: una sfumatura trasparente in cima e scura sul bordo della barra; non riceve tocchi
+    addView(View(context).apply {
+        background = GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(0x00000000, 0x33000000))
+    }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(SOMBRA_BARRA), Gravity.BOTTOM).apply {
+        bottomMargin = dp(ALTEZZA_BARRA + ALZO_BARRA)
+    })
     addView(View(context).apply { setBackgroundColor(ContextCompat.getColor(context, R.color.logo_sfondo)) },
         FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(FASCIA_BLU), Gravity.BOTTOM))
     addView(barra.vista, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA), Gravity.BOTTOM).apply {

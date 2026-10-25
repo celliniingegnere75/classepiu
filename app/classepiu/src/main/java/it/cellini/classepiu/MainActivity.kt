@@ -113,7 +113,7 @@ class MainActivity : AppCompatActivity() {
             setBackgroundColor(azzurro)
             addView(pagine, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             addView(FrameLayout(this@MainActivity).apply { id = schedeId }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-            addView(sovraimpressione(barraPagine), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + ALZO_BARRA), Gravity.BOTTOM))
+            addView(sovraimpressione(barraPagine), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + ALZO_BARRA + SOMBRA_BARRA), Gravity.BOTTOM))
         })
 
         if (savedInstanceState == null) {
