@@ -72,7 +72,10 @@ class ListaActivity : AppCompatActivity() {
                 runCatching {
                     val c = Impostazioni(this@ListaActivity).client()
                     // grandezza della classe: serve a riconoscere le note di classe (uguali per quasi tutti gli alunni)
-                    if (cosa == "note") dimClasse = runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second).size }.getOrDefault(0)
+                    // le note arrivano con l'id dell'alunno: i nomi vengono dall'elenco studenti
+                    if (cosa == "note") runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second) }.getOrDefault(emptyList()).let { st ->
+                        dimClasse = st.size; nomi = st.associate { it.id to it.nome }
+                    }
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
                     else c.lezioniGrezze(f.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -30) }.time), f.format(oggi.time))
                 }
@@ -89,6 +92,7 @@ class ListaActivity : AppCompatActivity() {
     private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "")
     private var grezzo = ""
     private var dimClasse = 0
+    private var nomi: Map<String, String> = emptyMap()
     private var tutte: List<Voce> = emptyList()
     private var inClasse = true
     private var alunnoAperto: String? = null
@@ -115,10 +119,16 @@ class ListaActivity : AppCompatActivity() {
                         val daClasse = v.t("classId", "classroomId")
                         if (cosa == "lezioni" && daClasse.isNotEmpty() && daClasse != classeId) return
                         val chi = v.t("studentName", "authorName", "teacherName", "subjectDesc", "lessonType", "classDesc", "evtCode")
-                        val alunno = v.t("studentName", "fullName", "completeName").ifEmpty {
+                        // gli "appunto" (NTNT) sono le autorizzazioni di entrata/uscita: per ora esclusi
+                        if (cosa == "note" && v.t("evtCode") == "NTNT") return
+                        val sid = v.t("studentId", "student_id")
+                        val alunno = nomi[sid] ?: v.t("studentName", "fullName", "completeName").ifEmpty {
                             listOf(v.t("studentLastName", "lastName", "surname"), v.t("studentFirstName", "firstName", "name")).filter { it.isNotEmpty() }.joinToString(" ")
-                        }
-                        val tipoNota = v.t("noteTypeDesc", "noteType", "typeDesc", "evtDesc", "eventDesc", "kind", "evtCode")
+                        }.ifEmpty { sid }
+                        // tipo come lo chiama classeviva (nota insegnante, nota nel registro, richiamo…), con autore, materia e motivo
+                        val descrizione = v.t("noteTypeDesc", "noteType", "typeDesc", "evtDesc", "eventDesc", "kind", "evtCode").replaceFirstChar { it.uppercase() }
+                        val dettagli = listOf(v.t("warningType"), v.t("subjectDesc")).filter { it.isNotEmpty() }.joinToString(", ")
+                        val tipoNota = listOf(descrizione + if (dettagli.isNotEmpty()) " ($dettagli)" else "", v.t("authorName")).filter { it.isNotEmpty() }.joinToString(" · ")
                         out.add(Voce(data, listOf(v.t("subjectDesc"), chi).filter { it.isNotEmpty() }.distinct().joinToString(" · "), corpo, alunno, tipoNota))
                     } else for (k in v.keys()) cammina(v.opt(k), livello + 1)
                 }
@@ -171,7 +181,7 @@ class ListaActivity : AppCompatActivity() {
     private fun mostraNote() {
         lista.removeAllViews()
         val ctx = this
-        val soglia = maxOf(2, Math.ceil(dimClasse * 0.8).toInt())
+        val soglia = maxOf(3, Math.ceil(dimClasse * 0.6).toInt())
         // una nota di classe compare uguale (stessa data e testo) a quasi tutta la classe
         val gruppi = tutte.groupBy { it.data.take(10) + "|" + it.testo }
         val diClasse = gruppi.values.filter { g -> g.map { it.alunno }.distinct().size >= soglia }
