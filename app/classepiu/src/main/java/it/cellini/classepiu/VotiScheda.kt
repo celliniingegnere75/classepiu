@@ -116,7 +116,7 @@ class VotiScheda : Scheda() {
                             .filter { it.optString("dateStart").length >= 10 && !it.optBoolean("isFinal", false) }.sortedBy { it.optString("dateStart") }
                         periodi.firstOrNull()?.let {
                             primoGiorno.time = f.parse(it.optString("dateStart").take(10))!!
-                            Scuola.salva(requireContext(), primoGiorno) // le altre schede non vanno prima di questo giorno
+                            context?.let { c -> Scuola.salva(c, primoGiorno) } // le altre schede non vanno prima di questo giorno
                         }
                         // periodo in corso: quello che contiene oggi; fuori dalle date resta il più vicino già iniziato
                         val oggi = f.format(java.util.Date())
