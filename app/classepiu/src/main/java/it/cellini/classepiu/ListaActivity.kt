@@ -58,6 +58,7 @@ class ListaActivity : AppCompatActivity() {
             addView(barra)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
         })
+        onBackPressedDispatcher.addCallback(this, indietro)
         carica()
     }
 
@@ -70,6 +71,8 @@ class ListaActivity : AppCompatActivity() {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val c = Impostazioni(this@ListaActivity).client()
+                    // grandezza della classe: serve a riconoscere le note di classe (uguali per quasi tutti gli alunni)
+                    if (cosa == "note") dimClasse = runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second).size }.getOrDefault(0)
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
                     else c.lezioniGrezze(f.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -30) }.time), f.format(oggi.time))
                 }
@@ -79,12 +82,19 @@ class ListaActivity : AppCompatActivity() {
             grezzo = corpo
             val voci = leggiVoci(corpo)
             if (voci.isEmpty()) { testo(if (cosa == "note") "nessuna nota." else "nessuna lezione negli ultimi 30 giorni.", corpo); return@launch }
-            mostra(voci)
+            if (cosa == "note") { tutte = voci; mostraNote() } else mostra(voci)
         }
     }
 
     private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "")
     private var grezzo = ""
+    private var dimClasse = 0
+    private var tutte: List<Voce> = emptyList()
+    private var inClasse = true
+    private var alunnoAperto: String? = null
+    private val indietro = object : androidx.activity.OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() { alunnoAperto = null; isEnabled = false; mostraNote() }
+    }
 
     private fun leggiVoci(grezzo: String): List<Voce> {
         val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyList() }
@@ -123,43 +133,93 @@ class ListaActivity : AppCompatActivity() {
         return runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ITALIAN).format(SimpleDateFormat("yyyyMMdd", Locale.ITALIAN).parse(n)!!) }.getOrDefault(d)
     }
 
+    private fun voceView(v: Voce, conAlunno: Boolean, colore: Int) = LinearLayout(this).apply {
+        val ctx = context
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, dp(8), 0, dp(4))
+        if (v.tipo.isNotEmpty() && cosa == "note") addView(TextView(ctx).apply { text = v.tipo; textSize = 13f; setTextColor(0xFF777777.toInt()) })
+        addView(TextView(ctx).apply { text = formatta(v.data); textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore) })
+        if (!conAlunno && v.titolo.isNotEmpty()) addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); setPadding(0, dp(2), 0, 0) })
+        addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
+    }
+
+    private fun scatola() = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(16), dp(12), dp(16), dp(12))
+        background = GradientDrawable().apply { setColor(0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
+    }
+
+    private fun parametri() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) }
+
+    private fun copiaRisposta() = TextView(this).apply {
+        text = "copia la risposta di classeviva"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(8), dp(8), dp(12))
+        setOnClickListener {
+            getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", grezzo))
+            android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+    }
+
     private fun mostra(voci: List<Voce>) {
         lista.removeAllViews()
+        voci.forEach { v -> lista.addView(scatola().apply { addView(voceView(v, false, azzurro)) }, parametri()) }
+        lista.addView(copiaRisposta())
+    }
+
+    private val arancio = 0xFFF0A040.toInt()
+
+    /** Note: linguette "di classe" (note uguali per quasi tutti gli alunni, una volta sola) e "per alunno" (chi ha almeno una nota, anche di classe). */
+    private fun mostraNote() {
+        lista.removeAllViews()
         val ctx = this
-        val colore = if (cosa == "note") 0xFFF0A040.toInt() else azzurro
-        fun voce(v: Voce, conAlunno: Boolean) = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(0, dp(8), 0, dp(4))
-            if (v.tipo.isNotEmpty() && cosa == "note") addView(TextView(ctx).apply { text = v.tipo; textSize = 13f; setTextColor(0xFF777777.toInt()) })
-            addView(TextView(ctx).apply { text = formatta(v.data); textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore) })
-            if (!conAlunno && v.titolo.isNotEmpty()) addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); setPadding(0, dp(2), 0, 0) })
-            addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
-        }
-        fun scatola() = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(dp(16), dp(12), dp(16), dp(12))
-            background = GradientDrawable().apply { setColor(0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
-        }
-        val parametri = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) }
-        if (cosa == "note") {
-            // una casella per alunno, con le sue note una sotto l'altra
-            voci.groupBy { it.alunno }.toSortedMap().forEach { (alunno, sue) ->
-                val b = scatola()
-                if (alunno.isNotEmpty()) b.addView(TextView(ctx).apply { text = alunno; textSize = 18f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
-                sue.forEachIndexed { i, v ->
-                    if (i > 0) b.addView(android.view.View(ctx).apply { setBackgroundColor(0xFFDDDDDD.toInt()) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(6) })
-                    b.addView(voce(v, true))
-                }
-                lista.addView(b, parametri)
+        val soglia = maxOf(2, Math.ceil(dimClasse * 0.8).toInt())
+        // una nota di classe compare uguale (stessa data e testo) a quasi tutta la classe
+        val gruppi = tutte.groupBy { it.data.take(10) + "|" + it.testo }
+        val diClasse = gruppi.values.filter { g -> g.map { it.alunno }.distinct().size >= soglia }
+
+        val aperto = alunnoAperto
+        if (aperto != null) {
+            lista.addView(TextView(ctx).apply { text = aperto; textSize = 20f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); setPadding(dp(4), 0, 0, dp(10)) })
+            tutte.filter { it.alunno == aperto }.sortedByDescending { it.data }.forEach { v ->
+                lista.addView(scatola().apply { addView(voceView(v, true, arancio)) }, parametri())
             }
-        } else voci.forEach { v -> lista.addView(scatola().apply { addView(voce(v, false)) }, parametri) }
-        lista.addView(TextView(ctx).apply {
-            text = "copia la risposta di classeviva"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(8), dp(8), dp(12))
-            setOnClickListener {
-                getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", grezzo))
-                android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
+            lista.addView(copiaRisposta())
+            return
+        }
+
+        fun pillola(t: String, attiva: Boolean, azione: () -> Unit) = TextView(ctx).apply {
+            text = t; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+            setPadding(dp(8), 0, dp(8), 0)
+            background = GradientDrawable().apply { cornerRadius = dp(22).toFloat(); setColor(if (attiva) azzurro else 0xFFFFFFFF.toInt()) }
+            setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
+            setOnClickListener { azione() }
+        }
+        lista.addView(LinearLayout(ctx).apply {
+            addView(pillola("di classe", inClasse) { inClasse = true; mostraNote() }, LinearLayout.LayoutParams(0, dp(40), 1f).apply { rightMargin = dp(8) })
+            addView(pillola("per alunno", !inClasse) { inClasse = false; mostraNote() }, LinearLayout.LayoutParams(0, dp(40), 1f))
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
+
+        if (inClasse) {
+            if (diClasse.isEmpty()) lista.addView(TextView(ctx).apply { text = "nessuna nota di classe."; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(12), dp(8), 0) })
+            diClasse.map { it.first() }.sortedByDescending { it.data }.forEach { v ->
+                lista.addView(scatola().apply { addView(voceView(v, true, arancio)) }, parametri())
             }
-        })
+        } else {
+            val alunni = tutte.map { it.alunno }.filter { it.isNotEmpty() }.distinct().sorted()
+            if (alunni.isEmpty()) lista.addView(TextView(ctx).apply { text = "nessun alunno con note."; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(12), dp(8), 0) })
+            alunni.forEach { a ->
+                val n = tutte.count { it.alunno == a }
+                lista.addView(LinearLayout(ctx).apply {
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(16), dp(14), dp(16), dp(14))
+                    background = GradientDrawable().apply { setColor(0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
+                    addView(TextView(ctx).apply { text = a; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(TextView(ctx).apply { text = n.toString(); textSize = 14f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER
+                        background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(arancio) } }, LinearLayout.LayoutParams(dp(30), dp(30)))
+                    setOnClickListener { alunnoAperto = a; indietro.isEnabled = true; mostraNote() }
+                }, parametri())
+            }
+        }
+        lista.addView(copiaRisposta())
     }
 
     private fun testo(s: String, corpo: String = "") {
