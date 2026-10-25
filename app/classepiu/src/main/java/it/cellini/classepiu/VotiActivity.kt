@@ -3,7 +3,9 @@ package it.cellini.classepiu
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Bundle
+import android.util.TypedValue
 import android.view.Gravity
 import android.view.ViewGroup
 import android.widget.EditText
@@ -260,18 +262,22 @@ class VotiActivity : AppCompatActivity() {
             textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF333333.toInt()); setPadding(dp(8), dp(6), dp(2), dp(6))
             if (modificabile) { setOnClickListener { sceltaData() } }
         }
+        // tipo (scritto/grafico, orale, pratico): occupa lo spazio in mezzo tra voto e data
+        txtTipo = TextView(ctx).apply {
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setPadding(dp(8), dp(6), dp(8), dp(6))
+            setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END
+            // se il tipo è lungo il testo si rimpicciolisce fino a 11 sp, poi si tronca con i puntini
+            if (Build.VERSION.SDK_INT >= 26) setAutoSizeTextTypeUniformWithConfiguration(11, 16, 1, TypedValue.COMPLEX_UNIT_SP)
+            if (modificabile) { setOnClickListener { sceltaTipo() } }
+        }
         val riga1 = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(txtValore)
-            addView(txtMateria, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(txtTipo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(txtData)
         }
 
-        // riga 2: tipo (scritto/grafico, orale, pratico) e spunta "media"
-        txtTipo = TextView(ctx).apply {
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setPadding(dp(2), dp(6), dp(8), dp(6))
-            if (modificabile) { setOnClickListener { sceltaTipo() } }
-        }
+        // riga 2: materia e spunta "media" (spuntata = il voto fa media)
         val media = android.widget.CheckBox(ctx).apply {
             text = "media"; textSize = 15f; isChecked = mediaScelta; isEnabled = modificabile
             buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
@@ -279,7 +285,7 @@ class VotiActivity : AppCompatActivity() {
         }
         val riga2 = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(txtTipo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(txtMateria, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(media)
         }
 
