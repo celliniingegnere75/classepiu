@@ -30,6 +30,9 @@ class VotiActivity : AppCompatActivity() {
     private var primoGiorno: java.util.Calendar = java.util.Calendar.getInstance().apply { // se le lezioni non si leggono: 1 settembre
         val o = java.util.Calendar.getInstance(); set(if (o.get(java.util.Calendar.MONTH) >= java.util.Calendar.SEPTEMBER) o.get(java.util.Calendar.YEAR) else o.get(java.util.Calendar.YEAR) - 1, java.util.Calendar.SEPTEMBER, 1)
     }
+    /** Livello di voto della tabella di classeviva: codice, scritta mostrata e valore decimale. */
+    private class Livello(val codice: String, val scritta: String, val decimale: Double)
+    private var livelli: List<Livello> = emptyList()
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
     private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
@@ -76,14 +79,22 @@ class VotiActivity : AppCompatActivity() {
                     c.studentiGrezzi(tipo, classeId) to c.votiGrezzi(tipo, classeId)
                 }
             }
-            // primo giorno di scuola: la prima lezione registrata dall'inizio di settembre
+            // tabella dei voti ammessi e periodi (primo giorno di scuola = inizio del primo periodo)
             launch(Dispatchers.IO) {
                 runCatching {
-                    val f = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ITALIAN)
-                    val oggi = java.util.Calendar.getInstance()
-                    val (c, t) = Impostazioni(this@VotiActivity).client().lezioniGrezze(f.format(primoGiorno.time), f.format(oggi.time))
-                    if (c == 200) Regex("\"evtDate\"\\s*:\\s*\"(\\d{4})-(\\d{2})-(\\d{2})").findAll(t)
-                        .map { it.groupValues.drop(1).joinToString("") }.minOrNull()?.let { primoGiorno.time = f.parse(it)!! }
+                    val t = Impostazioni(this@VotiActivity).client().componentiPrimaMia(tipo, classeId) ?: return@runCatching
+                    val o = org.json.JSONObject(t)
+                    o.optJSONArray("levels")?.let { a ->
+                        livelli = (0 until a.length()).mapNotNull { i ->
+                            val l = a.optJSONObject(i) ?: return@mapNotNull null
+                            Livello(l.optString("levelCode"), l.optString("displayValue"), l.optDouble("decimalValue", Double.NaN))
+                        }.filter { it.scritta.isNotEmpty() }
+                    }
+                    val f = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
+                    o.optJSONArray("periods")?.let { a ->
+                        (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("dateStart")?.takeIf { d -> d.length >= 10 } }.minOrNull()
+                            ?.let { primoGiorno.time = f.parse(it.take(10))!! }
+                    }
                 }
             }
             val (st, vt) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
@@ -150,6 +161,7 @@ class VotiActivity : AppCompatActivity() {
 
     /** 5½ = 5,5; 5+ = 5,25; 6- = 5,75; i numeri semplici restano tali. */
     private fun numeroDa(v: String): Double? {
+        livelli.firstOrNull { it.scritta == v.trim() }?.let { return it.decimale.takeIf { d -> !d.isNaN() && d >= 0 } }
         val t = v.trim().replace(',', '.')
         t.toDoubleOrNull()?.let { return it }
         val base = t.trimEnd('+', '-', '½').toDoubleOrNull() ?: return null
@@ -192,7 +204,8 @@ class VotiActivity : AppCompatActivity() {
         val valore = TextView(ctx).apply {
             text = valoreScelto; textSize = 15f; setTextColor(Color.BLACK); setPadding(dp(4), dp(10), dp(4), dp(10))
             setOnClickListener {
-                val scelte = (1..10).flatMap { n -> listOf("$n-", "$n", "$n+", "$n½").filter { n < 10 || it == "10" || it == "10-" } }.drop(1)
+                // voti ammessi: la tabella di classeviva; se non si legge, una scala numerica di ripiego
+                val scelte = livelli.map { it.scritta }.ifEmpty { (1..10).flatMap { n -> listOf("$n-", "$n", "$n+", "$n½").filter { n < 10 || it == "10" || it == "10-" } }.drop(1) }
                 val voci = if (valoreScelto in scelte || valoreScelto.isEmpty()) scelte else listOf(valoreScelto) + scelte
                 MaterialAlertDialogBuilder(ctx).setTitle("voto")
                     .setItems(voci.toTypedArray()) { _, i -> valoreScelto = voci[i]; text = valoreScelto }
@@ -255,7 +268,7 @@ class VotiActivity : AppCompatActivity() {
     private fun salvaSuClasseviva(v: Voto, valore: String, data: String, nota: String) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, data, nota) } }
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, livelli.firstOrNull { it.scritta == valore }?.codice, livelli.firstOrNull { it.scritta == valore }?.decimale?.takeIf { !it.isNaN() }, data, nota) } }
             val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
                 ?: "non riuscito: ${r.exceptionOrNull()?.message}; resta sul telefono"
             android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()

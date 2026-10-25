@@ -237,15 +237,36 @@ class ClasseViva(private val utente: String, private val password: String) {
         return r.codice to r.testo
     }
 
+    /** Risposta di evaluations/components della prima materia del docente (livelli di voto, periodi, componenti), o null. */
+    fun componentiPrimaMia(tipo: String, classeId: String): String? {
+        if (token.isEmpty()) login()
+        val t = tipo.ifEmpty { "ordinary" }
+        val m = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
+        if (m.codice != 200) return null
+        val radice = try { org.json.JSONTokener(m.testo).nextValue() } catch (e: Exception) { return null }
+        val materie = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return null
+        for (i in 0 until materie.length()) {
+            val o = materie.optJSONObject(i) ?: continue
+            if (!o.optBoolean("isMine", false)) continue
+            val sid = o.opt("subjectId")?.toString() ?: continue
+            val r = http("GET", "$BASE/teachers/$id/evaluations/components/$t/$classeId/$sid")
+            if (r.codice == 200) return r.testo
+        }
+        return null
+    }
+
     /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
-    fun salvaVoto(grezzo: String, valore: String, data: String, nota: String): Pair<Int, String> {
+    fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, data: String, nota: String): Pair<Int, String> {
         if (token.isEmpty()) login()
         val o = JSONObject(grezzo)
-        val t = valore.trim().replace(',', '.')
-        val n = t.toDoubleOrNull() ?: t.trimEnd('+', '-', '½').toDoubleOrNull()?.plus(when (t.lastOrNull()) { '½' -> 0.5; '+' -> 0.25; '-' -> -0.25; else -> 0.0 })
+        // livello scelto dalla tabella di classeviva: si aggiornano i campi del voto che l'oggetto già contiene
         if (valore.isNotBlank()) {
             o.put("displayValue", valore.trim())
-            if (n != null) o.put("decimalValue", n)
+            if (decimale != null) o.put("decimalValue", decimale)
+            if (livelloCodice != null) {
+                if (o.has("levelCode")) o.put("levelCode", livelloCodice)
+                if (o.has("levelId")) o.put("levelId", "$livelloCodice:0")
+            }
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
