@@ -268,7 +268,7 @@ class RegistroFragment : Fragment() {
                 gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false // sigla lunga: va a capo come in classeviva (5AN_C / AA)
             }
             val tessera = FrameLayout(ctx).apply {
-                background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
+                background = GradientDrawable().apply { setColor(0xFFE6F0F7.toInt()); cornerRadius = ctx.dp(14).toFloat() }
                 addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }
             // casella alta (2/3): nome esteso della classe e materia, carattere piccolo; apre l'elenco dei ragazzi
