@@ -223,6 +223,13 @@ class ClasseViva(private val utente: String, private val password: String) {
         return r.codice to r.testo
     }
 
+    /** Lezioni della classe in un giorno (yyyyMMdd), con i docenti che le hanno firmate: risposta grezza. */
+    fun lezioniClasseGrezze(tipo: String, classeId: String, giorno: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val r = http("GET", "$BASE/teachers/$id/lessons2/students/${tipo.ifEmpty { "ordinary" }}/$classeId/$giorno")
+        return r.codice to r.testo
+    }
+
     /** Lezioni del docente nell'intervallo (yyyyMMdd), risposta grezza. */
     fun lezioniGrezze(da: String, a: String): Pair<Int, String> {
         if (token.isEmpty()) login()

@@ -27,6 +27,9 @@ class ListaActivity : AppCompatActivity() {
     private var cosa = ""
     private var tipo = ""
     private var classeId = ""
+    private var giorno: Calendar = Calendar.getInstance()
+    private lateinit var testata: LinearLayout
+    private lateinit var dataGiorno: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -53,9 +56,23 @@ class ListaActivity : AppCompatActivity() {
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
+        // lezioni: giorno con frecce per scorrere ai giorni prima e dopo
+        fun freccia(t: String, passo: Int) = TextView(ctx).apply {
+            text = t; textSize = 28f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            setOnClickListener { giorno.add(Calendar.DAY_OF_MONTH, passo); carica() }
+        }
+        dataGiorno = TextView(ctx).apply { textSize = 16f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setTypeface(typeface, Typeface.BOLD) }
+        testata = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            visibility = if (cosa == "lezioni") android.view.View.VISIBLE else android.view.View.GONE
+            addView(freccia("‹", -1), LinearLayout.LayoutParams(dp(56), dp(44)))
+            addView(dataGiorno, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(freccia("›", 1), LinearLayout.LayoutParams(dp(56), dp(44)))
+        }
         setContentView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
+            addView(testata)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
         })
         onBackPressedDispatcher.addCallback(this, indietro)
@@ -64,6 +81,7 @@ class ListaActivity : AppCompatActivity() {
 
     private fun carica() {
         testo("carico $cosa…")
+        dataGiorno.text = SimpleDateFormat("EEEE d MMMM yyyy", Locale.ITALIAN).format(giorno.time)
         val f = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
         val oggi = Calendar.getInstance()
         val inizio = Calendar.getInstance().apply { set(if (oggi.get(Calendar.MONTH) >= Calendar.SEPTEMBER) oggi.get(Calendar.YEAR) else oggi.get(Calendar.YEAR) - 1, Calendar.SEPTEMBER, 1) }
@@ -77,14 +95,14 @@ class ListaActivity : AppCompatActivity() {
                         dimClasse = st.size; nomi = st.associate { it.id to it.nome }
                     }
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
-                    else c.lezioniGrezze(f.format(Calendar.getInstance().apply { add(Calendar.DAY_OF_MONTH, -30) }.time), f.format(oggi.time))
+                    else c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time))
                 }
             }
             val (codice, corpo) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
             if (codice != 200) { testo("classeviva ha risposto con un errore (http $codice).", corpo); return@launch }
             grezzo = corpo
             val voci = leggiVoci(corpo)
-            if (voci.isEmpty()) { testo(if (cosa == "note") "nessuna nota." else "nessuna lezione negli ultimi 30 giorni.", corpo); return@launch }
+            if (voci.isEmpty()) { testo(if (cosa == "note") "nessuna nota." else "nessuna lezione in questo giorno.", corpo); return@launch }
             if (cosa == "note") { tutte = voci; mostraNote() } else mostra(voci)
         }
     }
@@ -114,6 +132,16 @@ class ListaActivity : AppCompatActivity() {
                 is JSONObject -> {
                     val data = v.t("evtDate", "date", "noteDate", "lessonDate", "day")
                     val corpo = v.t("evtText", "noteText", "text", "note", "notes", "lessonArg", "lessonDesc", "description")
+                    if (cosa == "lezioni") {
+                        // una lezione firmata: ora, materia, argomento e docente (campi dedotti)
+                        val materia = v.t("subjectDesc", "subjectName", "subject")
+                        val firma = v.t("authorName", "teacherName", "signedBy", "teacher")
+                        if (materia.isNotEmpty() && (corpo.isNotEmpty() || firma.isNotEmpty() || v.t("evtHPos", "hourPos", "evtHour").isNotEmpty())) {
+                            val ora = v.t("evtHPos", "hourPos", "evtHour", "hour")
+                            out.add(Voce(data.ifEmpty { "" }, (if (ora.isNotEmpty()) "${ora}ª ora · " else "") + materia, corpo.ifEmpty { "nessun argomento" }, "", if (firma.isNotEmpty()) "firmata da $firma" else ""))
+                        } else for (k in v.keys()) cammina(v.opt(k), livello + 1)
+                        return
+                    }
                     if (data.isNotEmpty() && corpo.isNotEmpty()) {
                         // la classe: nei dati del docente le lezioni di tutte le classi sono insieme
                         val daClasse = v.t("classId", "classroomId")
@@ -147,6 +175,12 @@ class ListaActivity : AppCompatActivity() {
         val ctx = context
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(8), 0, dp(4))
+        if (cosa == "lezioni") {
+            addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
+            if (v.tipo.isNotEmpty()) addView(TextView(ctx).apply { text = v.tipo; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore); setPadding(0, dp(2), 0, 0) })
+            addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
+            return@apply
+        }
         if (v.tipo.isNotEmpty() && cosa == "note") addView(TextView(ctx).apply { text = v.tipo; textSize = 13f; setTextColor(0xFF777777.toInt()) })
         addView(TextView(ctx).apply { text = formatta(v.data); textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore) })
         if (!conAlunno && v.titolo.isNotEmpty()) addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); setPadding(0, dp(2), 0, 0) })
