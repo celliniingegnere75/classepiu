@@ -338,6 +338,10 @@ class RegistroFragment : Fragment() {
             }
             h.tessera.setOnClickListener(apriStudenti)
             h.sopra.setOnClickListener(apriStudenti)
+            // in "tutte le classi" il tasto voti c'è solo per le classi in cui insegno (stesso id tra quelle di "le mie classi")
+            val idClasse = c.chiave.split("|", limit = 3).getOrElse(1) { "" }
+            val mia = mie || datiMie.any { it.chiave.split("|", limit = 3).getOrElse(1) { "" } == idClasse }
+            h.voti.visibility = if (mia) View.VISIBLE else View.GONE
             h.voti.setOnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 startActivity(android.content.Intent(requireContext(), VotiActivity::class.java)
