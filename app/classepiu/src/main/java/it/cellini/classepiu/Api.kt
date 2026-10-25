@@ -173,6 +173,28 @@ class ClasseViva(private val utente: String, private val password: String) {
         return r.codice to r.testo
     }
 
+    /**
+     * Voti della classe: il percorso REST dei docenti non è documentato, quindi si provano più indirizzi
+     * e si tiene il primo che risponde 200; se nessuno risponde, il testo riporta l'esito di ciascuno.
+     */
+    fun votiGrezzi(tipo: String, classeId: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val t = tipo.ifEmpty { "ordinary" }
+        val percorsi = listOf(
+            "teachers/$id/grades/list/$t/$classeId",
+            "teachers/$id/students/grades/$t/$classeId",
+            "teachers/$id/grades/$t/$classeId",
+            "teachers/$id/classes/$classeId/grades",
+        )
+        val esiti = StringBuilder()
+        for (p in percorsi) {
+            val r = runCatching { http("GET", "$BASE/$p") }.getOrNull() ?: continue
+            if (r.codice == 200) return 200 to r.testo
+            esiti.append("$p -> HTTP ${r.codice} ${r.testo.take(120)}\n")
+        }
+        return 404 to esiti.toString()
+    }
+
     /** Segna la circolare come letta (come quando la si apre sull'app). */
     fun segnaLetta(c: Circolare, aderisci: Boolean = false): Boolean {
         if (percorso.isEmpty()) bacheca()
@@ -428,3 +450,43 @@ fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
 
 /** Solo la sigla della classe: il testo prima del primo spazio ("4ETA ELETTRONICA" -> "4ETA"). */
 fun siglaClasse(nome: String): String = nome.trim().substringBefore(' ')
+
+/** Un voto di uno studente: tipo di prova (orale, scritto/grafico, test…), valore mostrato, data e annotazioni per la famiglia. */
+data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String)
+
+/** Voti per id studente dalla risposta di ClasseViva (campi dedotti, lettura tollerante, sia voti annidati nello studente sia elenco piatto). */
+fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
+    val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
+    val out = LinkedHashMap<String, MutableList<Voto>>()
+    fun JSONObject.t(vararg ks: String): String {
+        for (k in ks) { val v = opt(k); if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray && v.toString().isNotBlank()) return v.toString().trim() }
+        return ""
+    }
+    fun cammina(v: Any?, idStudente: String, livello: Int) {
+        if (livello > 6) return
+        when (v) {
+            is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), idStudente, livello + 1)
+            is JSONObject -> {
+                val valore = v.t("displayValue", "decimalValue", "grade", "value", "gradeValue")
+                val èVoto = valore.isNotEmpty() && v.opt("grades") == null
+                // un voto ha un proprio "id": per lo studente valgono solo i campi esplicitamente suoi
+                val propri = if (èVoto) v.t("studentId", "student_id", "pupilId") else idDi(v)
+                if (èVoto) {
+                    val sid = propri.ifEmpty { idStudente }
+                    if (sid.isNotEmpty()) {
+                        val tipo = v.t("componentDesc", "gradeTypeDesc", "typeDesc", "gradeType", "type", "kind", "component").ifEmpty { "voto" }
+                        val data = v.t("evtDate", "date", "gradeDate", "day")
+                        val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
+                        val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
+                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations")))
+                    }
+                } else {
+                    val sid = propri.ifEmpty { idStudente }
+                    for (k in v.keys()) cammina(v.opt(k), sid, livello + 1)
+                }
+            }
+        }
+    }
+    cammina(radice, "", 0)
+    return out
+}
