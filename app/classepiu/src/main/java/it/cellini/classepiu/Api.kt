@@ -288,7 +288,7 @@ class ClasseViva(private val utente: String, private val password: String) {
 
     /**
      * Tipi di lezione per la firma, come nella tendina dell'app ufficiale (_st/lessontypes e _st/sctelessontypes).
-     * La forma della risposta non è ancora nota: si cercano gli elenchi e i campi più probabili. [grezzo] serve da copiare.
+     * Risposta: {"lessontypes":[{"id":1,"usrCode":"Lezione"},...]} e {"sctelessontypes":[...]} (PCTO/FSL sicurezza, orientamento). [grezzo] serve da copiare.
      */
     fun tipiLezione(): Pair<List<TipoLezione>, String> {
         if (token.isEmpty()) login()
@@ -307,8 +307,9 @@ class ClasseViva(private val utente: String, private val password: String) {
             for (i in 0 until a.length()) {
                 val o = a.optJSONObject(i)
                 val tipo = if (o == null) a.optString(i).takeIf { it.isNotBlank() }?.let { TipoLezione(it, it) } else {
-                    val nome = o.t("lessonTypeDesc", "desc", "description", "lessonType", "name", "label", "title", "code")
-                    val codice = o.t("lessonTypeCode", "code", "lessonTypeId", "id").ifEmpty { nome }
+                    // forma vera: {"id": 1, "usrCode": "Lezione"}
+                    val nome = o.t("usrCode", "lessonTypeDesc", "desc", "description", "lessonType", "name", "code")
+                    val codice = o.t("id", "lessonTypeId", "lessonTypeCode", "code").ifEmpty { nome }
                     nome.takeIf { it.isNotEmpty() }?.let { TipoLezione(codice, it) }
                 }
                 if (tipo != null && tipo.nome !in tipi) tipi[tipo.nome] = tipo
