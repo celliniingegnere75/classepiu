@@ -185,9 +185,12 @@ class VotiActivity : AppCompatActivity() {
     }
 
     private fun chipVoto(v: Voto) = TextView(this).apply {
-        text = v.valore; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER
+        text = v.valore; textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding(dp(14), 0, dp(14), 0); minWidth = dp(46)
-        background = GradientDrawable().apply { setColor(coloreVoto(v.numero)); cornerRadius = dp(12).toFloat() }
+        val colore = coloreVoto(v.numero)
+        // i voti che non fanno media (peso 0) hanno il bordo e lo sfondo chiaro
+        if (v.faMedia) { setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(colore); cornerRadius = dp(12).toFloat() } }
+        else { setTextColor(colore); background = GradientDrawable().apply { setColor(0xFFFFFFFF.toInt()); setStroke(dp(2), colore); cornerRadius = dp(12).toFloat() } }
         setOnClickListener { apriVoto(v, v.autore.isEmpty() || mioId.isEmpty() || v.autore == mioId) }
     }
 
@@ -256,7 +259,7 @@ class VotiActivity : AppCompatActivity() {
         }
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(8))
-            addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
+            addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}" + if (v.faMedia) "" else "  ·  non fa media"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
             // voto a sinistra, data (senza etichetta) in alto a destra sulla stessa riga
             addView(etichetta("voto"))
             addView(LinearLayout(ctx).apply {

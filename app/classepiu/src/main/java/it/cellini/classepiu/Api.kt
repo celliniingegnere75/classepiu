@@ -271,6 +271,9 @@ class ClasseViva(private val utente: String, private val password: String) {
                 if (o.has("levelCode")) o.put("levelCode", livelloCodice)
                 if (o.has("levelId")) o.put("levelId", "$livelloCodice:0")
             }
+            // le sigle (i, s, m, ms, +, -, g…) non fanno media: peso 0; un voto numerico riprende peso 1 se prima era 0
+            val numerico = valore.trim().firstOrNull()?.isDigit() == true
+            if (!numerico) o.put("weightFactor", 0) else if (o.optDouble("weightFactor", 1.0) == 0.0) o.put("weightFactor", 1)
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
@@ -535,7 +538,7 @@ fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
 fun siglaClasse(nome: String): String = nome.trim().substringBefore(' ')
 
 /** Un voto di uno studente: tipo di prova (orale, scritto/grafico, test…), valore mostrato, data e annotazioni per la famiglia. */
-data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String, val grezzo: String = "", val materia: String = "", val autore: String = "")
+data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String, val grezzo: String = "", val materia: String = "", val autore: String = "", val faMedia: Boolean = true)
 
 /** Voti per id studente dalla risposta di ClasseViva (campi dedotti, lettura tollerante, sia voti annidati nello studente sia elenco piatto). */
 fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
@@ -557,12 +560,13 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
                 val propri = if (èVoto) v.t("studentId", "student_id", "pupilId") else idDi(v)
                 if (èVoto) {
                     val sid = propri.ifEmpty { idStudente }
-                    if (sid.isNotEmpty()) {
+                    // voti annullati (canceled) non si mostrano
+                    if (sid.isNotEmpty() && v.opt("canceled") != true) {
                         val tipo = v.t("componentDesc", "gradeTypeDesc", "typeDesc", "gradeType", "type", "kind", "component").ifEmpty { "voto" }
                         val data = v.t("evtDate", "date", "gradeDate", "day")
                         val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
                         val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
-                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString(), materiaCorrente.ifEmpty { v.t("subjectDesc") }, v.t("authorId", "teacherId", "teacher_id")))
+                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString(), materiaCorrente.ifEmpty { v.t("subjectDesc") }, v.t("authorId", "teacherId", "teacher_id"), v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true))
                     }
                 } else {
                     val sid = propri.ifEmpty { idStudente }
