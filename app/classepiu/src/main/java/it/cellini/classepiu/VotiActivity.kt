@@ -198,6 +198,7 @@ class VotiActivity : AppCompatActivity() {
     private fun modificato(v: Voto) = v.copy(
         valore = memoria.getString("${v.chiave}|valore", null) ?: v.valore,
         numero = numeroDa(memoria.getString("${v.chiave}|valore", null) ?: v.valore) ?: v.numero,
+        faMedia = memoria.getString("${v.chiave}|valore", null)?.let { it.trim().firstOrNull()?.isDigit() == true } ?: v.faMedia,
         data = memoria.getString("${v.chiave}|data", null) ?: v.data,
         nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
     )
