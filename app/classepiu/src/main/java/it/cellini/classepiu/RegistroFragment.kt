@@ -50,6 +50,8 @@ class RegistroFragment : Fragment() {
     private lateinit var dettagli: TextView
     private lateinit var schedaMie: TextView
     private lateinit var schedaTutte: TextView
+    private lateinit var lente: ImageView
+    private lateinit var campoCerca: EditText
     private val adattatore = Adattatore()
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -57,7 +59,7 @@ class RegistroFragment : Fragment() {
         val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
 
         // --- titolo e lente di ricerca
-        val campoCerca = EditText(ctx).apply {
+        campoCerca = EditText(ctx).apply {
             hint = "cerca una classe"
             setSingleLine(true)
             textSize = 17f
@@ -68,7 +70,7 @@ class RegistroFragment : Fragment() {
                 override fun afterTextChanged(s: Editable?) { cerca = s?.toString().orEmpty(); mostra() }
             })
         }
-        val lente = ImageView(ctx).apply {
+        lente = ImageView(ctx).apply {
             setImageResource(android.R.drawable.ic_menu_search)
             imageTintList = android.content.res.ColorStateList.valueOf(0xFF3F3F3F.toInt())
             setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(8))
@@ -168,6 +170,9 @@ class RegistroFragment : Fragment() {
         }
         stile(schedaMie, mie)
         stile(schedaTutte, !mie)
+        // la ricerca serve solo su "tutte le classi"
+        lente.visibility = if (mie) View.GONE else View.VISIBLE
+        if (mie) { campoCerca.visibility = View.GONE; campoCerca.setText("") }
     }
 
     private fun fileCache(mie: Boolean) = File(requireContext().filesDir, if (mie) "classi_mie.json" else "classi_tutte.json")

@@ -148,6 +148,14 @@ class VotiActivity : AppCompatActivity() {
         }
     }
 
+    /** 5½ = 5,5; 5+ = 5,25; 6- = 5,75; i numeri semplici restano tali. */
+    private fun numeroDa(v: String): Double? {
+        val t = v.trim().replace(',', '.')
+        t.toDoubleOrNull()?.let { return it }
+        val base = t.trimEnd('+', '-', '½').toDoubleOrNull() ?: return null
+        return base + when (t.last()) { '½' -> 0.5; '+' -> 0.25; '-' -> -0.25; else -> 0.0 }
+    }
+
     private fun colorePerRiga(g: String) = when (g) { "orale" -> 0xFF4CAF7D.toInt(); "scritto" -> azzurro; "pratico" -> 0xFF9B7FD4.toInt(); "test" -> 0xFFF0A040.toInt(); else -> 0xFF8E8E8E.toInt() }
 
     private fun coloreVoto(n: Double?) = when {
@@ -167,7 +175,7 @@ class VotiActivity : AppCompatActivity() {
     /** Data e annotazioni modificate a mano sono tenute sul telefono (non vengono scritte su classeviva). */
     private fun modificato(v: Voto) = v.copy(
         valore = memoria.getString("${v.chiave}|valore", null) ?: v.valore,
-        numero = (memoria.getString("${v.chiave}|valore", null) ?: v.valore).replace(',', '.').toDoubleOrNull(),
+        numero = numeroDa(memoria.getString("${v.chiave}|valore", null) ?: v.valore) ?: v.numero,
         data = memoria.getString("${v.chiave}|data", null) ?: v.data,
         nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
     )
@@ -179,7 +187,18 @@ class VotiActivity : AppCompatActivity() {
             if (righe > 1) { minLines = righe; gravity = Gravity.TOP; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
         }
         fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(2)) }
-        val valore = campo(v.valore, "voto", 1)
+        // voto scelto da elenco, come sul registro: 5, 5+, 5½, 6- (il mezzo punto si scrive ½, il 5,75 è 6-)
+        var valoreScelto = v.valore
+        val valore = TextView(ctx).apply {
+            text = valoreScelto; textSize = 15f; setTextColor(Color.BLACK); setPadding(dp(4), dp(10), dp(4), dp(10))
+            setOnClickListener {
+                val scelte = (1..10).flatMap { n -> listOf("$n-", "$n", "$n+", "$n½").filter { n < 10 || it == "10" || it == "10-" } }.drop(1)
+                val voci = if (valoreScelto in scelte || valoreScelto.isEmpty()) scelte else listOf(valoreScelto) + scelte
+                MaterialAlertDialogBuilder(ctx).setTitle("voto")
+                    .setItems(voci.toTypedArray()) { _, i -> valoreScelto = voci[i]; text = valoreScelto }
+                    .show()
+            }
+        }
         val fIt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALIAN)
         val fApi = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
         var scelta: java.util.Date? = runCatching { fApi.parse(v.data.take(10)) }.getOrNull()
@@ -209,8 +228,8 @@ class VotiActivity : AppCompatActivity() {
             .setNegativeButton("annulla", null)
             .setPositiveButton("salva") { _, _ ->
                 val dataApi = scelta?.let { fApi.format(it) } ?: v.data
-                salvaSuClasseviva(v, valore.text.toString(), dataApi, nota.text.toString())
-                memoria.edit().putString("${v.chiave}|valore", valore.text.toString()).putString("${v.chiave}|data", dataApi).putString("${v.chiave}|nota", nota.text.toString()).apply()
+                salvaSuClasseviva(v, valoreScelto, dataApi, nota.text.toString())
+                memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|data", dataApi).putString("${v.chiave}|nota", nota.text.toString()).apply()
                 mostra(elenco, tutti)
             }
             .show()

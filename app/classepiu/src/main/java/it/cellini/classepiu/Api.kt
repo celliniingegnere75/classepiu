@@ -234,7 +234,8 @@ class ClasseViva(private val utente: String, private val password: String) {
     fun salvaVoto(grezzo: String, valore: String, data: String, nota: String): Pair<Int, String> {
         if (token.isEmpty()) login()
         val o = JSONObject(grezzo)
-        val n = valore.trim().replace(',', '.').toDoubleOrNull()
+        val t = valore.trim().replace(',', '.')
+        val n = t.toDoubleOrNull() ?: t.trimEnd('+', '-', '½').toDoubleOrNull()?.plus(when (t.lastOrNull()) { '½' -> 0.5; '+' -> 0.25; '-' -> -0.25; else -> 0.0 })
         if (valore.isNotBlank()) {
             o.put("displayValue", valore.trim())
             if (n != null) o.put("decimalValue", n)
