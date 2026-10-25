@@ -174,25 +174,26 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     /**
-     * Voti della classe: il percorso REST dei docenti non è documentato, quindi si provano più indirizzi
-     * e si tiene il primo che risponde 200; se nessuno risponde, il testo riporta l'esito di ciascuno.
+     * Voti della classe, come l'app ufficiale Classeviva Docenti: elenco materie (subjects/list) e per ciascuna
+     * evaluations/grades2/{tipo}/{classe}/{materia}. Le risposte delle materie leggibili vengono riunite in un solo array JSON.
      */
     fun votiGrezzi(tipo: String, classeId: String): Pair<Int, String> {
         if (token.isEmpty()) login()
         val t = tipo.ifEmpty { "ordinary" }
-        val percorsi = listOf(
-            "teachers/$id/grades/list/$t/$classeId",
-            "teachers/$id/students/grades/$t/$classeId",
-            "teachers/$id/grades/$t/$classeId",
-            "teachers/$id/classes/$classeId/grades",
-        )
+        val m = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
+        if (m.codice != 200) return m.codice to "subjects/list -> ${m.testo.take(300)}"
+        val radice = try { org.json.JSONTokener(m.testo).nextValue() } catch (e: Exception) { return 500 to "subjects/list non leggibile: ${m.testo.take(300)}" }
+        val materie = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return 404 to "nessuna materia: ${m.testo.take(300)}"
+        val unite = JSONArray()
         val esiti = StringBuilder()
-        for (p in percorsi) {
-            val r = runCatching { http("GET", "$BASE/$p") }.getOrNull() ?: continue
-            if (r.codice == 200) return 200 to r.testo
-            esiti.append("$p -> HTTP ${r.codice} ${r.testo.take(120)}\n")
+        for (i in 0 until materie.length()) {
+            val o = materie.optJSONObject(i) ?: continue
+            val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString() } ?: continue
+            val r = http("GET", "$BASE/teachers/$id/evaluations/grades2/$t/$classeId/$sid")
+            if (r.codice == 200) unite.put(try { org.json.JSONTokener(r.testo).nextValue() } catch (e: Exception) { continue })
+            else esiti.append("materia $sid -> HTTP ${r.codice} ${r.testo.take(120)}\n")
         }
-        return 404 to esiti.toString()
+        return if (unite.length() > 0) 200 to unite.toString() else 404 to esiti.toString().ifEmpty { "nessuna materia con voti" }
     }
 
     /** Segna la circolare come letta (come quando la si apre sull'app). */
