@@ -340,7 +340,12 @@ class RegistroFragment : Fragment() {
                     .putExtra("nome", c.nome))
             }
             for ((t, cosa) in listOf(h.lezioni to "lezioni", h.note to "note")) {
-                t.setOnClickListener { android.widget.Toast.makeText(requireContext(), "$cosa ${c.nome}: in arrivo", android.widget.Toast.LENGTH_SHORT).show() }
+                t.setOnClickListener {
+                    val p = c.chiave.split("|", limit = 3)
+                    startActivity(android.content.Intent(requireContext(), ListaActivity::class.java)
+                        .putExtra("cosa", cosa).putExtra("tipo", p.getOrElse(0) { "" }).putExtra("id", p.getOrElse(1) { "" })
+                        .putExtra("nome", c.nome))
+                }
             }
         }
     }

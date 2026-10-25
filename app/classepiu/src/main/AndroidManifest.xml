@@ -32,6 +32,7 @@
 
         <activity android:name=".StudentiActivity" android:exported="false" />
         <activity android:name=".VotiActivity" android:exported="false" />
+        <activity android:name=".ListaActivity" android:exported="false" />
         <activity android:name=".WebActivity" android:exported="false" android:parentActivityName=".MainActivity" />
 
         <activity

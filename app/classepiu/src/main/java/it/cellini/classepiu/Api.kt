@@ -196,6 +196,30 @@ class ClasseViva(private val utente: String, private val password: String) {
         return if (unite.length() > 0) 200 to unite.toString() else 404 to esiti.toString().ifEmpty { "nessuna materia con voti" }
     }
 
+    /** Note disciplinari della classe nell'intervallo (yyyyMMdd), risposta grezza. */
+    fun noteGrezze(tipo: String, classeId: String, da: String, a: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val r = http("GET", "$BASE/teachers/$id/notes/range/${tipo.ifEmpty { "ordinary" }}/$classeId/$da/$a")
+        return r.codice to r.testo
+    }
+
+    /** Lezioni del docente nell'intervallo (yyyyMMdd), risposta grezza. */
+    fun lezioniGrezze(da: String, a: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val r = http("GET", "$BASE/teachers/$id/lessons/mine/$da/$a")
+        return r.codice to r.testo
+    }
+
+    /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
+    fun salvaVoto(grezzo: String, data: String, nota: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val o = JSONObject(grezzo)
+        if (data.isNotBlank()) o.put("evtDate", data)
+        o.put("notesForFamily", nota)
+        val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", o)
+        return r.codice to r.testo
+    }
+
     /** Segna la circolare come letta (come quando la si apre sull'app). */
     fun segnaLetta(c: Circolare, aderisci: Boolean = false): Boolean {
         if (percorso.isEmpty()) bacheca()
@@ -453,7 +477,7 @@ fun leggiInsegnamenti(grezzo: String): List<Insegnamento> {
 fun siglaClasse(nome: String): String = nome.trim().substringBefore(' ')
 
 /** Un voto di uno studente: tipo di prova (orale, scritto/grafico, test…), valore mostrato, data e annotazioni per la famiglia. */
-data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String)
+data class Voto(val chiave: String, val studente: String, val tipo: String, val valore: String, val numero: Double?, val data: String, val nota: String, val grezzo: String = "", val materia: String = "")
 
 /** Voti per id studente dalla risposta di ClasseViva (campi dedotti, lettura tollerante, sia voti annidati nello studente sia elenco piatto). */
 fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
@@ -479,7 +503,7 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
                         val data = v.t("evtDate", "date", "gradeDate", "day")
                         val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
                         val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
-                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations")))
+                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString()))
                     }
                 } else {
                     val sid = propri.ifEmpty { idStudente }

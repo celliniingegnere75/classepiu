@@ -158,10 +158,22 @@ class VotiActivity : AppCompatActivity() {
             .setView(corpo)
             .setNegativeButton("annulla", null)
             .setPositiveButton("salva") { _, _ ->
+                salvaSuClasseviva(v, data.text.toString(), nota.text.toString())
                 memoria.edit().putString("${v.chiave}|data", data.text.toString()).putString("${v.chiave}|nota", nota.text.toString()).apply()
                 mostra(elenco, tutti)
             }
             .show()
+    }
+
+    /** Prova a scrivere la modifica su classeviva; se non riesce resta salvata sul telefono e lo si dice. */
+    private fun salvaSuClasseviva(v: Voto, data: String, nota: String) {
+        if (v.grezzo.isEmpty()) return
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, data, nota) } }
+            val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
+                ?: "non riuscito: ${r.exceptionOrNull()?.message}; resta sul telefono"
+            android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+        }
     }
 
     private fun testo(s: String, corpo: String = "") {
