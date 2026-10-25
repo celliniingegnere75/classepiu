@@ -34,6 +34,7 @@ class VotiActivity : AppCompatActivity() {
     private class Livello(val codice: String, val scritta: String, val decimale: Double)
     private var livelli: List<Livello> = emptyList()
     private var rispostaVoti = ""
+    private var materiaScelta = ""
     private var elenco: List<Studente> = emptyList()
     private var tutti: Map<String, List<Voto>> = emptyMap()
     private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
@@ -110,8 +111,24 @@ class VotiActivity : AppCompatActivity() {
         }
     }
 
-    private fun mostra(studenti: List<Studente>, voti: Map<String, List<Voto>>) {
+    private fun mostra(studenti: List<Studente>, tuttiVoti: Map<String, List<Voto>>) {
         lista.removeAllViews()
+        // una linguetta per materia (ed. civica separata dalle altre), se i voti arrivano da più materie
+        val materie = tuttiVoti.values.flatten().map { it.materia }.filter { it.isNotEmpty() }.distinct().sorted()
+        if (materiaScelta !in materie) materiaScelta = materie.firstOrNull() ?: ""
+        val voti = if (materie.size > 1) tuttiVoti.mapValues { (_, l) -> l.filter { it.materia == materiaScelta } } else tuttiVoti
+        if (materie.size > 1) lista.addView(LinearLayout(this).apply {
+            materie.forEachIndexed { i, m ->
+                val attiva = m == materiaScelta
+                addView(TextView(context).apply {
+                    text = m.lowercase(); textSize = 13f; gravity = Gravity.CENTER; setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END
+                    setPadding(dp(8), 0, dp(8), 0)
+                    background = GradientDrawable().apply { cornerRadius = dp(20).toFloat(); setColor(if (attiva) azzurro else 0xFFFFFFFF.toInt()) }
+                    setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
+                    setOnClickListener { materiaScelta = m; mostra(elenco, tutti) }
+                }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { if (i > 0) leftMargin = dp(8) })
+            }
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(12) })
         lista.addView(TextView(this).apply {
             text = "copia la risposta dei voti"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
             setOnClickListener {

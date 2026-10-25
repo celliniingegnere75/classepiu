@@ -192,7 +192,8 @@ class ClasseViva(private val utente: String, private val password: String) {
             if (ceMia && !o.optBoolean("isMine", false)) continue // solo i voti delle materie del docente
             val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString() } ?: continue
             val r = http("GET", "$BASE/teachers/$id/evaluations/grades2/$t/$classeId/$sid")
-            if (r.codice == 200) unite.put(try { org.json.JSONTokener(r.testo).nextValue() } catch (e: Exception) { continue })
+            // ogni risposta porta con sé la materia, così i voti si possono separare (es. educazione civica)
+            if (r.codice == 200) unite.put(JSONObject().put("subjectId", sid).put("subjectDesc", o.optString("subjectDesc")).put("data", try { org.json.JSONTokener(r.testo).nextValue() } catch (e: Exception) { continue }))
             else esiti.append("materia $sid -> HTTP ${r.codice} ${r.testo.take(120)}\n")
         }
         return if (unite.length() > 0) 200 to unite.toString() else 404 to esiti.toString().ifEmpty { "nessuna materia con voti" }
@@ -541,6 +542,7 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
         for (k in ks) { val v = opt(k); if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray && v.toString().isNotBlank()) return v.toString().trim() }
         return ""
     }
+    var materiaCorrente = ""
     fun cammina(v: Any?, idStudente: String, livello: Int) {
         if (livello > 6) return
         when (v) {
@@ -557,7 +559,7 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
                         val data = v.t("evtDate", "date", "gradeDate", "day")
                         val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
                         val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
-                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString()))
+                        out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString(), materiaCorrente.ifEmpty { v.t("subjectDesc") }))
                     }
                 } else {
                     val sid = propri.ifEmpty { idStudente }
@@ -566,6 +568,12 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
             }
         }
     }
-    cammina(radice, "", 0)
+    if (radice is JSONArray && (0 until radice.length()).all { radice.optJSONObject(it)?.has("data") == true && radice.optJSONObject(it)?.has("subjectId") == true }) {
+        for (i in 0 until radice.length()) {
+            val w = radice.getJSONObject(i)
+            materiaCorrente = w.optString("subjectDesc")
+            cammina(w.opt("data"), "", 0)
+        }
+    } else cammina(radice, "", 0)
     return out
 }
