@@ -32,7 +32,7 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
             setColor(ContextCompat.getColor(ctx, R.color.grigio_barra))
             cornerRadius = ctx.dp(33).toFloat()
         }
-        elevation = ctx.dp(3).toFloat()
+        elevation = ctx.dp(9).toFloat() // ombra più marcata: la barra sta sopra le pagine e le schede che scorrono
         setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
         // la barra prende i tocchi: non passano alla lista che le scorre sotto
         isClickable = true
