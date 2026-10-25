@@ -331,6 +331,8 @@ class ClasseViva(private val utente: String, private val password: String) {
         val o = JSONObject(grezzo)
         o.remove("studentStatus")
         o.put("lessonArg", argomento)
+        // classeviva risponde 412 "missing evtNumH": è il numero di ore della firma, che nella lezione letta si chiama evtDuration
+        if (!o.has("evtNumH")) o.put("evtNumH", o.optInt("evtDuration", 1))
         if (tipo != null) {
             // il nome va in lessonType; il codice nei campi che la lezione ha già (non si sa ancora quale usa classeviva)
             o.put("lessonType", tipo.nome)
