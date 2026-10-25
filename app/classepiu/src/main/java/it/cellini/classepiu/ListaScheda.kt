@@ -190,7 +190,7 @@ class ListaScheda : Scheda() {
     private fun scatola(mia: Boolean? = null) = LinearLayout(requireContext()).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(12), dp(16), dp(12))
-        background = GradientDrawable().apply { setColor(when (mia) { true -> 0xFFFFFFFF.toInt(); false -> 0xFFF0F0F0.toInt(); null -> 0xFFFCFCFC.toInt() }); cornerRadius = dp(16).toFloat() }
+        background = GradientDrawable().apply { setColor(when (mia) { true -> 0xFFFFFFFF.toInt(); false -> 0xFFF7F7F7.toInt(); null -> 0xFFFCFCFC.toInt() }); cornerRadius = dp(16).toFloat() }
     }
 
     private fun parametri() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) }
