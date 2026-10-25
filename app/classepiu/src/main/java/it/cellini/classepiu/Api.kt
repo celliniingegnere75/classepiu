@@ -186,8 +186,10 @@ class ClasseViva(private val utente: String, private val password: String) {
         val materie = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return 404 to "nessuna materia: ${m.testo.take(300)}"
         val unite = JSONArray()
         val esiti = StringBuilder()
+        val ceMia = (0 until materie.length()).any { materie.optJSONObject(it)?.optBoolean("isMine", false) == true }
         for (i in 0 until materie.length()) {
             val o = materie.optJSONObject(i) ?: continue
+            if (ceMia && !o.optBoolean("isMine", false)) continue // solo i voti delle materie del docente
             val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString() } ?: continue
             val r = http("GET", "$BASE/teachers/$id/evaluations/grades2/$t/$classeId/$sid")
             if (r.codice == 200) unite.put(try { org.json.JSONTokener(r.testo).nextValue() } catch (e: Exception) { continue })
@@ -204,8 +206,9 @@ class ClasseViva(private val utente: String, private val password: String) {
         val sb = StringBuilder("subjects/list HTTP ${m.codice}\n${m.testo.take(3000)}\n")
         val radice = try { org.json.JSONTokener(m.testo).nextValue() } catch (e: Exception) { return sb.toString() }
         val materie = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return sb.toString()
-        for (i in 0 until minOf(materie.length(), 3)) {
+        for (i in 0 until materie.length()) {
             val o = materie.optJSONObject(i) ?: continue
+            if (!o.optBoolean("isMine", false)) continue // le componenti esistono solo per le materie del docente (le altre: 404 "wrong subject-id")
             val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString() } ?: continue
             val r = http("GET", "$BASE/teachers/$id/evaluations/components/$t/$classeId/$sid")
             sb.append("\ncomponents/$sid HTTP ${r.codice}\n${r.testo.take(12000)}\n")
