@@ -194,102 +194,180 @@ class VotiActivity : AppCompatActivity() {
         setOnClickListener { apriVoto(v, v.autore.isEmpty() || mioId.isEmpty() || v.autore == mioId) }
     }
 
-    /** Data e annotazioni modificate a mano sono tenute sul telefono (non vengono scritte su classeviva). */
-    private fun modificato(v: Voto) = v.copy(
-        valore = memoria.getString("${v.chiave}|valore", null) ?: v.valore,
-        numero = numeroDa(memoria.getString("${v.chiave}|valore", null) ?: v.valore) ?: v.numero,
-        faMedia = memoria.getString("${v.chiave}|valore", null)?.let { it.trim().firstOrNull()?.isDigit() == true } ?: v.faMedia,
-        data = memoria.getString("${v.chiave}|data", null) ?: v.data,
-        nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
-    )
+    /** Valore, tipo, media, data e annotazioni modificati a mano restano sul telefono finché non si riescono a scrivere su classeviva. */
+    private fun modificato(v: Voto): Voto {
+        val valore = memoria.getString("${v.chiave}|valore", null) ?: v.valore
+        return v.copy(
+            valore = valore,
+            numero = numeroDa(valore) ?: v.numero,
+            tipo = memoria.getString("${v.chiave}|tipo", null) ?: v.tipo,
+            faMedia = memoria.getString("${v.chiave}|media", null)?.toBooleanStrictOrNull() ?: v.faMedia,
+            data = memoria.getString("${v.chiave}|data", null) ?: v.data,
+            nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
+        )
+    }
 
     private fun apriVoto(v: Voto, modificabile: Boolean) {
         val ctx = this
-        fun campo(valore: String, suggerimento: String, righe: Int) = EditText(ctx).apply {
-            setText(valore); hint = suggerimento; textSize = 15f
-            if (righe > 1) { minLines = righe; gravity = Gravity.TOP; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
-        }
-        fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(14), 0, dp(4)) }
-        // voto scelto da elenco, come sul registro: 5, 5+, 5½, 6- (il mezzo punto si scrive ½, il 5,75 è 6-)
-        var valoreScelto = v.valore
-        val valore = TextView(ctx).apply {
-            text = valoreScelto; textSize = 15f; setTextColor(Color.BLACK); setPadding(dp(4), dp(10), dp(4), dp(10))
-            setOnClickListener {
-                // voti ammessi: la tabella di classeviva; se non si legge, una scala numerica di ripiego
-                val scelte = livelli.map { it.scritta }.ifEmpty { (1..10).flatMap { n -> listOf("$n-", "$n", "$n+", "$n½").filter { n < 10 || it == "10" || it == "10-" } }.drop(1) }
-                val voci = if (valoreScelto in scelte || valoreScelto.isEmpty()) scelte else listOf(valoreScelto) + scelte
-                MaterialAlertDialogBuilder(ctx).setTitle("voto")
-                    .setItems(voci.toTypedArray()) { _, i -> valoreScelto = voci[i]; text = valoreScelto }
-                    .show()
-            }
-        }
         val fIt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALIAN)
         val fApi = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
+        val tipi = listOf("scritto/grafico", "orale", "pratico")
+        var valoreScelto = v.valore
+        var tipoScelto = v.tipo.lowercase()
+        var mediaScelta = v.faMedia
         var scelta: java.util.Date? = runCatching { fApi.parse(v.data.take(10)) }.getOrNull()
-        val data = TextView(ctx).apply {
-            text = scelta?.let { fIt.format(it) } ?: "scegli la data"; textSize = 15f; setTextColor(Color.BLACK)
-            setPadding(dp(4), dp(10), dp(4), dp(10))
-            setOnClickListener {
-                val c = java.util.Calendar.getInstance().apply { time = scelta ?: java.util.Date() }
-                val d = android.app.DatePickerDialog(ctx, { _, a, m, g ->
-                    scelta = java.util.Calendar.getInstance().apply { set(a, m, g) }.time
-                    text = fIt.format(scelta!!)
-                }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH))
-                d.datePicker.minDate = primoGiorno.timeInMillis // non prima del primo giorno di scuola
-                d.show()
+        lateinit var finestra: androidx.appcompat.app.AlertDialog
+        lateinit var txtValore: TextView
+        lateinit var txtTipo: TextView
+        lateinit var txtData: TextView
+
+        fun testoModificabile(t: String) = if (modificabile) "$t ▾" else t
+        fun aggiornaValore() { txtValore.text = testoModificabile(valoreScelto); txtValore.setTextColor(coloreVoto(numeroDa(valoreScelto))) }
+        fun aggiornaTipo() { txtTipo.text = testoModificabile(tipoScelto); txtTipo.setTextColor(colorePerRiga(if (tipoScelto.contains("scritt")) "scritto" else tipoScelto)) }
+        fun aggiornaData() { txtData.text = scelta?.let { fIt.format(it) } ?: "data" }
+        fun sceltaValore() {
+            // voti ammessi: la tabella di classeviva; se non si legge, una scala numerica di ripiego
+            val voci = livelli.map { it.scritta }.ifEmpty { (1..10).flatMap { n -> listOf("$n-", "$n", "$n+", "$n½").filter { n < 10 || it == "10" || it == "10-" } }.drop(1) }
+            MaterialAlertDialogBuilder(ctx).setTitle("voto")
+                .setItems(voci.toTypedArray()) { _, i -> valoreScelto = voci[i]; aggiornaValore() }
+                .show()
+        }
+        fun sceltaTipo() {
+            MaterialAlertDialogBuilder(ctx).setTitle("tipo")
+                .setItems(tipi.toTypedArray()) { _, i -> tipoScelto = tipi[i]; aggiornaTipo() }
+                .show()
+        }
+        fun sceltaData() {
+            val c = java.util.Calendar.getInstance().apply { time = scelta ?: java.util.Date() }
+            android.app.DatePickerDialog(ctx, { _, a, m, g ->
+                scelta = java.util.Calendar.getInstance().apply { set(a, m, g) }.time
+                aggiornaData()
+            }, c.get(java.util.Calendar.YEAR), c.get(java.util.Calendar.MONTH), c.get(java.util.Calendar.DAY_OF_MONTH)).apply {
+                datePicker.minDate = primoGiorno.timeInMillis // non prima del primo giorno di scuola
+            }.show()
+        }
+
+        // riga 1: voto - materia - data
+        txtValore = TextView(ctx).apply {
+            textSize = 22f; setTypeface(typeface, Typeface.BOLD); setPadding(dp(2), dp(6), dp(8), dp(6))
+            if (modificabile) { setOnClickListener { sceltaValore() } }
+        }
+        val txtMateria = TextView(ctx).apply {
+            text = v.materia.lowercase(); textSize = 14f; setTextColor(0xFF555555.toInt()); setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(8), dp(6), dp(8), dp(6))
+        }
+        txtData = TextView(ctx).apply {
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF333333.toInt()); setPadding(dp(8), dp(6), dp(2), dp(6))
+            if (modificabile) { setOnClickListener { sceltaData() } }
+        }
+        val riga1 = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(txtValore)
+            addView(txtMateria, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(txtData)
+        }
+
+        // riga 2: tipo (scritto/grafico, orale, pratico) e spunta "media"
+        txtTipo = TextView(ctx).apply {
+            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setPadding(dp(2), dp(6), dp(8), dp(6))
+            if (modificabile) { setOnClickListener { sceltaTipo() } }
+        }
+        val media = android.widget.CheckBox(ctx).apply {
+            text = "media"; textSize = 15f; isChecked = mediaScelta; isEnabled = modificabile
+            buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
+            setOnCheckedChangeListener { _, c -> mediaScelta = c }
+        }
+        val riga2 = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(txtTipo, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(media)
+        }
+
+        // riga 3: cancella (solo sui propri voti)
+        val cancella = TextView(ctx).apply {
+            text = "cancella"; textSize = 14f; setTextColor(0xFFE53935.toInt()); setPadding(dp(2), dp(8), dp(12), dp(8))
+            if (modificabile) {
+                setOnClickListener {
+                    MaterialAlertDialogBuilder(ctx).setMessage("cancellare questo voto da classeviva?")
+                        .setNegativeButton("no", null)
+                        .setPositiveButton("cancella") { _, _ -> finestra.dismiss(); cancellaSuClasseviva(v) }
+                        .show()
+                }
+            } else {
+                visibility = android.view.View.GONE
             }
         }
-        val nota = campo(v.nota, "", 3) // l'etichetta sopra basta: niente testo d'esempio
-        lateinit var finestra: androidx.appcompat.app.AlertDialog
-        fun pulsante(t: String, azione: () -> Unit) = TextView(ctx).apply {
+        val riga3 = LinearLayout(ctx).apply { addView(cancella) }
+
+        // annotazioni: etichetta quasi attaccata al campo di testo
+        val etichetta = TextView(ctx).apply { text = "annotazioni per la famiglia"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, 0) }
+        val nota = EditText(ctx).apply {
+            setText(v.nota); textSize = 15f; minLines = 3; gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            setPadding(dp(4), dp(2), dp(4), dp(4)); isEnabled = modificabile
+        }
+
+        fun bottone(t: String, azione: () -> Unit) = TextView(ctx).apply {
             text = t; textSize = 15f; setTypeface(typeface, Typeface.BOLD); setTextColor(azzurro); setPadding(dp(8), dp(12), dp(8), dp(12))
             setOnClickListener { azione() }
         }
         // annulla all'estremo sinistro, salva all'estremo destro della finestra
         val pulsanti = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(pulsante(if (modificabile) "annulla" else "chiudi") { finestra.dismiss() })
+            addView(bottone(if (modificabile) "annulla" else "chiudi") { finestra.dismiss() })
             addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
-            if (modificabile) addView(pulsante("salva") {
-                val dataApi = scelta?.let { fApi.format(it) } ?: v.data
-                salvaSuClasseviva(v, valoreScelto, dataApi, nota.text.toString())
-                memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|data", dataApi).putString("${v.chiave}|nota", nota.text.toString()).apply()
-                mostra(elenco, tutti)
-                finestra.dismiss()
-            })
+            if (modificabile) {
+                addView(bottone("salva") {
+                    val dataApi = scelta?.let { fApi.format(it) } ?: v.data
+                    salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, nota.text.toString())
+                    memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|tipo", tipoScelto)
+                        .putString("${v.chiave}|media", mediaScelta.toString()).putString("${v.chiave}|data", dataApi)
+                        .putString("${v.chiave}|nota", nota.text.toString()).apply()
+                    mostra(elenco, tutti)
+                    finestra.dismiss()
+                })
+            }
         }
+
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(8))
-            addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}" + if (v.faMedia) "" else "  ·  non fa media"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
-            // voto a sinistra, data (senza etichetta) in alto a destra sulla stessa riga
-            addView(etichetta("voto"))
-            addView(LinearLayout(ctx).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                addView(valore, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-                addView(data.apply { gravity = Gravity.END; setTypeface(typeface, Typeface.BOLD) }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            })
-            addView(etichetta("annotazioni per la famiglia")); addView(nota)
-            addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(16) })
+            addView(riga1); addView(riga2); addView(riga3)
+            if (!modificabile) {
+                addView(TextView(ctx).apply { text = "prof. " + v.docente.ifEmpty { "altro docente" }; textSize = 13f; setTextColor(0xFF777777.toInt()); setPadding(dp(2), dp(8), 0, 0) })
+            }
+            addView(etichetta); addView(nota)
+            addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
         }
-        if (!modificabile) {
-            // voto di un altro docente: solo in lettura
-            valore.setOnClickListener(null); valore.isClickable = false
-            data.setOnClickListener(null); data.isClickable = false
-            nota.isEnabled = false
-            corpo.addView(TextView(ctx).apply { text = "prof. " + v.docente.ifEmpty { "altro docente" }; textSize = 12f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(8), 0, 0) }, 1)
-        }
+        aggiornaValore(); aggiornaTipo(); aggiornaData()
         finestra = MaterialAlertDialogBuilder(ctx).setView(corpo).create()
         finestra.show()
     }
 
     /** Prova a scrivere la modifica su classeviva; se non riesce resta salvata sul telefono e lo si dice. */
-    private fun salvaSuClasseviva(v: Voto, valore: String, data: String, nota: String) {
+    private fun salvaSuClasseviva(v: Voto, valore: String, tipo: String, media: Boolean, data: String, nota: String) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, livelli.firstOrNull { it.scritta == valore }?.codice, livelli.firstOrNull { it.scritta == valore }?.decimale?.takeIf { !it.isNaN() }, data, nota) } }
+            val livello = livelli.firstOrNull { it.scritta == valore }
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() }, tipo, media, data, nota)
+                }
+            }
             val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
                 ?: "non riuscito: ${r.exceptionOrNull()?.message}; resta sul telefono"
             android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /** Cancella il voto su classeviva e ricarica l'elenco se ci riesce. */
+    private fun cancellaSuClasseviva(v: Voto) {
+        if (v.grezzo.isEmpty()) return
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().cancellaVoto(v.grezzo) } }
+            val codice = r.getOrNull()?.first ?: 0
+            val msg = if (codice in 200..299) "voto cancellato" else "non cancellato (http $codice): ${r.getOrNull()?.second?.take(80) ?: r.exceptionOrNull()?.message}"
+            android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+            if (codice in 200..299) carica()
         }
     }
 

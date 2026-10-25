@@ -260,21 +260,29 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
-    fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, data: String, nota: String): Pair<Int, String> {
+    fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String): Pair<Int, String> {
         if (token.isEmpty()) login()
         val o = JSONObject(grezzo)
-        // livello scelto dalla tabella di classeviva: si aggiornano i campi del voto che l'oggetto già contiene
+        // valore e livello scelti dalla tabella di classeviva; "non fa media" è decimalValue assente
         if (valore.isNotBlank()) {
             o.put("displayValue", valore.trim())
-            if (decimale != null) o.put("decimalValue", decimale)
             if (livelloCodice != null) {
                 if (o.has("levelCode")) o.put("levelCode", livelloCodice)
                 if (o.has("levelId")) o.put("levelId", "$livelloCodice:0")
             }
         }
+        if (!media) o.put("decimalValue", JSONObject.NULL) else if (decimale != null) o.put("decimalValue", decimale)
+        componentiTipo[tipo]?.let { (desc, pos) -> o.put("componentDesc", desc); o.put("componentPos", pos) }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", o)
+        return r.codice to r.testo
+    }
+
+    /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
+    fun cancellaVoto(grezzo: String): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", JSONObject(grezzo))
         return r.codice to r.testo
     }
 
@@ -425,6 +433,9 @@ fun leggiStato(grezzo: String): Map<String, Int> {
     for (id in senzaCodice) m[id] = if (giornoDiLezione) 0 else -1
     return m
 }
+
+/** Componenti dei voti: tipo della pagina -> nome e posizione come li dà classeviva. */
+private val componentiTipo = mapOf("scritto/grafico" to ("Scritto/Grafico" to 1), "orale" to ("Orale" to 2), "pratico" to ("Pratico" to 3))
 
 /** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */
 data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String)
