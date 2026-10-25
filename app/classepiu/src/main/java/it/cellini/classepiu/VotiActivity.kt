@@ -193,7 +193,8 @@ class VotiActivity : AppCompatActivity() {
         // i voti che non fanno media (peso 0) hanno il bordo e lo sfondo chiaro
         if (v.faMedia) { setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(colore); cornerRadius = dp(12).toFloat() } }
         else { setTextColor(colore); background = GradientDrawable().apply { setColor(0xFFFFFFFF.toInt()); setStroke(dp(2), colore); cornerRadius = dp(12).toFloat() } }
-        setOnClickListener { apriVoto(v, v.autore.isEmpty() || mioId.isEmpty() || v.autore == mioId) }
+        // modificabile solo se l'ha inserito il docente che guarda (io); se non si sa chi l'ha inserito, sola lettura
+        setOnClickListener { apriVoto(v, mioId.isNotEmpty() && v.autore == mioId) }
     }
 
     /** Valore, tipo, media, data e annotazioni modificati a mano restano sul telefono finché non si riescono a scrivere su classeviva. */
