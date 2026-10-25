@@ -248,7 +248,10 @@ class RegistroFragment : Fragment() {
     private inner class Adattatore : RecyclerView.Adapter<Adattatore.VH>() {
         var dati: List<Classe> = emptyList()
 
-        inner class VH(val box: View, val nome: TextView, val descrizione: TextView, val codice: TextView) : RecyclerView.ViewHolder(box)
+        inner class VH(
+            val box: View, val tessera: View, val sopra: View, val nome: TextView, val descrizione: TextView, val codice: TextView,
+            val voti: TextView, val lezioni: TextView, val note: TextView
+        ) : RecyclerView.ViewHolder(box)
 
         override fun getItemCount() = dati.size
 
@@ -263,12 +266,41 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(14).toFloat() }
                 addView(nome, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             }
-            val descrizione = TextView(ctx).apply { textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF4E4E4E.toInt()) }
-            val codice = TextView(ctx).apply { textSize = 12.8f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(4), 0, 0) }
-            val testi = LinearLayout(ctx).apply {
+            // casella alta (2/3): nome esteso della classe e materia, carattere piccolo; apre l'elenco dei ragazzi
+            val descrizione = TextView(ctx).apply {
+                textSize = 11.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF4E4E4E.toInt())
+                maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
+            }
+            val codice = TextView(ctx).apply {
+                textSize = 10.5f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(2), 0, 0)
+                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
+            }
+            val sopra = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
+                setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
+                background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(10).toFloat() }
                 addView(descrizione); addView(codice)
+            }
+            // casella bassa (1/3): voti, lezioni, note con colori diversi
+            fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
+                text = testo; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+                gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
+                background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
+            }
+            val voti = tasto("voti", 0xFF4CAF7D.toInt())
+            val lezioni = tasto("lezioni", celeste)
+            val note = tasto("note", 0xFFF0A040.toInt())
+            val sotto = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                listOf(voti, lezioni, note).forEachIndexed { i, t ->
+                    addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { if (i > 0) leftMargin = ctx.dp(6) })
+                }
+            }
+            val testi = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 2f))
+                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = ctx.dp(6) })
             }
             val riga = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -278,12 +310,12 @@ class RegistroFragment : Fragment() {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(18).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
                 addView(tessera, LinearLayout.LayoutParams(ctx.dp(100), ctx.dp(80)))
-                addView(testi, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f).apply { leftMargin = ctx.dp(14) })
+                addView(testi, LinearLayout.LayoutParams(0, ctx.dp(80), 1f).apply { leftMargin = ctx.dp(14) })
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, ctx.dp(6), 0, ctx.dp(6))
                 }
             }
-            return VH(riga, nome, descrizione, codice)
+            return VH(riga, tessera, sopra, nome, descrizione, codice, voti, lezioni, note)
         }
 
         override fun onBindViewHolder(h: VH, pos: Int) {
@@ -293,11 +325,16 @@ class RegistroFragment : Fragment() {
             h.descrizione.visibility = View.VISIBLE
             h.codice.text = c.codice
             h.codice.visibility = if (c.codice.isEmpty()) View.GONE else View.VISIBLE
-            h.box.setOnClickListener {
+            val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 startActivity(android.content.Intent(requireContext(), StudentiActivity::class.java)
                     .putExtra("tipo", p.getOrElse(0) { "" }).putExtra("id", p.getOrElse(1) { "" })
                     .putExtra("nome", c.nome).putExtra("descrizione", c.descrizione))
+            }
+            h.tessera.setOnClickListener(apriStudenti)
+            h.sopra.setOnClickListener(apriStudenti)
+            for ((t, cosa) in listOf(h.voti to "voti", h.lezioni to "lezioni", h.note to "note")) {
+                t.setOnClickListener { android.widget.Toast.makeText(requireContext(), "$cosa ${c.nome}: in arrivo", android.widget.Toast.LENGTH_SHORT).show() }
             }
         }
     }
