@@ -146,7 +146,7 @@ class VotiActivity : AppCompatActivity() {
     }
 
     private fun aggiornaTitolo() {
-        val t = android.text.SpannableString("voti $nomeClasse  $quadrimestre")
+        val t = android.text.SpannableString(if (quadrimestre.isEmpty()) "voti $nomeClasse" else "voti $nomeClasse - $quadrimestre")
         // il quadrimestre più piccolo, accanto al nome della classe
         if (quadrimestre.isNotEmpty()) t.setSpan(android.text.style.RelativeSizeSpan(0.65f), t.length - quadrimestre.length, t.length, 0)
         titolo.text = t
