@@ -135,6 +135,8 @@ class VotiActivity : AppCompatActivity() {
 
     /** Data e annotazioni modificate a mano sono tenute sul telefono (non vengono scritte su classeviva). */
     private fun modificato(v: Voto) = v.copy(
+        valore = memoria.getString("${v.chiave}|valore", null) ?: v.valore,
+        numero = (memoria.getString("${v.chiave}|valore", null) ?: v.valore).replace(',', '.').toDoubleOrNull(),
         data = memoria.getString("${v.chiave}|data", null) ?: v.data,
         nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
     )
@@ -146,11 +148,13 @@ class VotiActivity : AppCompatActivity() {
             if (righe > 1) { minLines = righe; gravity = Gravity.TOP; inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE }
         }
         fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(2)) }
+        val valore = campo(v.valore, "voto", 1)
         val data = campo(v.data, "data", 1)
         val nota = campo(v.nota, "annotazioni per la famiglia", 3)
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(8), dp(22), 0)
             addView(TextView(ctx).apply { text = "${v.valore}  ·  ${v.tipo.lowercase()}"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(coloreVoto(v.numero)) })
+            addView(etichetta("voto")); addView(valore)
             addView(etichetta("data")); addView(data)
             addView(etichetta("annotazioni per la famiglia")); addView(nota)
         }
@@ -158,18 +162,18 @@ class VotiActivity : AppCompatActivity() {
             .setView(corpo)
             .setNegativeButton("annulla", null)
             .setPositiveButton("salva") { _, _ ->
-                salvaSuClasseviva(v, data.text.toString(), nota.text.toString())
-                memoria.edit().putString("${v.chiave}|data", data.text.toString()).putString("${v.chiave}|nota", nota.text.toString()).apply()
+                salvaSuClasseviva(v, valore.text.toString(), data.text.toString(), nota.text.toString())
+                memoria.edit().putString("${v.chiave}|valore", valore.text.toString()).putString("${v.chiave}|data", data.text.toString()).putString("${v.chiave}|nota", nota.text.toString()).apply()
                 mostra(elenco, tutti)
             }
             .show()
     }
 
     /** Prova a scrivere la modifica su classeviva; se non riesce resta salvata sul telefono e lo si dice. */
-    private fun salvaSuClasseviva(v: Voto, data: String, nota: String) {
+    private fun salvaSuClasseviva(v: Voto, valore: String, data: String, nota: String) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, data, nota) } }
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, data, nota) } }
             val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
                 ?: "non riuscito: ${r.exceptionOrNull()?.message}; resta sul telefono"
             android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()

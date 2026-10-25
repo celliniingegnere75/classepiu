@@ -211,9 +211,14 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
-    fun salvaVoto(grezzo: String, data: String, nota: String): Pair<Int, String> {
+    fun salvaVoto(grezzo: String, valore: String, data: String, nota: String): Pair<Int, String> {
         if (token.isEmpty()) login()
         val o = JSONObject(grezzo)
+        val n = valore.trim().replace(',', '.').toDoubleOrNull()
+        if (valore.isNotBlank()) {
+            o.put("displayValue", valore.trim())
+            if (n != null) o.put("decimalValue", n)
+        }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", o)
