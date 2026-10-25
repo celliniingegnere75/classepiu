@@ -357,7 +357,7 @@ class VotiActivity : AppCompatActivity() {
             val livello = livelli.firstOrNull { it.scritta == valore }
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() }, tipo, media, data, nota)
+                    Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota)
                 }
             }
             val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
