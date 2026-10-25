@@ -30,15 +30,7 @@
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
 
-        <activity android:name=".StudentiActivity" android:exported="false" />
-        <activity android:name=".VotiActivity" android:exported="false" />
-        <activity android:name=".ListaActivity" android:exported="false" />
         <activity android:name=".WebActivity" android:exported="false" android:parentActivityName=".MainActivity" />
-
-        <activity
-            android:name=".DettaglioActivity"
-            android:exported="false"
-            android:parentActivityName=".MainActivity" />
 
         <provider
             android:name="androidx.core.content.FileProvider"

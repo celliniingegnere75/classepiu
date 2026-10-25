@@ -13,7 +13,6 @@ import android.widget.HorizontalScrollView
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
@@ -24,7 +23,7 @@ import kotlinx.coroutines.withContext
  * Voti della classe: per ogni alunno una casella con le righe orale, scritto/grafico, test (solo quelle che hanno voti).
  * I voti scorrono in orizzontale; toccandone uno si apre data e annotazioni per la famiglia, modificabili.
  */
-class VotiActivity : AppCompatActivity() {
+class VotiScheda : Scheda() {
     private val azzurro = 0xFF69BCE8.toInt()
     private lateinit var lista: LinearLayout
     private var tipo = ""
@@ -45,15 +44,13 @@ class VotiActivity : AppCompatActivity() {
     /** Materia della linguetta aperta e linguette disegnate (materia, vista). */
     private var materiaScelta = ""
     private var schede: List<Pair<String, TextView>> = emptyList()
-    private val memoria by lazy { getSharedPreferences("voti_modificati", MODE_PRIVATE) }
+    private val memoria by lazy { requireContext().getSharedPreferences("voti_modificati", android.content.Context.MODE_PRIVATE) }
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        window.statusBarColor = azzurro
+    override fun crea(savedInstanceState: Bundle?) {
         val nome = intent.getStringExtra("nome") ?: ""
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
-        val ctx = this
+        val ctx = requireContext()
 
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         nomeClasse = nome
@@ -82,11 +79,11 @@ class VotiActivity : AppCompatActivity() {
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
-        conBarra(LinearLayout(ctx).apply {
+        setContentView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = dp(10) })
-        }, MainActivity.TAB_REGISTRO)
+        })
         carica()
     }
 
@@ -95,7 +92,7 @@ class VotiActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val c = Impostazioni(this@VotiActivity).client()
+                    val c = Impostazioni(requireContext()).client()
                     mioId = c.idDocente()
                     c.studentiGrezzi(tipo, classeId) to c.votiGrezzi(tipo, classeId)
                 }
@@ -103,7 +100,7 @@ class VotiActivity : AppCompatActivity() {
             // tabella dei voti ammessi e periodi (primo giorno di scuola = inizio del primo periodo)
             launch(Dispatchers.IO) {
                 runCatching {
-                    val t = Impostazioni(this@VotiActivity).client().componentiPrimaMia(tipo, classeId) ?: return@runCatching
+                    val t = Impostazioni(requireContext()).client().componentiPrimaMia(tipo, classeId) ?: return@runCatching
                     val o = org.json.JSONObject(t)
                     o.optJSONArray("levels")?.let { a ->
                         livelli = (0 until a.length()).mapNotNull { i ->
@@ -167,7 +164,7 @@ class VotiActivity : AppCompatActivity() {
         // due linguette riempiono lo schermo; dalla terza in poi si scorre e la terza si vede appena
         val larga = ((resources.displayMetrics.widthPixels - dp(28)) / 2.3).toInt()
         schede = materie.map { m ->
-            val t = TextView(this).apply {
+            val t = TextView(requireContext()).apply {
                 text = m.lowercase(); textSize = 14f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
                 setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(12), 0, dp(12), 0)
                 setOnClickListener { materiaScelta = m; coloraLinguette(); mostra(elenco, tutti) }
@@ -190,7 +187,7 @@ class VotiActivity : AppCompatActivity() {
     private fun mostra(studenti: List<Studente>, tuttiVoti: Map<String, List<Voto>>) {
         lista.removeAllViews()
         val voti = tuttiVoti
-        val ctx = this
+        val ctx = requireContext()
         // righe sempre in questo ordine; altri tipi di prova (es. pratico) seguono con il proprio nome
         fun gruppo(t: String) = when {
             t.lowercase().contains("oral") -> "orale"
@@ -252,7 +249,7 @@ class VotiActivity : AppCompatActivity() {
         else -> 0xFF2EB82E.toInt()
     }
 
-    private fun chipVoto(v: Voto) = TextView(this).apply {
+    private fun chipVoto(v: Voto) = TextView(requireContext()).apply {
         text = v.valore; textSize = 16f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
         setPadding(dp(14), 0, dp(14), 0); minWidth = dp(46)
         val colore = coloreVoto(v.numero)
@@ -277,7 +274,7 @@ class VotiActivity : AppCompatActivity() {
     }
 
     private fun apriVoto(v: Voto, modificabile: Boolean) {
-        val ctx = this
+        val ctx = requireContext()
         val fIt = java.text.SimpleDateFormat("dd/MM/yyyy", java.util.Locale.ITALIAN)
         val fApi = java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.ITALIAN)
         val tipi = listOf("scritto/grafico", "orale", "pratico")
@@ -431,12 +428,12 @@ class VotiActivity : AppCompatActivity() {
             val livello = livelli.firstOrNull { it.scritta == valore }
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    Impostazioni(this@VotiActivity).client().salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota)
+                    Impostazioni(requireContext()).client().salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota)
                 }
             }
             val msg = r.getOrNull()?.let { (c, t) -> if (c in 200..299) "salvato su classeviva" else "classeviva non ha accettato (http $c): ${t.take(80)}; resta sul telefono" }
                 ?: "non riuscito: ${r.exceptionOrNull()?.message}; resta sul telefono"
-            android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_LONG).show()
         }
     }
 
@@ -444,21 +441,21 @@ class VotiActivity : AppCompatActivity() {
     private fun cancellaSuClasseviva(v: Voto) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@VotiActivity).client().cancellaVoto(v.grezzo) } }
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(requireContext()).client().cancellaVoto(v.grezzo) } }
             val codice = r.getOrNull()?.first ?: 0
             val msg = if (codice in 200..299) "voto cancellato" else "non cancellato (http $codice): ${r.getOrNull()?.second?.take(80) ?: r.exceptionOrNull()?.message}"
-            android.widget.Toast.makeText(this@VotiActivity, msg, android.widget.Toast.LENGTH_LONG).show()
+            android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_LONG).show()
             if (codice in 200..299) carica()
         }
     }
 
     private fun testo(s: String, corpo: String = "") {
         lista.removeAllViews()
-        lista.addView(TextView(this).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
-        if (corpo.isNotEmpty()) lista.addView(TextView(this).apply {
+        lista.addView(TextView(requireContext()).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
+        if (corpo.isNotEmpty()) lista.addView(TextView(requireContext()).apply {
             text = "mostra la risposta di classeviva (tocca per copiare)"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(12), dp(8), dp(12))
             setOnClickListener {
-                getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", corpo))
+                requireContext().getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", corpo))
                 android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
             }
         })

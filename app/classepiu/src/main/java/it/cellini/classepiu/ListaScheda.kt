@@ -9,7 +9,6 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -21,7 +20,7 @@ import java.util.Calendar
 import java.util.Locale
 
 /** Note o lezioni di una classe, dal giorno 1 settembre dell'anno scolastico a oggi, dalla più recente. Campi dedotti, lettura tollerante. */
-class ListaActivity : AppCompatActivity() {
+class ListaScheda : Scheda() {
     private val azzurro = 0xFF69BCE8.toInt()
     private lateinit var lista: LinearLayout
     private var cosa = ""
@@ -32,14 +31,12 @@ class ListaActivity : AppCompatActivity() {
     private val giorno: Calendar get() = striscia?.selezionato ?: Calendar.getInstance()
     private var mioId = ""
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        window.statusBarColor = azzurro
+    override fun crea(savedInstanceState: Bundle?) {
         cosa = intent.getStringExtra("cosa") ?: "note"
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         val nome = intent.getStringExtra("nome") ?: ""
-        val ctx = this
+        val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
             text = "$cosa $nome"; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE); gravity = Gravity.CENTER
@@ -58,13 +55,13 @@ class ListaActivity : AppCompatActivity() {
             clipToOutline = true
         }
         if (cosa == "lezioni") striscia = StrisciaGiorni(ctx) { carica() }
-        conBarra(LinearLayout(ctx).apply {
+        setContentView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
-            striscia?.aggiungiA(this)
+            striscia?.aggiungiA(requireContext())
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { if (striscia == null) topMargin = dp(10) })
-        }, MainActivity.TAB_REGISTRO)
-        onBackPressedDispatcher.addCallback(this, indietro)
+        })
+        requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, indietro)
         carica()
     }
 
@@ -76,7 +73,7 @@ class ListaActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val c = Impostazioni(this@ListaActivity).client()
+                    val c = Impostazioni(requireContext()).client()
                     mioId = c.idDocente()
                     // grandezza della classe: serve a riconoscere le note di classe (uguali per quasi tutti gli alunni)
                     // le note arrivano con l'id dell'alunno: i nomi vengono dall'elenco studenti
@@ -168,7 +165,7 @@ class ListaActivity : AppCompatActivity() {
         return runCatching { SimpleDateFormat("dd/MM/yyyy", Locale.ITALIAN).format(SimpleDateFormat("yyyyMMdd", Locale.ITALIAN).parse(n)!!) }.getOrDefault(d)
     }
 
-    private fun voceView(v: Voce, conAlunno: Boolean, colore: Int) = LinearLayout(this).apply {
+    private fun voceView(v: Voce, conAlunno: Boolean, colore: Int) = LinearLayout(requireContext()).apply {
         val ctx = context
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(8), 0, dp(4))
@@ -189,7 +186,7 @@ class ListaActivity : AppCompatActivity() {
         addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
     }
 
-    private fun scatola() = LinearLayout(this).apply {
+    private fun scatola() = LinearLayout(requireContext()).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(12), dp(16), dp(12))
         background = GradientDrawable().apply { setColor(0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
@@ -197,10 +194,10 @@ class ListaActivity : AppCompatActivity() {
 
     private fun parametri() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) }
 
-    private fun copiaRisposta() = TextView(this).apply {
+    private fun copiaRisposta() = TextView(requireContext()).apply {
         text = "copia la risposta di classeviva"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(8), dp(8), dp(12))
         setOnClickListener {
-            getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", grezzo))
+            requireContext().getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", grezzo))
             android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
         }
     }
@@ -216,7 +213,7 @@ class ListaActivity : AppCompatActivity() {
     /** Note: linguette "di classe" (note uguali per quasi tutti gli alunni, una volta sola) e "per alunno" (chi ha almeno una nota, anche di classe). */
     private fun mostraNote() {
         lista.removeAllViews()
-        val ctx = this
+        val ctx = requireContext()
         val soglia = maxOf(3, Math.ceil(dimClasse * 0.6).toInt())
         // una nota di classe compare uguale (stessa data e testo) a quasi tutta la classe
         val gruppi = tutte.groupBy { it.data.take(10) + "|" + it.testo }
@@ -270,7 +267,7 @@ class ListaActivity : AppCompatActivity() {
 
     /** Finestra per cambiare l'argomento della mia lezione; salva subito su classeviva e ricarica il giorno. */
     private fun modificaFirma(v: Voce) {
-        val ctx = this
+        val ctx = requireContext()
         val argomento = android.widget.EditText(ctx).apply {
             setText(if (v.testo == "nessun argomento") "" else v.testo); textSize = 15f; minLines = 3; gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
@@ -297,7 +294,7 @@ class ListaActivity : AppCompatActivity() {
                             .setMessage("classeviva non ha accettato la modifica (http $codice).")
                             .setNegativeButton("chiudi", null)
                             .setPositiveButton("copia la risposta") { _, _ ->
-                                getSystemService(android.content.ClipboardManager::class.java)
+                                requireContext().getSystemService(android.content.ClipboardManager::class.java)
                                     .setPrimaryClip(android.content.ClipData.newPlainText("risposta", "HTTP $codice\n$risposta\n\ninviato:\n${v.grezzo}"))
                             }.show()
                     }
@@ -307,11 +304,11 @@ class ListaActivity : AppCompatActivity() {
 
     private fun testo(s: String, corpo: String = "") {
         lista.removeAllViews()
-        lista.addView(TextView(this).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
-        if (corpo.isNotEmpty()) lista.addView(TextView(this).apply {
+        lista.addView(TextView(requireContext()).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
+        if (corpo.isNotEmpty()) lista.addView(TextView(requireContext()).apply {
             text = "mostra la risposta di classeviva (tocca per copiare)"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(12), dp(8), dp(12))
             setOnClickListener {
-                getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", corpo))
+                requireContext().getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", corpo))
                 android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
             }
         })

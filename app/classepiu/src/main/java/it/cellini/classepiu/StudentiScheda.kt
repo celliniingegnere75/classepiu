@@ -10,7 +10,6 @@ import android.view.ViewGroup
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
-import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,7 +20,7 @@ import java.util.Calendar
 import java.util.Locale
 
 /** Elenco degli studenti di una classe nel formato ClasseViva con i colori di classePiù, con presenze per giorno. */
-class StudentiActivity : AppCompatActivity() {
+class StudentiScheda : Scheda() {
     private val azzurro = 0xFF69BCE8.toInt()
     private lateinit var lista: LinearLayout
     private lateinit var striscia: StrisciaGiorni
@@ -32,13 +31,11 @@ class StudentiActivity : AppCompatActivity() {
     private var classeId = ""
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        window.statusBarColor = azzurro
+    override fun crea(savedInstanceState: Bundle?) {
         val nome = intent.getStringExtra("nome") ?: ""
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
-        val ctx = this
+        val ctx = requireContext()
 
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
@@ -64,12 +61,12 @@ class StudentiActivity : AppCompatActivity() {
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
         }
-        conBarra(LinearLayout(ctx).apply {
+        setContentView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
-            striscia.aggiungiA(this)
+            striscia.aggiungiA(requireContext())
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        }, MainActivity.TAB_REGISTRO)
+        })
         carica()
     }
 
@@ -77,7 +74,7 @@ class StudentiActivity : AppCompatActivity() {
     private fun carica() {
         testo("carico gli studenti…")
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@StudentiActivity).client().studentiGrezzi(tipo, classeId) } }
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(requireContext()).client().studentiGrezzi(tipo, classeId) } }
             val (codice, corpo) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
             studenti = if (codice == 200) leggiStudenti(corpo) else emptyList()
             if (studenti.isEmpty()) {
@@ -93,7 +90,7 @@ class StudentiActivity : AppCompatActivity() {
         lavoro?.cancel()
         val giorno = formatoApi.format(selezionato.time)
         lavoro = lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(this@StudentiActivity).client().statoGrezzo(tipo, classeId, giorno) } }
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(requireContext()).client().statoGrezzo(tipo, classeId, giorno) } }
             val stato = r.getOrNull()?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap()
             mostra(stato, caricamento = false, grezzo = r.getOrNull())
         }
@@ -101,7 +98,7 @@ class StudentiActivity : AppCompatActivity() {
 
     private fun mostra(stato: Map<String, Int>, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
-        val ctx = this
+        val ctx = requireContext()
         studenti.forEach { s ->
             val colore = when {
                 caricamento -> Color.TRANSPARENT                                  // in attesa dei dati: nessun pallino, niente grigio provvisorio
@@ -127,15 +124,15 @@ class StudentiActivity : AppCompatActivity() {
 
     private fun testo(s: String, codice: Int = 0, corpo: String = "") {
         lista.removeAllViews()
-        lista.addView(TextView(this).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
+        lista.addView(TextView(requireContext()).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
         if (corpo.isNotEmpty()) copiaRisposta("mostra la risposta di classeviva (tocca per copiare)", codice, corpo)
     }
 
     private fun copiaRisposta(etichetta: String, codice: Int, corpo: String) {
-        lista.addView(TextView(this).apply {
+        lista.addView(TextView(requireContext()).apply {
             text = etichetta; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(12), dp(8), dp(12))
             setOnClickListener {
-                val cm = getSystemService(android.content.ClipboardManager::class.java)
+                val cm = requireContext().getSystemService(android.content.ClipboardManager::class.java)
                 cm.setPrimaryClip(android.content.ClipData.newPlainText("risposta", "HTTP $codice\n$corpo"))
                 android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
             }

@@ -10,7 +10,6 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import androidx.core.text.HtmlCompat
@@ -23,33 +22,32 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-class DettaglioActivity : AppCompatActivity() {
+class DettaglioScheda : Scheda() {
 
     private lateinit var c: Circolare
 
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
+    override fun crea(savedInstanceState: Bundle?) {
         c = circolareDa(JSONObject(intent.getStringExtra("circolare") ?: "{}"))
 
-        val barra = MaterialToolbar(this).apply {
+        val barra = MaterialToolbar(requireContext()).apply {
             title = if (c.numero.isNotEmpty()) "circolare n. ${c.numero}" else "circolare"
             setNavigationIcon(androidx.appcompat.R.drawable.abc_ic_ab_back_material)
             setNavigationOnClickListener { finish() }
         }
-        val col = colonna()
-        col.addView(testo(c.titolo, 19f, true))
+        val col = requireContext().colonna()
+        col.addView(requireContext().testo(c.titolo, 19f, true))
         val info = listOf(dataBreve(c.data), c.categoria).filter { it.isNotBlank() }.joinToString(" · ")
-        col.addView(testo(info, 13f, alpha = .7f).apply { setPadding(0, dp(4), 0, dp(8)) })
+        col.addView(requireContext().testo(info, 13f, alpha = .7f).apply { setPadding(0, dp(4), 0, dp(8)) })
 
         if (c.azioni.isNotEmpty()) {
-            val avviso = colonna(12)
+            val avviso = requireContext().colonna(12)
             val cosa = c.azioni.joinToString(", ")
-            avviso.addView(testo("azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
-            avviso.addView(testo("la conferma si fa sul sito classeviva: premi il pulsante (l'accesso è automatico) e conferma la circolare in bacheca.", 14f))
-            avviso.addView(bottone("apri classeviva nel browser") {
-                startActivity(Intent(this, WebActivity::class.java))
+            avviso.addView(requireContext().testo("azione richiesta: $cosa", 15f, true).apply { setTextColor(ContextCompat.getColor(context, R.color.azione)) })
+            avviso.addView(requireContext().testo("la conferma si fa sul sito classeviva: premi il pulsante (l'accesso è automatico) e conferma la circolare in bacheca.", 14f))
+            avviso.addView(requireContext().bottone("apri classeviva nel browser") {
+                startActivity(Intent(requireContext(), WebActivity::class.java))
             })
-            col.addView(MaterialCardView(this).apply {
+            col.addView(MaterialCardView(requireContext()).apply {
                 setCardBackgroundColor(Color.WHITE)
                 addView(avviso)
                 layoutParams = piena().apply { bottomMargin = dp(12) }
@@ -57,12 +55,12 @@ class DettaglioActivity : AppCompatActivity() {
         }
 
         val corpo = if (c.testo.contains('<')) HtmlCompat.fromHtml(c.testo, HtmlCompat.FROM_HTML_MODE_COMPACT) else c.testo
-        col.addView(testo(corpo.ifEmpty { "(nessun testo)" }, 15.5f).apply { setTextIsSelectable(true) })
+        col.addView(requireContext().testo(corpo.ifEmpty { "(nessun testo)" }, 15.5f).apply { setTextIsSelectable(true) })
 
         if (c.allegati.isNotEmpty()) {
             col.addView(titoloSezione("allegati"))
             c.allegati.forEach { a ->
-                col.addView(TextView(this).apply {
+                col.addView(TextView(requireContext()).apply {
                     text = "📎 ${a.nome}"; textSize = 15f
                     setTextColor(ContextCompat.getColor(context, R.color.primario))
                     setPadding(dp(4), dp(10), dp(4), dp(10))
@@ -72,10 +70,10 @@ class DettaglioActivity : AppCompatActivity() {
         }
 
         col.addView(titoloSezione("azioni"))
-        col.addView(bottone("invia per mail", icona = android.R.drawable.ic_dialog_email) { inviaOra() }.apply { layoutParams = piena() })
-        val pref = getSharedPreferences("app", MODE_PRIVATE)
+        col.addView(requireContext().bottone("invia per mail", icona = android.R.drawable.ic_dialog_email) { inviaOra() }.apply { layoutParams = piena() })
+        val pref = requireContext().getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
         val chiaveLetta = "letta_app_${c.chiave}"
-        val letta = TextView(this).apply {
+        val letta = TextView(requireContext()).apply {
             text = "Segna come letta"; textSize = 16f; gravity = android.view.Gravity.CENTER
             setPadding(dp(8), dp(14), dp(8), dp(14))
             fun colora() = setTextColor(if (pref.getBoolean(chiaveLetta, false)) 0xFF9E9E9E.toInt() else ContextCompat.getColor(context, R.color.primario))
@@ -89,7 +87,7 @@ class DettaglioActivity : AppCompatActivity() {
         col.addView(letta, piena())
         if (c.adesione) {
             val chiaveAdesione = "adesione_app_${c.chiave}"
-            val aderisci = TextView(this).apply {
+            val aderisci = TextView(requireContext()).apply {
                 text = "Aderisci"; textSize = 16f; gravity = android.view.Gravity.CENTER
                 setPadding(dp(8), dp(14), dp(8), dp(14))
                 fun colora() = setTextColor(if (pref.getBoolean(chiaveAdesione, false)) 0xFF9E9E9E.toInt() else ContextCompat.getColor(context, R.color.primario))
@@ -106,34 +104,34 @@ class DettaglioActivity : AppCompatActivity() {
 
         // in fondo spazio per la barra delle pagine, che resta sopra al testo
         col.setPadding(col.paddingLeft, col.paddingTop, col.paddingRight, col.paddingBottom + dp(SPAZIO_BARRA))
-        val scroll = ScrollView(this).apply { addView(col) }
-        conBarra(LinearLayout(this).apply {
+        val scroll = ScrollView(requireContext()).apply { addView(col) }
+        setContentView(LinearLayout(requireContext()).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(0xFFF5F5F5.toInt())
             addView(barra)
             addView(scroll, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-        }, MainActivity.TAB_BACHECA)
+        })
     }
 
-    private fun avviso(s: String) = Toast.makeText(this, s, Toast.LENGTH_LONG).show()
+    private fun avviso(s: String) = Toast.makeText(requireContext(), s, Toast.LENGTH_LONG).show()
 
     private fun apriAllegato(a: Allegato) {
         avviso("scarico ${a.nome}…")
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val cv = Impostazioni(this@DettaglioActivity).client()
+                    val cv = Impostazioni(requireContext()).client()
                     cv.login()
                     cv.bacheca()
                     var f = cv.allegato(c, a)
                     if (f == null) { cv.segnaLetta(c); f = cv.allegato(c, a) }
                     f ?: throw IllegalStateException("classeviva non rende ancora disponibile l'allegato.")
-                    val dir = File(cacheDir, "allegati").apply { mkdirs() }
+                    val dir = File(requireContext().cacheDir, "allegati").apply { mkdirs() }
                     File(dir, f.nome.replace(Regex("[\\\\/:*?\"<>|]"), "_")).apply { writeBytes(f.dati) }
                 }
             }
             r.onSuccess { file ->
-                val uri = FileProvider.getUriForFile(this@DettaglioActivity, "$packageName.files", file)
+                val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.files", file)
                 val tipo = if (file.name.lowercase().endsWith(".pdf")) "application/pdf" else "*/*"
                 val vedi = Intent(Intent.ACTION_VIEW).setDataAndType(uri, tipo).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 try {
@@ -146,19 +144,19 @@ class DettaglioActivity : AppCompatActivity() {
     }
 
     private fun inviaOra() {
-        val imp = Impostazioni(this)
+        val imp = Impostazioni(requireContext())
         if (!imp.mailPronta) { avviso(imp.coseMancanti); return }
         avviso("invio in corso…")
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(applicationContext, c) } }
+            val r = withContext(Dispatchers.IO) { runCatching { Controllo.inviaOra(requireContext().applicationContext, c) } }
             r.onSuccess { avviso("inviata (${imp.doveVanno}, allegati $it/${c.allegati.size}).") }
                 .onFailure { errore ->
                     val testo = errore.message ?: errore.toString()
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(this@DettaglioActivity)
+                    com.google.android.material.dialog.MaterialAlertDialogBuilder(requireContext())
                         .setTitle("invio non riuscito")
                         .setMessage(testo)
                         .setPositiveButton("copia") { _, _ ->
-                            val cm = getSystemService(CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                            val cm = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
                             cm.setPrimaryClip(android.content.ClipData.newPlainText("errore", testo))
                             avviso("errore copiato.")
                         }
@@ -172,7 +170,7 @@ class DettaglioActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val cv = Impostazioni(this@DettaglioActivity).client()
+                    val cv = Impostazioni(requireContext()).client()
                     cv.login(); cv.bacheca(); cv.segnaLetta(c, aderisci = true)
                 }
             }
@@ -184,7 +182,7 @@ class DettaglioActivity : AppCompatActivity() {
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val cv = Impostazioni(this@DettaglioActivity).client()
+                    val cv = Impostazioni(requireContext()).client()
                     cv.login(); cv.bacheca(); cv.segnaLetta(c)
                 }
             }

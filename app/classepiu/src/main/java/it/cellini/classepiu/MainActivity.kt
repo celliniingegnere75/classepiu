@@ -22,7 +22,9 @@ import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.os.bundleOf
 import androidx.fragment.app.Fragment
+import androidx.fragment.app.FragmentManager
 
 /**
  * Schermata principale come la bozza: fascia azzurra con la scritta classePiù, contenitore grigio
@@ -31,6 +33,7 @@ import androidx.fragment.app.Fragment
 class MainActivity : AppCompatActivity() {
 
     private val contenitoreId = View.generateViewId()
+    private val schedeId = View.generateViewId()
     private var schedaAttiva = TAB_REGISTRO
     private var barra: BarraPagine? = null
 
@@ -80,7 +83,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         // --- pannello bianco con angoli superiori arrotondati, da bordo a bordo (come la bozza);
-        //     in fondo la fascia azzurra e, appoggiata sopra, la barra delle pagine (la stessa di tutte le schermate)
+        //     sopra le pagine si aprono le schede (alunni, voti, note, lezioni, circolare) e, in sovraimpressione su tutto,
+        //     la barra delle pagine con la riga azzurra, sempre ferma
         val pannello = FrameLayout(this).apply {
             id = contenitoreId; setBackgroundColor(Color.WHITE)
             // le liste delle pagine scorrono fin sotto la barra, coperte solo da lei
@@ -97,12 +101,20 @@ class MainActivity : AppCompatActivity() {
             setPadding(0, dp(14), 0, 0)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
-        barra = conBarra(LinearLayout(this).apply {
+        val pagine = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(azzurro)
             addView(testa, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             addView(contenitore, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = -dp(12); leftMargin = dp(1); rightMargin = dp(1) })
-        }, schedaAttiva) { mostra(it) }
+        }
+        val barraPagine = BarraPagine(this) { vaiA(it) }
+        barra = barraPagine
+        setContentView(FrameLayout(this).apply {
+            setBackgroundColor(azzurro)
+            addView(pagine, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(FrameLayout(this@MainActivity).apply { id = schedeId }, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            addView(sovraimpressione(barraPagine), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + ALZO_BARRA), Gravity.BOTTOM))
+        })
 
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
@@ -119,6 +131,8 @@ class MainActivity : AppCompatActivity() {
 
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
+                // prima si chiude la scheda aperta (torna a registro o bacheca)
+                if (supportFragmentManager.backStackEntryCount > 0) { supportFragmentManager.popBackStack(); return }
                 val registro = frammento(TAB_REGISTRO) as? RegistroFragment
                 if (schedaAttiva == TAB_REGISTRO && registro?.indietro() == true) return
                 if (schedaAttiva != TAB_BACHECA) { mostra(TAB_BACHECA); return }
@@ -132,7 +146,7 @@ class MainActivity : AppCompatActivity() {
         } else chiediBatteria()
         gestisci(intent)
         // dopo l'ingresso con le credenziali si entra subito, senza animazione
-        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false) && !intent.hasExtra(EXTRA_SCHEDA)) Splash.mostra(this)
+        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) Splash.mostra(this)
     }
 
     /** Stessa uscita del pulsante in opzioni: toglie la password, ferma il controllo e torna all'accesso. */
@@ -185,9 +199,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun gestisci(i: Intent?) {
-        if (i?.getBooleanExtra(EXTRA_REGISTRO, false) == true) mostra(TAB_REGISTRO)
-        // dalla barra delle pagine di un'altra schermata
-        i?.getIntExtra(EXTRA_SCHEDA, 0)?.takeIf { it != 0 }?.let { mostra(it) }
+        if (i?.getBooleanExtra(EXTRA_REGISTRO, false) == true) vaiA(TAB_REGISTRO)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -196,6 +208,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun frammento(tab: Int): Fragment? = supportFragmentManager.findFragmentByTag("t$tab")
+
+    /** Dalla barra: chiude le schede aperte e va alla pagina scelta. */
+    private fun vaiA(tab: Int) {
+        if (!supportFragmentManager.isStateSaved) supportFragmentManager.popBackStackImmediate(null, FragmentManager.POP_BACK_STACK_INCLUSIVE)
+        mostra(tab)
+    }
+
+    /** Apre una scheda (alunni, voti, note, lezioni, circolare) che entra da destra sopra la pagina; "indietro" o ✕ la chiudono. */
+    fun apri(scheda: Scheda, vararg extra: Pair<String, Any?>) {
+        if (supportFragmentManager.isStateSaved) return
+        scheda.arguments = bundleOf(*extra)
+        supportFragmentManager.beginTransaction()
+            .setCustomAnimations(R.anim.entra_da_destra, 0, 0, R.anim.esce_a_destra)
+            .add(schedeId, scheda)
+            .addToBackStack(null)
+            .commit()
+    }
 
     fun mostra(tab: Int) {
         schedaAttiva = tab
@@ -215,6 +244,5 @@ class MainActivity : AppCompatActivity() {
         const val TAB_HOME = 4
         const val EXTRA_REGISTRO = "apri_registro"
         const val EXTRA_SENZA_ANIMAZIONE = "senza_animazione"
-        const val EXTRA_SCHEDA = "scheda"
     }
 }

@@ -332,9 +332,8 @@ class RegistroFragment : Fragment() {
             h.codice.visibility = if (c.codice.isEmpty()) View.GONE else View.VISIBLE
             val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
-                startActivity(android.content.Intent(requireContext(), StudentiActivity::class.java)
-                    .putExtra("tipo", p.getOrElse(0) { "" }).putExtra("id", p.getOrElse(1) { "" })
-                    .putExtra("nome", c.nome).putExtra("descrizione", c.descrizione))
+                (requireActivity() as MainActivity).apri(StudentiScheda(),
+                    "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome, "descrizione" to c.descrizione)
             }
             h.tessera.setOnClickListener(apriStudenti)
             h.sopra.setOnClickListener(apriStudenti)
@@ -344,16 +343,14 @@ class RegistroFragment : Fragment() {
             h.voti.visibility = if (mia) View.VISIBLE else View.GONE
             h.voti.setOnClickListener {
                 val p = c.chiave.split("|", limit = 3)
-                startActivity(android.content.Intent(requireContext(), VotiActivity::class.java)
-                    .putExtra("tipo", p.getOrElse(0) { "" }).putExtra("id", p.getOrElse(1) { "" })
-                    .putExtra("nome", c.nome))
+                (requireActivity() as MainActivity).apri(VotiScheda(),
+                    "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome)
             }
             for ((t, cosa) in listOf(h.lezioni to "lezioni", h.note to "note")) {
                 t.setOnClickListener {
                     val p = c.chiave.split("|", limit = 3)
-                    startActivity(android.content.Intent(requireContext(), ListaActivity::class.java)
-                        .putExtra("cosa", cosa).putExtra("tipo", p.getOrElse(0) { "" }).putExtra("id", p.getOrElse(1) { "" })
-                        .putExtra("nome", c.nome))
+                    (requireActivity() as MainActivity).apri(ListaScheda(),
+                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome)
                 }
             }
         }

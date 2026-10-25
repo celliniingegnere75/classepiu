@@ -1,11 +1,12 @@
 package it.cellini.classepiu
 
-import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.os.Bundle
 import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
@@ -13,12 +14,14 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.fragment.app.Fragment
 
-/** Altezza della barra delle pagine e della fascia azzurra sotto ai pannelli (dp). */
+/** Altezza della barra delle pagine, della riga azzurra in fondo e di quanto la barra sta sopra il fondo (dp). */
 const val ALTEZZA_BARRA = 66
 const val FASCIA_BLU = 14
-/** Spazio da lasciare in fondo alle liste perché l'ultima voce non resti sotto la barra (dp). */
-const val SPAZIO_BARRA = ALTEZZA_BARRA - FASCIA_BLU + 12
+const val ALZO_BARRA = 5
+/** Spazio da lasciare in fondo alle liste perché l'ultima voce si possa portare sopra la barra (dp). */
+const val SPAZIO_BARRA = ALTEZZA_BARRA + ALZO_BARRA + 12
 
 /** Barra delle pagine (home, registro, bacheca, setting), la stessa in tutte le schermate; la voce attiva ha l'etichetta più scura. */
 class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
@@ -65,21 +68,46 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
 }
 
 /**
- * Mette la schermata sopra la fascia azzurra in basso e la barra delle pagine appoggiata al fondo, sempre visibile.
- * Toccando una voce si lascia la schermata e si va alla pagina scelta; mentre è aperta una finestra di modifica
- * la finestra copre tutto e la barra non risponde finché non la si chiude.
+ * Barra delle pagine e riga azzurra in un solo oggetto, in sovraimpressione sul fondo della schermata principale:
+ * le pagine e le schede scorrono sotto, lei resta ferma. La barra è alzata di [ALZO_BARRA] per lasciar vedere il blu.
  */
-fun Activity.conBarra(contenuto: View, attiva: Int, scegli: ((Int) -> Unit)? = null): BarraPagine {
-    val barra = BarraPagine(this) { tab -> if (scegli != null) scegli(tab) else vaiAllaPagina(tab) }
-    barra.attiva(attiva)
-    setContentView(FrameLayout(this).apply {
-        setBackgroundColor(ContextCompat.getColor(this@conBarra, R.color.logo_sfondo))
-        addView(contenuto, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT).apply { bottomMargin = dp(FASCIA_BLU) })
-        addView(barra.vista, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA), Gravity.BOTTOM).apply {
-            leftMargin = dp(18); rightMargin = dp(18)
-        })
+fun Context.sovraimpressione(barra: BarraPagine): FrameLayout = FrameLayout(this).apply {
+    addView(View(context).apply { setBackgroundColor(ContextCompat.getColor(context, R.color.logo_sfondo)) },
+        FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(FASCIA_BLU), Gravity.BOTTOM))
+    addView(barra.vista, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA), Gravity.BOTTOM).apply {
+        leftMargin = dp(18); rightMargin = dp(18); bottomMargin = dp(ALZO_BARRA)
     })
-    return barra
+}
+
+/**
+ * Scheda aperta da registro o bacheca (alunni, voti, note, lezioni, circolare): entra da destra sopra la pagina
+ * da cui è aperta, dentro la schermata principale, così la barra e la riga azzurra non si muovono.
+ * Si scrive come una schermata: [crea] costruisce la vista e la passa a [setContentView]; [finish] la chiude.
+ */
+abstract class Scheda : Fragment() {
+    private var radice: View? = null
+
+    /** Gli extra con cui è stata aperta. */
+    protected val intent: Intent get() = Intent().putExtras(arguments ?: Bundle())
+
+    protected abstract fun crea(savedInstanceState: Bundle?)
+
+    protected fun setContentView(v: View) { radice = v }
+
+    protected fun finish() { if (isAdded && !parentFragmentManager.isStateSaved) parentFragmentManager.popBackStack() }
+
+    protected fun dp(v: Int): Int = requireContext().dp(v)
+
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
+        crea(savedInstanceState)
+        // la scheda copre la pagina sotto: i tocchi non passano
+        return radice!!.apply { isClickable = true }
+    }
+
+    override fun onDestroyView() {
+        super.onDestroyView()
+        radice = null
+    }
 }
 
 /**
@@ -104,12 +132,4 @@ fun ViewGroup.listeSottoLaBarra() {
         if (v is ViewGroup) for (i in 0 until v.childCount) cerca(v.getChildAt(i))
     }
     cerca(this)
-}
-
-/** Torna alla schermata principale sulla pagina scelta, chiudendo le schede aperte sopra. */
-fun Activity.vaiAllaPagina(tab: Int) {
-    startActivity(Intent(this, MainActivity::class.java)
-        .putExtra(MainActivity.EXTRA_SCHEDA, tab)
-        .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
-    finish()
 }

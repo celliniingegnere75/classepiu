@@ -222,7 +222,7 @@ class BachecaFragment : Fragment() {
             h.badge.visibility = if (badge.isNotEmpty()) View.VISIBLE else View.GONE
             h.titolo.alpha = if (c.letta) 0.75f else 1f
             h.box.setOnClickListener {
-                startActivity(Intent(requireContext(), DettaglioActivity::class.java).putExtra("circolare", c.json().toString()))
+                (requireActivity() as MainActivity).apri(DettaglioScheda(), "circolare" to c.json().toString())
             }
         }
     }

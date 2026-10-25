@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- la scheda entra da destra -->
+<translate xmlns:android="http://schemas.android.com/apk/res/android"
+    android:duration="250"
+    android:fromXDelta="100%"
+    android:interpolator="@android:interpolator/decelerate_cubic"
+    android:toXDelta="0%" />
