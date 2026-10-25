@@ -223,9 +223,17 @@ class VotiActivity : AppCompatActivity() {
         lateinit var txtValore: TextView
         lateinit var txtTipo: TextView
         lateinit var txtData: TextView
+        lateinit var media: android.widget.CheckBox
 
         fun testoModificabile(t: String) = if (modificabile) "$t ▾" else t
-        fun aggiornaValore() { txtValore.text = testoModificabile(valoreScelto); txtValore.setTextColor(coloreVoto(numeroDa(valoreScelto))) }
+        // solo i voti numerici e la "i" possono fare media: per gli altri la spunta non compare
+        fun puoFareMedia(t: String) = t.trim() == "i" || numeroDa(t) != null
+        fun aggiornaValore() {
+            txtValore.text = testoModificabile(valoreScelto); txtValore.setTextColor(coloreVoto(numeroDa(valoreScelto)))
+            val puoMedia = puoFareMedia(valoreScelto)
+            media.visibility = if (puoMedia) android.view.View.VISIBLE else android.view.View.GONE
+            if (!puoMedia) { mediaScelta = false; media.isChecked = false }
+        }
         fun aggiornaTipo() { txtTipo.text = testoModificabile(tipoScelto); txtTipo.setTextColor(colorePerRiga(if (tipoScelto.contains("scritt")) "scritto" else tipoScelto)) }
         fun aggiornaData() { txtData.text = scelta?.let { fIt.format(it) } ?: "data" }
         fun sceltaValore() {
@@ -279,7 +287,7 @@ class VotiActivity : AppCompatActivity() {
         }
 
         // riga 2: materia e spunta "media" (spuntata = il voto fa media)
-        val media = android.widget.CheckBox(ctx).apply {
+        media = android.widget.CheckBox(ctx).apply {
             text = "media"; textSize = 15f; isChecked = mediaScelta; isEnabled = modificabile
             buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
             setOnCheckedChangeListener { _, c -> mediaScelta = c }
