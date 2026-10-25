@@ -186,10 +186,11 @@ class ListaScheda : Scheda() {
         addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
     }
 
-    private fun scatola() = LinearLayout(requireContext()).apply {
+    /** Scatola di una voce; le mie lezioni hanno un fondo azzurro chiaro, come nel registro, per dire che si possono modificare. */
+    private fun scatola(mia: Boolean = false) = LinearLayout(requireContext()).apply {
         orientation = LinearLayout.VERTICAL
         setPadding(dp(16), dp(12), dp(16), dp(12))
-        background = GradientDrawable().apply { setColor(0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
+        background = GradientDrawable().apply { setColor(if (mia) 0xFFE6F4FB.toInt() else 0xFFFCFCFC.toInt()); cornerRadius = dp(16).toFloat() }
     }
 
     private fun parametri() = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) }
@@ -204,7 +205,7 @@ class ListaScheda : Scheda() {
 
     private fun mostra(voci: List<Voce>) {
         lista.removeAllViews()
-        voci.forEach { v -> lista.addView(scatola().apply { addView(voceView(v, false, azzurro)) }, parametri()) }
+        voci.forEach { v -> lista.addView(scatola(v.mia).apply { addView(voceView(v, false, azzurro)) }, parametri()) }
         lista.addView(copiaRisposta())
     }
 
