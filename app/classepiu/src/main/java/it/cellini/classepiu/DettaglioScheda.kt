@@ -58,7 +58,7 @@ class DettaglioScheda : Scheda() {
         col.addView(requireContext().testo(corpo.ifEmpty { "(nessun testo)" }, 15.5f).apply { setTextIsSelectable(true) })
 
         if (c.allegati.isNotEmpty()) {
-            col.addView(titoloSezione("allegati"))
+            col.addView(requireContext().titoloSezione("allegati"))
             c.allegati.forEach { a ->
                 col.addView(TextView(requireContext()).apply {
                     text = "📎 ${a.nome}"; textSize = 15f
@@ -69,7 +69,7 @@ class DettaglioScheda : Scheda() {
             }
         }
 
-        col.addView(titoloSezione("azioni"))
+        col.addView(requireContext().titoloSezione("azioni"))
         col.addView(requireContext().bottone("invia per mail", icona = android.R.drawable.ic_dialog_email) { inviaOra() }.apply { layoutParams = piena() })
         val pref = requireContext().getSharedPreferences("app", android.content.Context.MODE_PRIVATE)
         val chiaveLetta = "letta_app_${c.chiave}"

@@ -58,7 +58,7 @@ class ListaScheda : Scheda() {
         setContentView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setBackgroundColor(azzurro)
             addView(barra)
-            striscia?.aggiungiA(requireContext())
+            striscia?.aggiungiA(this)
             addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { if (striscia == null) topMargin = dp(10) })
         })
         requireActivity().onBackPressedDispatcher.addCallback(viewLifecycleOwner, indietro)
