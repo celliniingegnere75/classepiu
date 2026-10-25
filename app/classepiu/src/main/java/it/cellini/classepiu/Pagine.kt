@@ -21,7 +21,7 @@ const val ALTEZZA_BARRA = 66
 const val FASCIA_BLU = 14
 const val ALZO_BARRA = 5
 /** Altezza della sfumatura d'ombra sopra la barra (dp): l'ombra di Android scende sempre in basso, questa sale. */
-const val SOMBRA_BARRA = 12
+const val SOMBRA_BARRA = 3
 /** Spazio da lasciare in fondo alle liste perché l'ultima voce si possa portare sopra la barra (dp). */
 const val SPAZIO_BARRA = ALTEZZA_BARRA + ALZO_BARRA + 12
 
