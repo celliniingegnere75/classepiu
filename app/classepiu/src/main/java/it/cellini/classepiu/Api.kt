@@ -283,7 +283,9 @@ class ClasseViva(private val utente: String, private val password: String) {
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
-        val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", o)
+        // L’endpoint grades2 richiede un contenitore "grades", anche quando si modifica un solo voto.
+        val richiesta = JSONObject().put("grades", JSONArray().put(o))
+        val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }
 
