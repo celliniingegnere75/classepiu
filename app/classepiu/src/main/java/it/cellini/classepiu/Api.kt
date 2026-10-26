@@ -699,4 +699,3 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
     return out
 }
 
-// Diagnostica temporanea annotazioni: verificare il passaggio di notesForFamily.
