@@ -514,11 +514,14 @@ class VotiScheda : Scheda() {
                 android.widget.Toast.makeText(ctx, if (dettaglio.isBlank()) "salvato su classeviva" else dettaglio, android.widget.Toast.LENGTH_LONG).show()
                 mostra(elenco, tutti)
             } else {
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setMessage("ClasseViva non ha accettato (HTTP $codice). Il vecchio voto non è stato cancellato.")
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setMessage("ClasseViva non ha accettato (HTTP $codice). Il vecchio voto non è stato cancellato. La diagnostica contiene dati del registro; condividila solo qui dopo averla controllata.")
                     .setNegativeButton("chiudi", null)
                     .setPositiveButton("copia la risposta") { _, _ ->
                         ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta",
                             "HTTP $codice\n$risposta\n$dettaglio\n\nprima:\n${v.grezzo}\n\ncomponente scelta:\n$componente"))
+                    }
+                    .setNeutralButton("copia diagnostica completa") { _, _ ->
+                        copiaDiagnostica(ctx, "ERRORE SALVATAGGIO VOTO\nHTTP $codice\nRisposta: $risposta\nDettaglio: $dettaglio\nVoto originale: ${v.grezzo}\nComponente scelta: $componente")
                     }.show()
             }
         }
@@ -567,15 +570,31 @@ class VotiScheda : Scheda() {
                     else -> "ClasseViva ha risposto HTTP $codice, ma non è stato possibile verificare se il voto sia stato eliminato."
                 }
                 MaterialAlertDialogBuilder(ctx).setTitle("Cancellazione da verificare")
-                    .setMessage("$messaggio\n\nRisposta: ${risposta.take(1200)}\n\n$verifica")
+                    .setMessage("$messaggio\n\nRisposta: ${risposta.take(1200)}\n\n$verifica\n\nLa diagnostica può contenere dati del registro; condividila solo qui dopo averla controllata.")
                     .setNegativeButton("chiudi", null)
                     .setPositiveButton("copia la risposta") { _, _ ->
                         ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(
                             android.content.ClipData.newPlainText("risposta",
                                 "HTTP $codice\n$risposta\n\nverifica lettura:\n$verifica\n\nvoto originale:\n${v.grezzo}"))
+                    }
+                    .setNeutralButton("copia diagnostica completa") { _, _ ->
+                        copiaDiagnostica(ctx, "ERRORE CANCELLAZIONE VOTO\nHTTP $codice\nMessaggio: $messaggio\nRisposta: $risposta\nVerifica: $verifica\nVoto originale: ${v.grezzo}")
                     }.show()
             }
         }
+    }
+
+
+    /** Copia gli ultimi 100.000 caratteri del log HTTP, più i dettagli dell'operazione fallita. */
+    private fun copiaDiagnostica(ctx: android.content.Context, dettagli: String) {
+        val f = java.io.File(ctx.filesDir, "classepiu_log.txt")
+        val log = runCatching { if (f.exists()) f.readText(Charsets.UTF_8).takeLast(100000) else "LOG HTTP ASSENTE: nessuna richiesta è stata registrata." }
+            .getOrDefault("Impossibile leggere il log HTTP.")
+        val testo = "CLASSEPIU - DIAGNOSTICA HTTP\nI token di accesso sono oscurati; il log può contenere nomi, voti e annotazioni degli alunni.\n\n$dettagli\n\n===== LOG HTTP (ultimi 100000 caratteri) =====\n$log"
+        ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(
+            android.content.ClipData.newPlainText("diagnostica ClassePiu", testo)
+        )
+        android.widget.Toast.makeText(ctx, "Diagnostica copiata. Incollala qui in chat; se troppo lunga, inviala in più parti.", android.widget.Toast.LENGTH_LONG).show()
     }
 
     private fun testo(s: String, corpo: String = "") {
