@@ -202,9 +202,9 @@ class ImpostazioniFragment : Fragment() {
         aggiornaVisibilitaControlli()
 
         // Esporta il log HTTP diagnostico per analizzare le risposte di ClasseViva.
-        val salvaLog = pillola(ctx, "salva log diagnostico", 14f, azzurro, Color.WHITE, ctx.dp(42)).apply {
+        val salvaLog = pillola(ctx, "salva log media voto", 14f, azzurro, Color.WHITE, ctx.dp(42)).apply {
             setPadding(ctx.dp(20), ctx.dp(8), ctx.dp(20), ctx.dp(8))
-            contentDescription = "Salva il log diagnostico di ClassePiù"
+            contentDescription = "Esporta il log della modifica del voto e della gestione della media"
             setOnClickListener { salvaLogLauncher.launch("classepiu_media_log.txt") }
         }
         col.addView(salvaLog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
