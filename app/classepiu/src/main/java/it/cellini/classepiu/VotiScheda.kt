@@ -154,7 +154,7 @@ class VotiScheda : Scheda() {
             }
             val (st, vt) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
             val studenti = if (st.first == 200) leggiStudenti(st.second) else emptyList()
-            if (vt.first != 200) { testo("classeviva non ha dato i voti (http ${vt.first}).", vt.second); return@launch }
+            if (vt.first != 200) { testo("classeviva non ha dato i voti (http ${vt.first})."); return@launch }
             val voti = leggiVoti(vt.second)
             if (studenti.isEmpty()) { testo("nessuno studente riconosciuto.", st.second); return@launch }
             if (voti.isEmpty()) { testo("nessun voto riconosciuto nella risposta.", vt.second); return@launch }
@@ -565,30 +565,23 @@ class VotiScheda : Scheda() {
                     ancoraPresente == true -> "ClasseViva ha risposto HTTP $codice, ma il voto risulta ancora presente. Non considerarlo cancellato."
                     else -> "ClasseViva ha risposto HTTP $codice, ma non è stato possibile verificare se il voto sia stato eliminato."
                 }
-                MaterialAlertDialogBuilder(ctx).setTitle("Cancellazione da verificare")
-                    .setMessage("$messaggio\n\nRisposta: ${risposta.take(1200)}\n\n$verifica\n\nLa diagnostica può contenere dati del registro; condividila solo qui dopo averla controllata.")
-                    .setNegativeButton("chiudi", null)
-                    .setPositiveButton("copia la risposta") { _, _ ->
-                        ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(
-                            android.content.ClipData.newPlainText("risposta",
-                                "HTTP $codice\n$risposta\n\nverifica lettura:\n$verifica\n\nvoto originale:\n${v.grezzo}"))
-                    }
+                MaterialAlertDialogBuilder(ctx)
+                    .setTitle("Cancellazione da verificare")
+                    .setMessage(messaggio)
+                    .setPositiveButton("chiudi", null)
                     .show()
             }
         }
     }
 
 
-    /** Copia gli ultimi 100.000 caratteri del log HTTP, più i dettagli dell'operazione fallita. */
-    private fun testo(s: String, corpo: String = "") {
+    private fun testo(s: String) {
         lista.removeAllViews()
-        lista.addView(TextView(requireContext()).apply { text = s; textSize = 15f; setTextColor(0xFF555555.toInt()); setPadding(dp(8), dp(24), dp(8), 0) })
-        if (corpo.isNotEmpty()) lista.addView(TextView(requireContext()).apply {
-            text = "mostra la risposta di classeviva (tocca per copiare)"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(12), dp(8), dp(12))
-            setOnClickListener {
-                requireContext().getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", corpo))
-                android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
-            }
+        lista.addView(TextView(requireContext()).apply {
+            text = s
+            textSize = 15f
+            setTextColor(0xFF555555.toInt())
+            setPadding(dp(8), dp(24), dp(8), 0)
         })
     }
 }
