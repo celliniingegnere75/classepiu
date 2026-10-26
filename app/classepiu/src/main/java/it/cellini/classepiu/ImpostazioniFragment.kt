@@ -140,18 +140,6 @@ class ImpostazioniFragment : Fragment() {
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
             aggiornaVisibilitaControlli()
-
-        // Esporta il log HTTP diagnostico per analizzare le risposte di ClasseViva.
-        val salvaLog = pillola(ctx, "salva log diagnostico", 14f, azzurro, Color.WHITE, ctx.dp(42)).apply {
-            setPadding(ctx.dp(20), ctx.dp(8), ctx.dp(20), ctx.dp(8))
-            contentDescription = "Salva il log diagnostico di ClassePiù"
-            setOnClickListener { salvaLogLauncher.launch("classepiu_log.txt") }
-        }
-        col.addView(salvaLog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL
-            topMargin = ctx.dp(18)
-            bottomMargin = ctx.dp(12)
-        })
         } as View
         segnaLetteRow = riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12), true) { on ->
             imp.segnaLette = on
@@ -212,6 +200,18 @@ class ImpostazioniFragment : Fragment() {
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(4) })
         aggiornaOre(imp.controlloAutomatico)
         aggiornaVisibilitaControlli()
+
+        // Esporta il log HTTP diagnostico per analizzare le risposte di ClasseViva.
+        val salvaLog = pillola(ctx, "salva log diagnostico", 14f, azzurro, Color.WHITE, ctx.dp(42)).apply {
+            setPadding(ctx.dp(20), ctx.dp(8), ctx.dp(20), ctx.dp(8))
+            contentDescription = "Salva il log diagnostico di ClassePiù"
+            setOnClickListener { salvaLogLauncher.launch("classepiu_log.txt") }
+        }
+        col.addView(salvaLog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = ctx.dp(18)
+            bottomMargin = ctx.dp(12)
+        })
 
         // --- due schede in alto: "orario" e "funzioni" (tutto quello che c'era)
         val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
