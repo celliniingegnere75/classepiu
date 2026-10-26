@@ -20,6 +20,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -38,6 +40,22 @@ class ImpostazioniFragment : Fragment() {
     private var segnaLetteRow: View? = null
     private var controlloPeriodicoRow: View? = null
     private var gruppoIntervallo: View? = null
+
+    // Salva il log diagnostico tramite il selettore file di Android.
+    private val salvaLogLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
+        if (uri != null) {
+            try {
+                val fileLog = java.io.File(requireContext().filesDir, "classepiu_log.txt")
+                requireContext().contentResolver.openOutputStream(uri)?.use { output ->
+                    if (fileLog.exists()) fileLog.inputStream().use { input -> input.copyTo(output) }
+                    else output.write("Log diagnostico non ancora presente.\n".toByteArray(Charsets.UTF_8))
+                } ?: throw java.io.IOException("Impossibile aprire il file di destinazione")
+                Toast.makeText(requireContext(), "Log salvato", Toast.LENGTH_LONG).show()
+            } catch (e: Exception) {
+                Toast.makeText(requireContext(), "Errore nel salvataggio del log: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
@@ -122,6 +140,18 @@ class ImpostazioniFragment : Fragment() {
             imp.invioMail = on
             messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
             aggiornaVisibilitaControlli()
+
+        // Esporta il log HTTP diagnostico per analizzare le risposte di ClasseViva.
+        val salvaLog = pillola(ctx, "salva log diagnostico", 14f, azzurro, Color.WHITE, ctx.dp(42)).apply {
+            setPadding(ctx.dp(20), ctx.dp(8), ctx.dp(20), ctx.dp(8))
+            contentDescription = "Salva il log diagnostico di ClassePiù"
+            setOnClickListener { salvaLogLauncher.launch("classepiu_log.txt") }
+        }
+        col.addView(salvaLog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            gravity = Gravity.CENTER_HORIZONTAL
+            topMargin = ctx.dp(18)
+            bottomMargin = ctx.dp(12)
+        })
         } as View
         segnaLetteRow = riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12), true) { on ->
             imp.segnaLette = on
