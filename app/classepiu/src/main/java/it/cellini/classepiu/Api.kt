@@ -306,6 +306,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: valore.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
             ?: 0.0
         o.put("decimalValue", decimaleDaInviare)
+        // L’API di ClasseViva espone esplicitamente noAverage: true per i voti blu esclusi dalla media.
+        // weightFactor da solo non basta: il server può rispondere 200 senza aggiornare l’esclusione.
+        o.put("noAverage", !media)
         o.put("weightFactor", if (media) o.optDouble("weightFactor", 1.0).takeIf { it > 0.0 } ?: 1.0 else 0.0)
         componentiTipo[tipo]?.let { (desc, pos) -> o.put("componentDesc", desc); o.put("componentPos", pos) }
         // il voto letto non ha componentId: senza, classeviva può ignorare il cambio di tipo; si mette quello del periodo giusto
@@ -698,7 +701,7 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
                         val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
                         val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
                         out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString(), materiaCorrente.ifEmpty { v.t("subjectDesc") }, v.t("authorId", "teacherId", "teacher_id"), // non fa media: peso 0 oppure valore decimale assente (nei dati di classeviva sono i voti "blu", per esempio superati da un recupero)
-            (v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true) && v.opt("decimalValue") != JSONObject.NULL, v.t("teacherName", "authorName")))
+            !v.optBoolean("noAverage", false) && (v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true) && v.opt("decimalValue") != JSONObject.NULL, v.t("teacherName", "authorName")))
                     }
                 } else {
                     val sid = propri.ifEmpty { idStudente }
