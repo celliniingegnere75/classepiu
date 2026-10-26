@@ -32,8 +32,8 @@ jobs:
       - name: Set higher version code for recovery APK
         run: sed -i 's/versionCode = buildNumber/versionCode = 100000 + buildNumber/' app/classepiu/build.gradle.kts
 
-      - name: Build debug APK
-        run: gradle --no-daemon -p app clean assembleDebug
+      - name: Run unit tests and build debug APK
+        run: gradle --no-daemon -p app clean testDebugUnitTest assembleDebug
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
