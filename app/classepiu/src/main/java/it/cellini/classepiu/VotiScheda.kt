@@ -426,7 +426,9 @@ class VotiScheda : Scheda() {
             if (modificabile) {
                 addView(bottone("salva") {
                     val dataApi = scelta?.let { fApi.format(it) } ?: v.data
-                    salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, nota.text.toString())
+                    val annotazione = nota.text.toString()
+                    android.widget.Toast.makeText(ctx, "Diagnostica annotazioni: ${annotazione.length} caratteri", android.widget.Toast.LENGTH_LONG).show()
+                    salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, annotazione)
                     memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|tipo", tipoScelto)
                         .putString("${v.chiave}|media", mediaScelta.toString()).putString("${v.chiave}|data", dataApi)
                         .putString("${v.chiave}|nota", nota.text.toString()).apply()
