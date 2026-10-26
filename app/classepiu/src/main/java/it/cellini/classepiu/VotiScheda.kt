@@ -464,30 +464,61 @@ class VotiScheda : Scheda() {
                 runCatching {
                     val c = Impostazioni(ctx).client()
                     val esito = c.salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota, componente)
-                    // controllo: si rilegge il voto da classeviva e si guarda se il tipo è cambiato davvero
-                    val dopo = if (esito.first in 200..299) runCatching {
-                        val id = vecchio?.opt("evtId")?.toString()
-                        val tutto = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId).second
-                        Regex("\\{[^{}]*\"evtId\":\\s*$id[,}][^{}]*\\}").find(tutto)?.value
-                    }.getOrNull() else null
-                    Triple(esito.first, esito.second, dopo)
+                    var dettaglio = ""
+                    val componenteOriginale = vecchio?.optString("componentDesc").orEmpty()
+                    if (esito.first in 200..299 && !componenteOriginale.equals(tipo, ignoreCase = true)) {
+                        val lettura = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                        val radice = runCatching { org.json.JSONTokener(lettura.second).nextValue() }.getOrNull()
+                        val idOriginale = vecchio?.opt("evtId")?.toString().orEmpty()
+                        val idInserito = runCatching { org.json.JSONObject(esito.second).optJSONArray("grades")?.optJSONObject(0)?.opt("insertId")?.toString().orEmpty() }.getOrDefault("")
+                        val votiLetti = mutableListOf<org.json.JSONObject>()
+                        fun raccogli(x: Any?) {
+                            when (x) {
+                                is org.json.JSONObject -> {
+                                    if (x.has("evtId") && x.optString("evtId").isNotBlank()) votiLetti.add(x)
+                                    val it = x.keys()
+                                    while (it.hasNext()) raccogli(x.opt(it.next()))
+                                }
+                                is org.json.JSONArray -> for (i in 0 until x.length()) raccogli(x.opt(i))
+                            }
+                        }
+                        raccogli(radice)
+                        val nuovo = votiLetti.firstOrNull { g ->
+                            val id = g.opt("evtId")?.toString().orEmpty()
+                            id.isNotBlank() && id != idOriginale &&
+                            (idInserito.isBlank() || id == idInserito) &&
+                            g.optString("studentId") == vecchio?.optString("studentId") &&
+                            g.optString("subjectId") == vecchio?.optString("subjectId") &&
+                            g.optString("componentDesc").equals(tipo, ignoreCase = true) &&
+                            g.optString("evtDate") == data &&
+                            g.optString("displayValue") == valore
+                        }
+                        if (nuovo != null) {
+                            // La cancellazione è consentita solo dopo aver trovato il nuovo voto nel registro.
+                            val (codCanc, risCanc) = c.cancellaVoto(v.grezzo)
+                            val dopoCanc = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                            val ancoraVecchio = Regex("\\\"evtId\\\"\\s*:\\s*${Regex.escape(idOriginale)}(?:[,}])").containsMatchIn(dopoCanc.second)
+                            val ancoraNuovo = Regex("\\\"evtId\\\"\\s*:\\s*${Regex.escape(nuovo.optString("evtId"))}(?:[,}])").containsMatchIn(dopoCanc.second)
+                            dettaglio = "Nuovo voto verificato (${nuovo.optString("componentDesc")}, evtId=${nuovo.optString("evtId")}). Cancellazione vecchio HTTP $codCanc; vecchio ancora presente=$ancoraVecchio; nuovo presente=$ancoraNuovo. ${risCanc.take(250)}"
+                        } else {
+                            dettaglio = "Il server ha risposto HTTP ${esito.first}, ma non ho verificato con certezza il nuovo voto: il vecchio non è stato cancellato. Risposta: ${esito.second.take(300)}"
+                        }
+                    }
+                    Triple(esito.first, esito.second, dettaglio)
                 }
             }
-            val (codice, risposta, dopo) = r.getOrElse {
+            val (codice, risposta, dettaglio) = r.getOrElse {
                 android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}; resta sul telefono", android.widget.Toast.LENGTH_LONG).show(); return@launch
             }
-            val tipoDopo = dopo?.let { runCatching { org.json.JSONObject(it).optString("componentDesc").lowercase() }.getOrNull() }
-            if (codice in 200..299 && (tipoDopo == null || tipoDopo == tipo)) {
-                android.widget.Toast.makeText(ctx, "salvato su classeviva", android.widget.Toast.LENGTH_LONG).show()
+            if (codice in 200..299) {
+                android.widget.Toast.makeText(ctx, if (dettaglio.isBlank()) "salvato su classeviva" else dettaglio, android.widget.Toast.LENGTH_LONG).show()
+                mostra(elenco, tutti)
             } else {
-                // non accettato, o accettato ma il tipo non è cambiato: si può copiare tutto per sistemare la scrittura
-                val messaggio = if (codice in 200..299) "classeviva ha risposto ok, ma il voto risulta ancora \"$tipoDopo\" invece di \"$tipo\"."
-                    else "classeviva non ha accettato (http $codice); la modifica resta sul telefono."
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setMessage(messaggio)
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setMessage("ClasseViva non ha accettato (HTTP $codice). Il vecchio voto non è stato cancellato.")
                     .setNegativeButton("chiudi", null)
                     .setPositiveButton("copia la risposta") { _, _ ->
                         ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta",
-                            "HTTP $codice\n$risposta\n\nprima:\n${v.grezzo}\n\ncomponente scelta:\n$componente\n\ndopo:\n$dopo"))
+                            "HTTP $codice\n$risposta\n$dettaglio\n\nprima:\n${v.grezzo}\n\ncomponente scelta:\n$componente"))
                     }.show()
             }
         }
