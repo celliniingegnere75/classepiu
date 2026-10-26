@@ -283,8 +283,12 @@ class ClasseViva(private val utente: String, private val password: String) {
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
-        // L’endpoint grades2 richiede un contenitore "grades", anche quando si modifica un solo voto.
-        val richiesta = JSONObject().put("grades", JSONArray().put(o))
+        // grades2 valida anche evtDate sul payload principale: conserva la data originale se il campo UI è vuoto.
+        val dataVoto = o.optString("evtDate").ifBlank { data.trim() }
+        if (dataVoto.isNotBlank()) o.put("evtDate", dataVoto)
+        val richiesta = JSONObject()
+            .put("grades", JSONArray().put(o))
+            .put("evtDate", dataVoto)
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }
