@@ -65,30 +65,12 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val testo get() = String(corpo, Charsets.UTF_8)
     }
 
-    private fun registraLog(testo: String) {
-        try {
-            val file = java.io.File(appContext?.filesDir ?: return, "classepiu_media_log.txt")
-            synchronized(ClasseViva::class.java) {
-                val data = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.ITALY).format(java.util.Date())
-                file.appendText(data + " " + testo + "\n", Charsets.UTF_8)
-            }
-        } catch (_: Exception) { }
-    }
-
     private fun http(metodo: String, url: String, corpo: JSONObject? = null): Risposta {
-        val inizio = System.currentTimeMillis()
-        // Il log registra esclusivamente la richiesta di modifica di un voto e la relativa risposta.
-        // Non registra login, classi, studenti, voti letti o altre chiamate API.
-        val tracciaVoto = metodo == "PUT" && url.endsWith("/evaluations/grades2")
-        if (tracciaVoto) {
-            appContext?.filesDir?.let { dir ->
-                runCatching { java.io.File(dir, "classepiu_log.txt").delete() }
-                runCatching { java.io.File(dir, "classepiu_media_log.txt").delete() }
-                runCatching { java.io.File(dir, "classepiu_media_log.txt").writeText("DIAGNOSTICA MODIFICA VOTO - solo richiesta PUT e risposta server\\n", Charsets.UTF_8) }
-            }
-            registraLog("RICHIESTA " + metodo + " " + url + " body=" + (corpo?.toString()?.take(6000) ?: ""))
+        // Elimina eventuali file diagnostici delle versioni precedenti.
+        appContext?.filesDir?.let { dir ->
+            runCatching { java.io.File(dir, "classepiu_log.txt").delete() }
+            runCatching { java.io.File(dir, "classepiu_media_log.txt").delete() }
         }
-        try {
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = metodo
         c.connectTimeout = 30_000
@@ -103,13 +85,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val out = ByteArrayOutputStream()
         flusso?.use { it.copyTo(out) }
         c.disconnect()
-        val testo = String(out.toByteArray(), Charsets.UTF_8)
-        if (tracciaVoto) registraLog("RISPOSTA " + metodo + " " + url + " HTTP " + codice + " durata=" + (System.currentTimeMillis() - inizio) + "ms bytes=" + out.size() + " body=" + testo.take(6000))
         return Risposta(codice, out.toByteArray())
-        } catch (e: Exception) {
-            if (tracciaVoto) registraLog("ECCEZIONE HTTP " + metodo + " " + url + " durata=" + (System.currentTimeMillis() - inizio) + "ms " + e.javaClass.name + ": " + e.message)
-            throw e
-        }
     }
 
     fun login() {
@@ -292,7 +268,6 @@ class ClasseViva(private val utente: String, private val password: String, priva
     fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String,
                   componente: JSONObject? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
-        registraLog("DIAGNOSTICA ANNOTAZIONI: parametro nota.length=${nota.length}, blank=${nota.isBlank()}")
         if (token.isEmpty()) login()
         // ClasseViva richiede decimalValue numerico: inviare null provoca HTTP 412.
         // Il fatto che il voto faccia media si rappresenta con weightFactor, non con decimalValue=null.
@@ -326,7 +301,6 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
-        registraLog("DIAGNOSTICA ANNOTAZIONI: notesForFamily nel payload.length=${o.optString("notesForFamily").length}, blank=${o.optString("notesForFamily").isBlank()}")
         // grades2 valida anche evtDate sul payload principale: conserva la data originale se il campo UI è vuoto.
         val dataVoto = o.optString("evtDate").ifBlank { data.trim() }
         if (dataVoto.isNotBlank()) o.put("evtDate", dataVoto)
@@ -413,9 +387,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("displayPos", o.opt("displayPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
             .put("componentPos", o.opt("componentPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
             .put("periodPos", o.optInt("periodPos", 1))
-        registraLog("INIZIO CANCELLAZIONE VOTO evtId=" + o.optString("evtId") + " studentId=" + o.optString("studentId") + " subjectId=" + o.optString("subjectId") + " payload=" + richiesta)
         val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", richiesta)
-        registraLog("FINE CANCELLAZIONE VOTO evtId=" + o.optString("evtId") + " HTTP " + r.codice + " risposta=" + r.testo.take(12000))
         return r.codice to r.testo
     }
 
