@@ -292,6 +292,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
     fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String,
                   componente: JSONObject? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
+        registraLog("DIAGNOSTICA ANNOTAZIONI: parametro nota.length=${nota.length}, blank=${nota.isBlank()}")
         if (token.isEmpty()) login()
         // ClasseViva richiede decimalValue numerico: inviare null provoca HTTP 412.
         // Il fatto che il voto faccia media si rappresenta con weightFactor, non con decimalValue=null.
@@ -325,6 +326,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
         if (data.isNotBlank()) o.put("evtDate", data)
         o.put("notesForFamily", nota)
+        registraLog("DIAGNOSTICA ANNOTAZIONI: notesForFamily nel payload.length=${o.optString("notesForFamily").length}, blank=${o.optString("notesForFamily").isBlank()}")
         // grades2 valida anche evtDate sul payload principale: conserva la data originale se il campo UI è vuoto.
         val dataVoto = o.optString("evtDate").ifBlank { data.trim() }
         if (dataVoto.isNotBlank()) o.put("evtDate", dataVoto)
