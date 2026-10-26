@@ -726,3 +726,5 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
     } else cammina(radice, "", 0)
     return out
 }
+
+// Diagnostica temporanea annotazioni: verificare il passaggio di notesForFamily.
