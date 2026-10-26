@@ -263,6 +263,19 @@ class ClasseViva(private val utente: String, private val password: String) {
     fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String,
                   componente: JSONObject? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
+        // Sicurezza: grades2 risponde HTTP 200 anche quando inserisce un nuovo voto invece di modificare
+        // quello esistente. Non inviare la richiesta se cambia il componente, altrimenti si duplicano i voti.
+        val componenteOriginale = o.optString("componentDesc").trim()
+        val componenteScelto = componente?.optString("componentName")?.trim().orEmpty()
+        if (componenteOriginale.isNotEmpty() && componenteScelto.isNotEmpty() &&
+            !componenteOriginale.equals(componenteScelto, ignoreCase = true)) {
+            return 409 to JSONObject()
+                .put("error", "Cambio componente bloccato per sicurezza")
+                .put("message", "ClasseViva ha inserito un nuovo voto invece di modificare quello originale. Nessuna richiesta è stata inviata. Il voto esistente è rimasto invariato.")
+                .put("originalComponent", componenteOriginale)
+                .put("requestedComponent", componenteScelto)
+                .toString()
+        }
         if (token.isEmpty()) login()
         // valore e livello scelti dalla tabella di classeviva; "non fa media" è decimalValue assente
         if (valore.isNotBlank()) {
