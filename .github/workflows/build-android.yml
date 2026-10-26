@@ -35,10 +35,13 @@ jobs:
       - name: Run unit tests and build debug APK
         run: gradle --no-daemon -p app clean testDebugUnitTest assembleDebug
 
-      - name: Upload debug APK
+      - name: Rename APK
+        run: cp app/classepiu/build/outputs/apk/debug/*.apk app/classepiu.apk
+
+      - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: ClassePiu-debug-APK
-          path: app/classepiu/build/outputs/apk/debug/*.apk
+          name: classepiu
+          path: app/classepiu.apk
           if-no-files-found: error
           retention-days: 14
