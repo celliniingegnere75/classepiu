@@ -46,7 +46,7 @@ class ClasseVivaException(msg: String) : Exception(msg)
  * Client minimo per l'interfaccia REST di ClasseViva (web.spaggiari.eu/rest/v1),
  * la stessa usata dallo script cv.py di Termux.
  */
-class ClasseViva(private val utente: String, private val password: String) {
+class ClasseViva(private val utente: String, private val password: String, private val appContext: android.content.Context? = null) {
 
     private var token: String = ""
     private var id: String = ""
@@ -65,7 +65,21 @@ class ClasseViva(private val utente: String, private val password: String) {
         val testo get() = String(corpo, Charsets.UTF_8)
     }
 
+    private fun registraLog(testo: String) {
+        try {
+            val file = java.io.File(appContext?.filesDir ?: return, "classepiu_log.txt")
+            synchronized(ClasseViva::class.java) {
+                val data = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.ITALY).format(java.util.Date())
+                file.appendText(data + " " + testo + "\n", Charsets.UTF_8)
+            }
+        } catch (_: Exception) { }
+    }
+
     private fun http(metodo: String, url: String, corpo: JSONObject? = null): Risposta {
+        val inizio = System.currentTimeMillis()
+        val corpoLog = corpo?.let { val copia = JSONObject(it.toString()); if (url.endsWith("/auth/login")) copia.put("pass", "[OSCURATA]"); copia.toString().take(12000) } ?: ""
+        registraLog("RICHIESTA " + metodo + " " + url + " body=" + corpoLog)
+        try {
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = metodo
         c.connectTimeout = 30_000
@@ -80,7 +94,13 @@ class ClasseViva(private val utente: String, private val password: String) {
         val out = ByteArrayOutputStream()
         flusso?.use { it.copyTo(out) }
         c.disconnect()
+        val testo = String(out.toByteArray(), Charsets.UTF_8)
+        registraLog("RISPOSTA " + metodo + " " + url + " HTTP " + codice + " durata=" + (System.currentTimeMillis() - inizio) + "ms body=" + testo.take(12000))
         return Risposta(codice, out.toByteArray())
+        } catch (e: Exception) {
+            registraLog("ECCEZIONE HTTP " + metodo + " " + url + " durata=" + (System.currentTimeMillis() - inizio) + "ms " + e.javaClass.name + ": " + e.message + "\n" + e.stackTraceToString())
+            throw e
+        }
     }
 
     fun login() {
@@ -369,7 +389,9 @@ class ClasseViva(private val utente: String, private val password: String) {
             .put("displayPos", o.opt("displayPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
             .put("componentPos", o.opt("componentPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
             .put("periodPos", o.optInt("periodPos", 1))
+        registraLog("INIZIO CANCELLAZIONE VOTO evtId=" + o.optString("evtId") + " studentId=" + o.optString("studentId") + " subjectId=" + o.optString("subjectId") + " payload=" + richiesta)
         val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", richiesta)
+        registraLog("FINE CANCELLAZIONE VOTO evtId=" + o.optString("evtId") + " HTTP " + r.codice + " risposta=" + r.testo.take(12000))
         return r.codice to r.testo
     }
 
