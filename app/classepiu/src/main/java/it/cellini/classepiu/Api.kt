@@ -289,6 +289,8 @@ class ClasseViva(private val utente: String, private val password: String) {
         val richiesta = JSONObject()
             .put("grades", JSONArray().put(o))
             .put("evtDate", dataVoto)
+            // grades2 valida alcuni campi anche al livello principale del payload.
+            .put("classType", o.optString("classType"))
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }
