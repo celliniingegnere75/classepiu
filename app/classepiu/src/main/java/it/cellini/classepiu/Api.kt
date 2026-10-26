@@ -67,7 +67,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     private fun registraLog(testo: String) {
         try {
-            val file = java.io.File(appContext?.filesDir ?: return, "classepiu_log.txt")
+            val file = java.io.File(appContext?.filesDir ?: return, "classepiu_media_log.txt")
             synchronized(ClasseViva::class.java) {
                 val data = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", java.util.Locale.ITALY).format(java.util.Date())
                 file.appendText(data + " " + testo + "\n", Charsets.UTF_8)
@@ -77,8 +77,17 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     private fun http(metodo: String, url: String, corpo: JSONObject? = null): Risposta {
         val inizio = System.currentTimeMillis()
-        val corpoLog = corpo?.let { val copia = JSONObject(it.toString()); if (url.endsWith("/auth/login")) copia.put("pass", "[OSCURATA]"); copia.toString().take(12000) } ?: ""
-        registraLog("RICHIESTA " + metodo + " " + url + " body=" + corpoLog)
+        // Il log registra esclusivamente la richiesta di modifica di un voto e la relativa risposta.
+        // Non registra login, classi, studenti, voti letti o altre chiamate API.
+        val tracciaVoto = metodo == "PUT" && url.endsWith("/evaluations/grades2")
+        if (tracciaVoto) {
+            appContext?.filesDir?.let { dir ->
+                runCatching { java.io.File(dir, "classepiu_log.txt").delete() }
+                runCatching { java.io.File(dir, "classepiu_media_log.txt").delete() }
+                runCatching { java.io.File(dir, "classepiu_media_log.txt").writeText("DIAGNOSTICA MODIFICA VOTO - solo richiesta PUT e risposta server\\n", Charsets.UTF_8) }
+            }
+            registraLog("RICHIESTA " + metodo + " " + url + " body=" + (corpo?.toString()?.take(6000) ?: ""))
+        }
         try {
         val c = URL(url).openConnection() as HttpURLConnection
         c.requestMethod = metodo
@@ -95,14 +104,10 @@ class ClasseViva(private val utente: String, private val password: String, priva
         flusso?.use { it.copyTo(out) }
         c.disconnect()
         val testo = String(out.toByteArray(), Charsets.UTF_8)
-        // La risposta di login contiene il token di sessione: non deve finire nel log diagnostico.
-        val testoLog = if (url.endsWith("/auth/login")) {
-            runCatching { JSONObject(testo).put("token", "[OSCURATO]").toString() }.getOrDefault("[risposta login oscurata]")
-        } else testo
-        registraLog("RISPOSTA " + metodo + " " + url + " HTTP " + codice + " durata=" + (System.currentTimeMillis() - inizio) + "ms bytes=" + out.size() + " body=" + testoLog.take(12000))
+        if (tracciaVoto) registraLog("RISPOSTA " + metodo + " " + url + " HTTP " + codice + " durata=" + (System.currentTimeMillis() - inizio) + "ms bytes=" + out.size() + " body=" + testo.take(6000))
         return Risposta(codice, out.toByteArray())
         } catch (e: Exception) {
-            registraLog("ECCEZIONE HTTP " + metodo + " " + url + " durata=" + (System.currentTimeMillis() - inizio) + "ms " + e.javaClass.name + ": " + e.message + "\n" + e.stackTraceToString())
+            if (tracciaVoto) registraLog("ECCEZIONE HTTP " + metodo + " " + url + " durata=" + (System.currentTimeMillis() - inizio) + "ms " + e.javaClass.name + ": " + e.message)
             throw e
         }
     }
