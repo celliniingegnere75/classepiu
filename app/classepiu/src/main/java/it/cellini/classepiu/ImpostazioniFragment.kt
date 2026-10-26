@@ -45,7 +45,7 @@ class ImpostazioniFragment : Fragment() {
     private val salvaLogLauncher = registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) {
             try {
-                val fileLog = java.io.File(requireContext().filesDir, "classepiu_log.txt")
+                val fileLog = java.io.File(requireContext().filesDir, "classepiu_media_log.txt")
                 requireContext().contentResolver.openOutputStream(uri)?.use { output ->
                     if (fileLog.exists()) fileLog.inputStream().use { input -> input.copyTo(output) }
                     else output.write("Log diagnostico non ancora presente.\n".toByteArray(Charsets.UTF_8))
@@ -205,7 +205,7 @@ class ImpostazioniFragment : Fragment() {
         val salvaLog = pillola(ctx, "salva log diagnostico", 14f, azzurro, Color.WHITE, ctx.dp(42)).apply {
             setPadding(ctx.dp(20), ctx.dp(8), ctx.dp(20), ctx.dp(8))
             contentDescription = "Salva il log diagnostico di ClassePiù"
-            setOnClickListener { salvaLogLauncher.launch("classepiu_log.txt") }
+            setOnClickListener { salvaLogLauncher.launch("classepiu_media_log.txt") }
         }
         col.addView(salvaLog, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             gravity = Gravity.CENTER_HORIZONTAL
