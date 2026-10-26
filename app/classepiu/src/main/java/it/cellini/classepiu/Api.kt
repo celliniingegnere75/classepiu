@@ -295,6 +295,7 @@ class ClasseViva(private val utente: String, private val password: String) {
             .put("subjectId", o.opt("subjectId") ?: JSONObject.NULL)
             .put("displayPos", o.opt("displayPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
             .put("componentPos", o.opt("componentPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
+            .put("periodPos", o.opt("periodPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }
