@@ -493,15 +493,57 @@ class VotiScheda : Scheda() {
         }
     }
 
-    /** Cancella il voto su classeviva e ricarica l'elenco se ci riesce. */
+    /** Cancella il voto e verifica rileggendo il registro: HTTP 2xx da solo non prova la cancellazione. */
     private fun cancellaSuClasseviva(v: Voto) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(requireContext()).client().cancellaVoto(v.grezzo) } }
-            val codice = r.getOrNull()?.first ?: 0
-            val msg = if (codice in 200..299) "voto cancellato" else "non cancellato (http $codice): ${r.getOrNull()?.second?.take(80) ?: r.exceptionOrNull()?.message}"
-            android.widget.Toast.makeText(requireContext(), msg, android.widget.Toast.LENGTH_LONG).show()
-            if (codice in 200..299) carica()
+            val ctx = requireContext()
+            val esito = withContext(Dispatchers.IO) {
+                runCatching {
+                    val c = Impostazioni(ctx).client()
+                    val prima = org.json.JSONObject(v.grezzo)
+                    val idVoto = prima.opt("evtId")?.toString().orEmpty()
+                    val (codice, risposta) = c.cancellaVoto(v.grezzo)
+                    var ancoraPresente: Boolean? = null
+                    var verifica = ""
+                    if (codice in 200..299 && idVoto.isNotBlank()) {
+                        val (cv, testoVoti) = c.votiGrezzi(tipo, classeId)
+                        verifica = "Verifica lettura HTTP $cv: " + testoVoti.take(1200)
+                        if (cv == 200) {
+                            ancoraPresente = Regex("\\\"evtId\\\"\\s*:\\s*${Regex.escape(idVoto)}(?:[,}])").containsMatchIn(testoVoti)
+                        }
+                    }
+                    Triple(codice, risposta, Pair(ancoraPresente, verifica))
+                }
+            }
+            val es = esito.getOrNull()
+            if (es == null) {
+                MaterialAlertDialogBuilder(ctx)
+                    .setTitle("Cancellazione non riuscita")
+                    .setMessage(esito.exceptionOrNull()?.message ?: "Errore sconosciuto")
+                    .setPositiveButton("chiudi", null).show()
+                return@launch
+            }
+            val (codice, risposta, controllo) = es
+            val (ancoraPresente, verifica) = controllo
+            if (codice in 200..299 && ancoraPresente == false) {
+                android.widget.Toast.makeText(ctx, "voto cancellato e verifica completata", android.widget.Toast.LENGTH_LONG).show()
+                carica()
+            } else {
+                val messaggio = when {
+                    codice !in 200..299 -> "ClasseViva ha rifiutato la cancellazione (HTTP $codice)."
+                    ancoraPresente == true -> "ClasseViva ha risposto HTTP $codice, ma il voto risulta ancora presente. Non considerarlo cancellato."
+                    else -> "ClasseViva ha risposto HTTP $codice, ma non è stato possibile verificare se il voto sia stato eliminato."
+                }
+                MaterialAlertDialogBuilder(ctx).setTitle("Cancellazione da verificare")
+                    .setMessage("$messaggio\n\nRisposta: ${risposta.take(1200)}\n\n$verifica")
+                    .setNegativeButton("chiudi", null)
+                    .setPositiveButton("copia dettagli") { _, _ ->
+                        ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(
+                            android.content.ClipData.newPlainText("cancellazione voto",
+                                "HTTP $codice\\n$risposta\\n$verifica\\n\\nVoto originale:\\n${v.grezzo}"))
+                    }.show()
+            }
         }
     }
 
