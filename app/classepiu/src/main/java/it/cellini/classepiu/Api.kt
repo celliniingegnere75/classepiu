@@ -95,7 +95,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
         flusso?.use { it.copyTo(out) }
         c.disconnect()
         val testo = String(out.toByteArray(), Charsets.UTF_8)
-        registraLog("RISPOSTA " + metodo + " " + url + " HTTP " + codice + " durata=" + (System.currentTimeMillis() - inizio) + "ms body=" + testo.take(12000))
+        // La risposta di login contiene il token di sessione: non deve finire nel log diagnostico.
+        val testoLog = if (url.endsWith("/auth/login")) {
+            runCatching { JSONObject(testo).put("token", "[OSCURATO]").toString() }.getOrDefault("[risposta login oscurata]")
+        } else testo
+        registraLog("RISPOSTA " + metodo + " " + url + " HTTP " + codice + " durata=" + (System.currentTimeMillis() - inizio) + "ms bytes=" + out.size() + " body=" + testoLog.take(12000))
         return Risposta(codice, out.toByteArray())
         } catch (e: Exception) {
             registraLog("ECCEZIONE HTTP " + metodo + " " + url + " durata=" + (System.currentTimeMillis() - inizio) + "ms " + e.javaClass.name + ": " + e.message + "\n" + e.stackTraceToString())
