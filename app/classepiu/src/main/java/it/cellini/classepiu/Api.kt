@@ -262,8 +262,8 @@ class ClasseViva(private val utente: String, private val password: String) {
     /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
     fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String,
                   componente: JSONObject? = null): Pair<Int, String> {
+        val o = ClasseVivaPayloadValidation.voto(grezzo)
         if (token.isEmpty()) login()
-        val o = JSONObject(grezzo)
         // valore e livello scelti dalla tabella di classeviva; "non fa media" è decimalValue assente
         if (valore.isNotBlank()) {
             o.put("displayValue", valore.trim())
@@ -327,8 +327,8 @@ class ClasseViva(private val utente: String, private val password: String) {
     }
 
     fun salvaFirma(grezzo: String, argomento: String, tipo: TipoLezione? = null): Pair<Int, String> {
+        val o = ClasseVivaPayloadValidation.firma(grezzo)
         if (token.isEmpty()) login()
-        val o = JSONObject(grezzo)
         o.remove("studentStatus")
         o.put("lessonArg", argomento)
         // classeviva risponde 412 "missing evtNumH": è il numero di ore della firma, che nella lezione letta si chiama evtDuration
@@ -344,8 +344,9 @@ class ClasseViva(private val utente: String, private val password: String) {
 
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
     fun cancellaVoto(grezzo: String): Pair<Int, String> {
+        val o = ClasseVivaPayloadValidation.voto(grezzo)
         if (token.isEmpty()) login()
-        val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", JSONObject(grezzo))
+        val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", o)
         return r.codice to r.testo
     }
 
