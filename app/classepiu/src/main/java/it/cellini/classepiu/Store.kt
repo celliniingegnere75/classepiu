@@ -18,9 +18,15 @@ class Impostazioni(ctx: Context) {
             ctx, "impostazioni", chiave,
             EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
             EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-        )
+        ).also { cifrate ->
+            migraPreferenzeLegacy(ctx, cifrate)
+        }
     } catch (e: Exception) {
-        ctx.getSharedPreferences("impostazioni_semplici", Context.MODE_PRIVATE)
+        // Mai ripiegare su preferenze in chiaro: meglio fermarsi che salvare password non cifrate.
+        throw IllegalStateException(
+            "Impossibile aprire l'archivio cifrato di ClassePiu. Le credenziali non sono state salvate in chiaro.",
+            e
+        )
     }
 
     var utente: String
@@ -114,6 +120,28 @@ class Impostazioni(ctx: Context) {
         else "manca gmail o la password per le app: in opzioni, funzioni."
 
     fun client() = ClasseViva(utente, password)
+}
+
+/** Migra una sola volta le vecchie impostazioni non cifrate, solo dopo aver aperto l'archivio cifrato. */
+private fun migraPreferenzeLegacy(ctx: Context, cifrate: SharedPreferences) {
+    val legacy = ctx.getSharedPreferences("impostazioni_semplici", Context.MODE_PRIVATE)
+    val valori = legacy.all
+    if (valori.isEmpty()) return
+
+    val editor = cifrate.edit()
+    for ((chiave, valore) in valori) {
+        if (cifrate.contains(chiave)) continue
+        when (valore) {
+            is String -> editor.putString(chiave, valore)
+            is Boolean -> editor.putBoolean(chiave, valore)
+            is Int -> editor.putInt(chiave, valore)
+            is Long -> editor.putLong(chiave, valore)
+            is Float -> editor.putFloat(chiave, valore)
+            is Set<*> -> editor.putStringSet(chiave, valore.filterIsInstance<String>().toSet())
+        }
+    }
+    check(editor.commit()) { "Migrazione delle impostazioni nell'archivio cifrato non riuscita." }
+    check(legacy.edit().clear().commit()) { "Impossibile eliminare le vecchie impostazioni non cifrate." }
 }
 
 /**
