@@ -538,10 +538,10 @@ class VotiScheda : Scheda() {
                 MaterialAlertDialogBuilder(ctx).setTitle("Cancellazione da verificare")
                     .setMessage("$messaggio\n\nRisposta: ${risposta.take(1200)}\n\n$verifica")
                     .setNegativeButton("chiudi", null)
-                    .setPositiveButton("copia dettagli") { _, _ ->
+                    .setPositiveButton("copia la risposta") { _, _ ->
                         ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(
-                            android.content.ClipData.newPlainText("cancellazione voto",
-                                "HTTP $codice\\n$risposta\\n$verifica\\n\\nVoto originale:\\n${v.grezzo}"))
+                            android.content.ClipData.newPlainText("risposta",
+                                "HTTP $codice\n$risposta\n\nverifica lettura:\n$verifica\n\nvoto originale:\n${v.grezzo}"))
                     }.show()
             }
         }
