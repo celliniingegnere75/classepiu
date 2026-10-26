@@ -12,6 +12,7 @@ import java.util.Locale
 
 /** Impostazioni dell'app. Credenziali e password restano solo sul telefono, cifrate. */
 class Impostazioni(ctx: Context) {
+    private val appContext = ctx.applicationContext
     private val p: SharedPreferences = try {
         val chiave = MasterKey.Builder(ctx).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build()
         EncryptedSharedPreferences.create(
@@ -119,7 +120,8 @@ class Impostazioni(ctx: Context) {
         } else if (usaRicevitore) "manca l'indirizzo o il codice del ricevitore: in opzioni, funzioni."
         else "manca gmail o la password per le app: in opzioni, funzioni."
 
-    fun client() = ClasseViva(utente, password)
+    // Passa il contesto applicativo: abilita il log HTTP diagnostico persistente in ClasseViva.
+    fun client() = ClasseViva(utente, password, appContext)
 }
 
 /** Migra una sola volta le vecchie impostazioni non cifrate, solo dopo aver aperto l'archivio cifrato. */
