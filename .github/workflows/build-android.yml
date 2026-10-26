@@ -29,6 +29,9 @@ jobs:
         with:
           gradle-version: '8.7'
 
+      - name: Set higher version code for recovery APK
+        run: sed -i 's/versionCode = buildNumber/versionCode = 100000 + buildNumber/' app/classepiu/build.gradle.kts
+
       - name: Build debug APK
         run: gradle --no-daemon -p app clean assembleDebug
 
