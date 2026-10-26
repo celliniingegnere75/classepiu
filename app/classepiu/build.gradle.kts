@@ -72,4 +72,6 @@ dependencies {
     implementation("com.google.android.gms:play-services-auth:21.2.0") // accesso con Google per inviare con Gmail
     implementation("com.sun.mail:android-mail:1.6.7")
     implementation("com.sun.mail:android-activation:1.6.7")
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.json:json:20240303")
 }
