@@ -288,7 +288,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
                   componente: JSONObject? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
         if (token.isEmpty()) login()
-        // valore e livello scelti dalla tabella di classeviva; "non fa media" è decimalValue assente
+        // ClasseViva richiede decimalValue numerico: inviare null provoca HTTP 412.
+        // Il fatto che il voto faccia media si rappresenta con weightFactor, non con decimalValue=null.
         if (valore.isNotBlank()) {
             o.put("displayValue", valore.trim())
             if (livelloCodice != null) {
@@ -296,7 +297,16 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 if (o.has("levelId")) o.put("levelId", "$livelloCodice:0")
             }
         }
-        if (!media) o.put("decimalValue", JSONObject.NULL) else if (decimale != null) o.put("decimalValue", decimale)
+        val decimaleOriginale = o.opt("decimalValue")
+            ?.takeIf { it != JSONObject.NULL }
+            ?.let { it.toString().toDoubleOrNull() }
+        val decimaleDaInviare = decimale
+            ?.takeIf { it.isFinite() && it >= 0.0 }
+            ?: decimaleOriginale?.takeIf { it.isFinite() && it >= 0.0 }
+            ?: valore.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+            ?: 0.0
+        o.put("decimalValue", decimaleDaInviare)
+        o.put("weightFactor", if (media) o.optDouble("weightFactor", 1.0).takeIf { it > 0.0 } ?: 1.0 else 0.0)
         componentiTipo[tipo]?.let { (desc, pos) -> o.put("componentDesc", desc); o.put("componentPos", pos) }
         // il voto letto non ha componentId: senza, classeviva può ignorare il cambio di tipo; si mette quello del periodo giusto
         if (componente != null) {
