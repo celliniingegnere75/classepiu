@@ -186,7 +186,8 @@ class VotiScheda : Scheda() {
         val larga = ((resources.displayMetrics.widthPixels - dp(28)) / 2.3).toInt()
         schede = materie.map { m ->
             val t = TextView(requireContext()).apply {
-                text = m.lowercase(); textSize = 14f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
+                text = m.lowercase().let { if (it.length > 15) it.take(14) + "…" else it } // nome materia: 15 caratteri al massimo
+                textSize = 14f; setTypeface(typeface, Typeface.BOLD); gravity = Gravity.CENTER
                 setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(12), 0, dp(12), 0)
                 setOnClickListener { materiaScelta = m; coloraLinguette(); mostra(elenco, tutti) }
             }

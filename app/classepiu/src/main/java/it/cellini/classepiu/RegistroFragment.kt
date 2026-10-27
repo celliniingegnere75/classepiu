@@ -254,8 +254,8 @@ class RegistroFragment : Fragment() {
         var dati: List<Classe> = emptyList()
 
         inner class VH(
-            val box: View, val tessera: View, val sopra: View, val nome: TextView, val descrizioneClasse: TextView, val descrizione: TextView, val codice: TextView,
-            val voti: TextView, val lezioni: TextView, val note: TextView
+            val box: View, val tessera: View, val sopra: View, val nome: TextView, val descrizioneClasse: TextView,
+            val appello: TextView, val codice: TextView, val voti: TextView, val lezioni: TextView, val note: TextView
         ) : RecyclerView.ViewHolder(box)
 
         override fun getItemCount() = dati.size
@@ -263,53 +263,52 @@ class RegistroFragment : Fragment() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val ctx = parent.context
             val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+            // tessera a sinistra: sigla grande e sotto la descrizione della classe (una riga, 12 caratteri al massimo)
             val nome = TextView(ctx).apply {
-                textSize = 30f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
-                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false
-                translationY = -ctx.dp(5).toFloat()
+                textSize = 28f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
+                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false // sigla lunga: va a capo come in classeviva (5AN_C / AA)
             }
             val descrizioneClasse = TextView(ctx).apply {
-                textSize = 9.5f; setTextColor(0xFF4E4E4E.toInt())
-                gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true); maxLines = 1
+                textSize = 10f; setTextColor(0xFF3B97CC.toInt()) // blu appena più scuro della sigla
+                gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 ellipsize = android.text.TextUtils.TruncateAt.END
+                setPadding(0, ctx.dp(3), 0, 0)
             }
             val tessera = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                setPadding(ctx.dp(3), ctx.dp(2), ctx.dp(3), ctx.dp(2))
+                setPadding(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
                 background = GradientDrawable().apply { setColor(0xFFF0F6FA.toInt()); cornerRadius = ctx.dp(14).toFloat() }
                 addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(descrizioneClasse, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
-            // casella alta (2/3): nome esteso della classe e materia, carattere piccolo; apre l'elenco dei ragazzi
-            val descrizione = TextView(ctx).apply {
+            // casella alta (metà): etichetta verde "appello rapido" e sotto la materia; apre l'elenco dei ragazzi
+            val appello = TextView(ctx).apply {
                 text = "appello rapido"
-                textSize = 11.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
-                gravity = Gravity.CENTER; maxLines = 1; setSingleLine(true); includeFontPadding = false
-                setPadding(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
-                background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
+                textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF424242.toInt())
+                gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
+                setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
+                background = GradientDrawable().apply { setColor(0xFFC8E6C9.toInt()); cornerRadius = ctx.dp(10).toFloat() }
             }
             val codice = TextView(ctx).apply {
-                textSize = 10.5f; setTextColor(celeste); setPadding(0, ctx.dp(2), 0, 0)
-                maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
+                textSize = 10.5f; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
+                setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
             }
             val sopra = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
-                // Contenitore trasparente: evita l’effetto di un pulsante dentro un altro.
-                addView(descrizione); addView(codice)
+                addView(appello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+                addView(codice, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
-            // casella bassa (1/3): voti, lezioni, note con colori diversi
+            // casella bassa (metà): lezioni, voti, note in tre azzurri pallidi diversi tra loro e dallo sfondo
             fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
-                text = testo; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFFFFFFFF.toInt())
+                text = testo; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF424242.toInt())
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
-            // Tre tonalità di blu distinte, tutte leggibili sul fondo chiaro della scheda.
-            val voti = tasto("voti", 0xFF1565C0.toInt())
-            val lezioni = tasto("lezioni", 0xFF039BE5.toInt())
-            val note = tasto("note", 0xFF3949AB.toInt())
+            val voti = tasto("voti", 0xFFB3DDF5.toInt())
+            val lezioni = tasto("lezioni", 0xFFD4EEFB.toInt())
+            val note = tasto("note", 0xFFC5D5F2.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 listOf(lezioni, voti, note).forEachIndexed { i, t ->
@@ -319,7 +318,7 @@ class RegistroFragment : Fragment() {
             val testi = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 2f).apply { topMargin = ctx.dp(6) })
+                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = ctx.dp(6) })
             }
             val riga = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -328,38 +327,31 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(18).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
-                addView(tessera, LinearLayout.LayoutParams(ctx.dp(100), ctx.dp(80)))
-                addView(testi, LinearLayout.LayoutParams(0, ctx.dp(80), 1f).apply { leftMargin = ctx.dp(14) })
+                addView(tessera, LinearLayout.LayoutParams(ctx.dp(110), ctx.dp(100)))
+                addView(testi, LinearLayout.LayoutParams(0, ctx.dp(100), 1f).apply { leftMargin = ctx.dp(14) })
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, ctx.dp(6), 0, ctx.dp(6))
                 }
             }
-            return VH(riga, tessera, sopra, nome, descrizioneClasse, descrizione, codice, voti, lezioni, note)
+            return VH(riga, tessera, sopra, nome, descrizioneClasse, appello, codice, voti, lezioni, note)
+        }
+
+        /** Toglie dall'inizio del testo la sigla o il codice della classe (es. "5AN_C - ELETTRONICA" -> "ELETTRONICA"). */
+        private fun senzaPrefisso(testo: String, vararg prefissi: String): String {
+            val t = testo.trim()
+            val p = prefissi.map { it.trim() }.filter { it.isNotEmpty() }.firstOrNull { t.startsWith(it, ignoreCase = true) } ?: return t
+            return t.drop(p.length).trimStart(' ', '-', ':', '–', '—')
         }
 
         override fun onBindViewHolder(h: VH, pos: Int) {
             val c = dati[pos]
             h.nome.text = c.nome
-            val descrizioneOriginale = c.descrizione.trim()
-            val prefissiDaRimuovere = listOf(c.codice.trim(), c.nome.trim())
-                .filter { it.isNotEmpty() }
-            val descrizioneBreve = prefissiDaRimuovere.firstOrNull {
-                descrizioneOriginale.startsWith(it, ignoreCase = true)
-            }?.let {
-                descrizioneOriginale.drop(it.length).trimStart(' ', '-', ':', '–', '—')
-            } ?: descrizioneOriginale
-            h.descrizioneClasse.text = if (descrizioneBreve.length > 12) descrizioneBreve.take(11) + "…" else descrizioneBreve
-            h.descrizioneClasse.visibility = if (descrizioneBreve.isEmpty()) View.GONE else View.VISIBLE
-            h.descrizione.text = "appello rapido"
-            h.descrizione.visibility = View.VISIBLE
-            val codiceOriginale = c.codice.trim()
-            val codiceMostrato = if (c.nome.isNotEmpty() && codiceOriginale.startsWith(c.nome, ignoreCase = true)) {
-                codiceOriginale.drop(c.nome.length).trimStart(' ', '-', ':', '–', '—')
-            } else {
-                codiceOriginale
-            }
-            h.codice.text = codiceMostrato
-            h.codice.visibility = if (c.codice.isEmpty()) View.GONE else View.VISIBLE
+            val descrizione = senzaPrefisso(c.descrizione, c.codice, c.nome)
+            h.descrizioneClasse.text = if (descrizione.length > 12) descrizione.take(11) + "…" else descrizione
+            h.descrizioneClasse.visibility = if (descrizione.isEmpty()) View.GONE else View.VISIBLE
+            val codice = senzaPrefisso(c.codice, c.nome)
+            h.codice.text = codice
+            h.codice.visibility = if (codice.isEmpty()) View.GONE else View.VISIBLE
             val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 (requireActivity() as MainActivity).apri(StudentiScheda(),
