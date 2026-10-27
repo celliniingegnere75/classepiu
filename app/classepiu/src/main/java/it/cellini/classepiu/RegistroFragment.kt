@@ -263,14 +263,14 @@ class RegistroFragment : Fragment() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val ctx = parent.context
             val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
-            // tessera a sinistra: sigla grande e sotto la descrizione della classe (fino a due righe)
+            // tessera a sinistra: sigla grande e sotto la descrizione della classe (una riga, 12 caratteri al massimo)
             val nome = TextView(ctx).apply {
                 textSize = 28f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
                 gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false // sigla lunga: va a capo come in classeviva (5AN_C / AA)
             }
             val descrizioneClasse = TextView(ctx).apply {
-                textSize = 10f; setTextColor(0xFF4E4E4E.toInt())
-                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false
+                textSize = 10f; setTextColor(0xFF3B97CC.toInt()) // blu appena più scuro della sigla
+                gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(0, ctx.dp(3), 0, 0)
             }
@@ -347,7 +347,7 @@ class RegistroFragment : Fragment() {
             val c = dati[pos]
             h.nome.text = c.nome
             val descrizione = senzaPrefisso(c.descrizione, c.codice, c.nome)
-            h.descrizioneClasse.text = descrizione
+            h.descrizioneClasse.text = if (descrizione.length > 12) descrizione.take(11) + "…" else descrizione
             h.descrizioneClasse.visibility = if (descrizione.isEmpty()) View.GONE else View.VISIBLE
             val codice = senzaPrefisso(c.codice, c.nome)
             h.codice.text = codice
