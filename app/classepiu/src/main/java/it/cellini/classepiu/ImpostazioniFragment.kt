@@ -466,15 +466,23 @@ class ImpostazioniFragment : Fragment() {
         val tasti = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL; isBaselineAligned = false
         }
-        tasti.addView(pillola(ctx, "compilazione\nmagica", 11f, Color.WHITE, azzurro, altezzaTasto).apply {
-            setTypeface(typeface, Typeface.BOLD); includeFontPadding = false; setLineSpacing(0f, 0.95f)
-            maxLines = 2; hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
-            setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(2))
-            ContextCompat.getDrawable(ctx, R.drawable.ic_cappello_mago)?.let { cappello ->
-                cappello.setBounds(0, 0, ctx.dp(18), ctx.dp(18))
-                setCompoundDrawablesRelative(cappello, null, null, null)
-                compoundDrawablePadding = ctx.dp(6)
-            }
+        // cappello a sinistra, "compilazione" su una riga e "magica" sotto: due scritte separate su riga singola, così non va mai a capo
+        tasti.addView(LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            background = GradientDrawable().apply { setColor(azzurro); cornerRadius = altezzaTasto / 2f }
+            isClickable = true; isFocusable = true
+            setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
+            addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
+                LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { rightMargin = ctx.dp(5) })
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                listOf("compilazione", "magica").forEach { parola ->
+                    addView(TextView(ctx).apply {
+                        text = parola; textSize = 11f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
+                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.CENTER
+                    })
+                }
+            })
             setOnClickListener { wizard(ctx, orario) }
         }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto))
         tasti.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, altezzaTasto).apply {
