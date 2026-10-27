@@ -583,6 +583,8 @@ class VotiScheda : Scheda() {
                             if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             if (attuale.optString("classType").isEmpty() && this@VotiScheda.tipo.isNotEmpty()) attuale.put("classType", this@VotiScheda.tipo)
+                            // il registro web chiama i gruppi per sigla (es. 5EA_AUA), non con il numero delle API
+                            attuale.put("webGroupCode", siglaClasse(nomeClasse))
                             val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
                             if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(700) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
                         }
@@ -601,6 +603,8 @@ class VotiScheda : Scheda() {
                             if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             if (attuale.optString("classType").isEmpty() && this@VotiScheda.tipo.isNotEmpty()) attuale.put("classType", this@VotiScheda.tipo)
+                            // il registro web chiama i gruppi per sigla (es. 5EA_AUA), non con il numero delle API
+                            attuale.put("webGroupCode", siglaClasse(nomeClasse))
                             val (cw, rw) = c.senzaVotoWeb(attuale.toString(), casella, decimale)
                             if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(700) else "classeviva web HTTP $cw ${rw.take(200)}"
                         }

@@ -461,7 +461,7 @@ class ImpostazioniFragment : Fragment() {
         }
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
         // I due tasti hanno la stessa grandezza: la scritta del wizard va su due righe più piccole, con il cappello da mago
-        val larghezzaTasto = ctx.dp(130)
+        val larghezzaTasto = ctx.dp(150)
         val altezzaTasto = ctx.dp(44)
         val tasti = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL; isBaselineAligned = false
@@ -485,10 +485,11 @@ class ImpostazioniFragment : Fragment() {
             })
             setOnClickListener { wizard(ctx, orario) }
         }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto))
-        tasti.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, altezzaTasto).apply {
+        tasti.addView(pillola(ctx, "pulisci", 13f, Color.WHITE, azzurro, altezzaTasto).apply {
+            setTypeface(typeface, Typeface.BOLD)
             setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto).apply { leftMargin = ctx.dp(40) })
+        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto).apply { leftMargin = ctx.dp(20) })
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })

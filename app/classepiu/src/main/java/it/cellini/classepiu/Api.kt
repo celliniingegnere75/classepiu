@@ -471,7 +471,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val gruppo = eGruppo(o)
         // come il registro web: per un gruppo (es. 5EA_AUA) classe_id e materia_id restano vuoti
         val indirizzo = "https://web.spaggiari.eu/cvv/app/default/regvoti.php?classe_id=${if (gruppo) "" else enc(t("classId"))}" +
-            "&gruppo_id=${if (gruppo) enc(t("classId")) else ""}&materia_id=${if (gruppo) "" else enc(t("subjectId"))}"
+            "&gruppo_id=${if (gruppo) enc(t("webGroupCode").ifEmpty { t("classId") }) else ""}&materia_id=${if (gruppo) "" else enc(t("subjectId"))}"
         val (codice, html) = web.chiama(indirizzo)
         if (codice !in 200..299) throw ClasseVivaException("registro web non leggibile (HTTP $codice)")
         data class Cella(val evento: String, val studente: String, val casella: String, val data: String, val voto: String)
@@ -488,7 +488,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
                     cifre(it.data) == cifre(t("evtDate").take(10)) && it.voto.trim() == t("displayValue").trim() }
                 .singleOrNull()
             ?: throw ClasseVivaException("non trovo il voto nella pagina del registro web (${celle.size} caselle lette): non ho mandato niente\n" +
-                "classe=${t("classId")} materia=${t("subjectId")} tipo=${t("classType")} studente=$studente evento=${t("evtId")}\n" +
+                "classe=${t("classId")} gruppo=${t("webGroupCode")} materia=${t("subjectId")} tipo=${t("classType")} studente=$studente evento=${t("evtId")}\n" +
                 "pagina: ${Regex("(?is)<title>(.*?)</title>").find(html)?.groupValues?.get(1)?.trim().orEmpty()} (${html.length} caratteri, " +
                 "${Regex("button_").findAll(html).count()} button_) " + html.replace(Regex("(?s)<script.*?</script>|<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim().take(200))
         return trovata.evento to trovata.casella
@@ -535,7 +535,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "ope" to "AJINS",
             "studente_id" to t("studentId"),
             "classe" to if (gruppo) "" else t("classId"),
-            "gruppo" to if (gruppo) t("classId") else "",
+            "gruppo" to if (gruppo) t("webGroupCode").ifEmpty { t("classId") } else "",
             "valore" to if (senzaVoto) "" else valore,
             "evento_codice" to "VG",
             "valore_display" to display,
