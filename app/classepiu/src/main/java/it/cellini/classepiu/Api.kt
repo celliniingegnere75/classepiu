@@ -410,14 +410,32 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * Se Spaggiari cambia qualcosa torna "" e il destinatario si scrive a mano.
      */
     fun emailRegistrata(): String = runCatching {
+        val biscotti = sessioneWeb()
+        if (biscotti.isEmpty()) return@runCatching ""
+
+        val stato = URL("https://web.spaggiari.eu/auth/app/default/OtpApi.php?a=recStatus").openConnection() as HttpURLConnection
+        stato.connectTimeout = 30_000
+        stato.readTimeout = 30_000
+        stato.setRequestProperty("User-Agent", BROWSER)
+        stato.setRequestProperty("Cookie", biscotti)
+        val testo = (if (stato.responseCode in 200..299) stato.inputStream else stato.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
+        stato.disconnect()
+        val j = JSONObject(testo)
+        (j.optJSONObject("data")?.optString("emailAddress") ?: j.optString("emailAddress")).trim().takeIf { it.contains('@') }.orEmpty()
+    }.getOrDefault("")
+
+    private var biscottiWeb = ""
+
+    /** Entra nel portale web di ClasseViva (sessione a cookie, come il browser) e restituisce i cookie, "" se non riesce. */
+    private fun sessioneWeb(): String {
+        if (biscottiWeb.isNotEmpty()) return biscottiWeb
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
-        val browser = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
         val login = URL("https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php?a=aLoginPwd").openConnection() as HttpURLConnection
         login.requestMethod = "POST"
         login.connectTimeout = 30_000
         login.readTimeout = 30_000
         login.instanceFollowRedirects = false
-        login.setRequestProperty("User-Agent", browser)
+        login.setRequestProperty("User-Agent", BROWSER)
         login.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
         login.doOutput = true
         login.outputStream.use { it.write("cid=&uid=${enc(utente)}&pwd=${enc(password)}&pin=&target=".toByteArray()) }
@@ -425,23 +443,70 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val biscotti = login.headerFields.filterKeys { it.equals("Set-Cookie", ignoreCase = true) }
             .values.flatten().map { it.substringBefore(';') }.filter { it.contains('=') }
         login.disconnect()
-        if (biscotti.isEmpty()) return@runCatching ""
+        biscottiWeb = biscotti.joinToString("; ")
+        return biscottiWeb
+    }
 
-        val stato = URL("https://web.spaggiari.eu/auth/app/default/OtpApi.php?a=recStatus").openConnection() as HttpURLConnection
-        stato.connectTimeout = 30_000
-        stato.readTimeout = 30_000
-        stato.setRequestProperty("User-Agent", browser)
-        stato.setRequestProperty("Cookie", biscotti.joinToString("; "))
-        val testo = (if (stato.responseCode in 200..299) stato.inputStream else stato.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
-        stato.disconnect()
-        val j = JSONObject(testo)
-        (j.optJSONObject("data")?.optString("emailAddress") ?: j.optString("emailAddress")).trim().takeIf { it.contains('@') }.orEmpty()
-    }.getOrDefault("")
+    /**
+     * Mette o toglie un voto dalla media. Le API REST (e l'app ufficiale) non lo permettono: si fa come ClasseViva web,
+     * che salva il voto con POST cvv/app/default/votiio.php (ope=AJINS) e no_voto=1 per "non fa media".
+     * Richiesta copiata dal browser il 27/10/2026; [casella] è "S1_3" (periodo_componente, dal componentId "Q1:S1_3:PRA:0").
+     */
+    fun mediaVotoWeb(grezzo: String, faMedia: Boolean, casella: String?, decimale: Double? = null): Pair<Int, String> {
+        val o = ClasseVivaPayloadValidation.voto(grezzo)
+        val biscotti = sessioneWeb()
+        if (biscotti.isEmpty()) return 0 to "accesso a classeviva web non riuscito"
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
+        val display = t("displayValue")
+        // i voti fuori media hanno decimalValue vuoto: si usa quello del livello scelto
+        val valore = t("decimalValue").ifEmpty { decimale?.toString() ?: display.replace(',', '.').filter { it.isDigit() || it == '.' } }
+        val data = t("evtDate").take(10).split("-").let { if (it.size == 3) "${it[2]}-${it[1]}-${it[0]}" else t("evtDate") }
+        val gruppo = t("classType").equals("G", ignoreCase = true)
+        val campi = linkedMapOf(
+            "ope" to "AJINS",
+            "studente_id" to t("studentId"),
+            "classe" to if (gruppo) "" else t("classId"),
+            "gruppo" to if (gruppo) t("classId") else "",
+            "valore" to valore,
+            "evento_codice" to "VG",
+            "valore_display" to display,
+            "descrizione_1" to "${casella ?: "S${o.optInt("periodPos", 1)}_${o.optInt("componentPos")}"}_${o.optInt("displayPos")}",
+            "data" to data,
+            "materia_id" to t("subjectId"),
+            "materia_desc" to t("subjectDesc"),
+            "causale_codice" to "VA",
+            "causale_desc" to "<ztx>Altro</ztx>",
+            "evento_id" to t("evtId"),
+            "nota_1" to t("notesForFamily"),
+            "nota_2" to t("internalNotes"),
+            "no_voto" to if (faMedia) "0" else "1",
+            "id_uda" to ""
+        )
+        val c = URL("https://web.spaggiari.eu/cvv/app/default/votiio.php").openConnection() as HttpURLConnection
+        c.requestMethod = "POST"
+        c.connectTimeout = 30_000
+        c.readTimeout = 30_000
+        c.setRequestProperty("User-Agent", BROWSER)
+        c.setRequestProperty("Cookie", biscotti)
+        c.setRequestProperty("Accept", "application/json, text/javascript, */*")
+        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
+        c.setRequestProperty("X-Requested-With", "XMLHttpRequest")
+        c.setRequestProperty("Origin", "https://web.spaggiari.eu")
+        c.setRequestProperty("Referer", "https://web.spaggiari.eu/cvv/app/default/regvoti.php")
+        c.doOutput = true
+        c.outputStream.use { it.write(campi.entries.joinToString("&") { (k, v) -> "$k=${enc(v)}" }.toByteArray()) }
+        val codice = c.responseCode
+        val testo = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
+        c.disconnect()
+        return codice to testo
+    }
 
     class CircolareRitirata : Exception("circolare ritirata dalla scuola")
 
     companion object {
         const val BASE = "https://web.spaggiari.eu/rest/v1"
+        private const val BROWSER = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
         const val RITIRATA = "no more active"
     }
 }

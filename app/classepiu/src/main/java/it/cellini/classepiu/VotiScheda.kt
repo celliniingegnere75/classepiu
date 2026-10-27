@@ -288,6 +288,7 @@ class VotiScheda : Scheda() {
         val tipi = listOf("scritto/grafico", "orale", "pratico")
         var valoreScelto = v.valore
         var tipoScelto = v.tipo.lowercase()
+        var mediaScelta = v.faMedia
         var scelta: java.util.Date? = runCatching { fApi.parse(v.data.take(10)) }.getOrNull()
         lateinit var finestra: androidx.appcompat.app.AlertDialog
         lateinit var txtValore: TextView
@@ -302,6 +303,7 @@ class VotiScheda : Scheda() {
             txtValore.text = testoModificabile(valoreScelto); txtValore.setTextColor(coloreVoto(numeroDa(valoreScelto)))
             val puoMedia = puoFareMedia(valoreScelto)
             media.visibility = if (puoMedia) android.view.View.VISIBLE else android.view.View.GONE
+            if (!puoMedia) { mediaScelta = false; media.isChecked = false }
         }
         fun aggiornaTipo() { txtTipo.text = testoModificabile(tipoScelto); txtTipo.setTextColor(colorePerRiga(if (tipoScelto.contains("scritt")) "scritto" else tipoScelto)) }
         fun aggiornaData() { txtData.text = scelta?.let { fIt.format(it) } ?: "data" }
@@ -355,15 +357,11 @@ class VotiScheda : Scheda() {
             addView(txtData)
         }
 
-        // riga 2: materia e spunta "media" (spuntata = il voto fa media), solo da leggere:
-        // le API di classeviva (e l'app ufficiale) non hanno un campo per togliere un voto dalla media
+        // riga 2: materia e spunta "media" (spuntata = il voto fa media); si scrive passando da classeviva web
         media = android.widget.CheckBox(ctx).apply {
-            text = "media"; textSize = 15f; isChecked = v.faMedia
+            text = "media"; textSize = 15f; isChecked = mediaScelta; isEnabled = modificabile
             buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
-            setOnCheckedChangeListener { b, _ ->
-                b.isChecked = v.faMedia
-                if (modificabile) android.widget.Toast.makeText(ctx, "la media si cambia solo da classeviva web", android.widget.Toast.LENGTH_LONG).show()
-            }
+            setOnCheckedChangeListener { _, c -> mediaScelta = c }
         }
         val riga2 = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -415,7 +413,7 @@ class VotiScheda : Scheda() {
                 addView(bottone("salva") {
                     val dataApi = scelta?.let { fApi.format(it) } ?: v.data
                     val annotazione = nota.text.toString()
-                    salvaSuClasseviva(v, valoreScelto, tipoScelto, dataApi, annotazione)
+                    salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, annotazione)
                     finestra.dismiss()
                 })
             }
@@ -440,7 +438,7 @@ class VotiScheda : Scheda() {
      * Stessa data e stesso tipo: si riscrive la stessa casella. Data o tipo diversi: classeviva identifica il voto
      * con data + tipo + posizione, quindi si crea il voto nella casella nuova e, solo dopo averlo ritrovato, si cancella il vecchio.
      */
-    private fun salvaSuClasseviva(v: Voto, valore: String, tipo: String, data: String, nota: String) {
+    private fun salvaSuClasseviva(v: Voto, valore: String, tipo: String, media: Boolean, data: String, nota: String) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
             val ctx = requireContext()
@@ -476,7 +474,11 @@ class VotiScheda : Scheda() {
                     val c = Impostazioni(ctx).client()
                     val decimale = livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }
                     var avviso = ""
-                    val esito = if (!sposta) {
+                    // solo la media cambiata: niente PUT, si passa direttamente da classeviva web
+                    val soloMedia = !sposta && valore == v.valore && nota.trim() == v.nota.trim() && media != v.faMedia
+                    val esito = if (soloMedia) {
+                        200 to ""
+                    } else if (!sposta) {
                         c.salvaVoto(v.grezzo, valore, decimale, data, nota)
                     } else {
                         // casella libera (1..30, come l'app ufficiale) nel tipo e periodo di arrivo, per non sovrascrivere altri voti
@@ -512,6 +514,21 @@ class VotiScheda : Scheda() {
                         }
                         e
                     }
+                    // media: le API non la gestiscono, si scrive come ClasseViva web sul voto com'è adesso nel registro
+                    if (esito.first in 200..299 && media != v.faMedia) {
+                        val (cm, adesso) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                        val attuale = if (cm == 200) votiDi(adesso).firstOrNull {
+                            it.optString("studentId") == vecchio.optString("studentId") && it.optString("subjectId") == vecchio.optString("subjectId") &&
+                            it.optString("componentDesc").equals(tipo, true) && it.optString("evtDate") == data && it.optString("displayValue") == valore
+                        } ?: votiDi(adesso).firstOrNull { idEvt(it) == idVecchio } else null
+                        if (attuale == null) avviso += "\nmedia non cambiata: non ritrovo il voto nel registro."
+                        else {
+                            val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
+                                ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
+                            val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
+                            if (cw !in 200..299) avviso += "\nmedia non cambiata: classeviva web ha risposto HTTP $cw ${rw.take(200)}"
+                        }
+                    }
                     // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto
                     var nonApplicati: List<String>? = null
                     if (esito.first in 200..299) {
@@ -524,6 +541,7 @@ class VotiScheda : Scheda() {
                                 if (ora.valore != valore) add("voto (resta ${ora.valore})")
                                 if (!ora.tipo.equals(tipo, true)) add("tipo (resta ${ora.tipo.lowercase()})")
                                 if (ora.data != data) add("data (resta ${ora.data})")
+                                if (ora.faMedia != media) add(if (ora.faMedia) "media (fa ancora media)" else "media (resta fuori media)")
                                 if (ora.nota.trim() != nota.trim()) add("annotazioni")
                             }
                         }
