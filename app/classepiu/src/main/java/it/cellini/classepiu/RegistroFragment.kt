@@ -298,7 +298,7 @@ class RegistroFragment : Fragment() {
             val note = tasto("note", 0xFFF0A040.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
-                listOf(voti, lezioni, note).forEachIndexed { i, t ->
+                listOf(lezioni, voti, note).forEachIndexed { i, t ->
                     addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { if (i > 0) leftMargin = ctx.dp(6) })
                 }
             }
