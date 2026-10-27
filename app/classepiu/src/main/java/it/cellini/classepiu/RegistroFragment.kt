@@ -285,10 +285,10 @@ class RegistroFragment : Fragment() {
             // casella alta (metà): etichetta verde "appello rapido" e sotto la materia; apre l'elenco dei ragazzi
             val appello = TextView(ctx).apply {
                 text = "appello rapido"
-                textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF424242.toInt())
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
-                background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
+                background = GradientDrawable().apply { setColor(0xFFC8E6C9.toInt()); cornerRadius = ctx.dp(10).toFloat() }
             }
             val codice = TextView(ctx).apply {
                 textSize = 10.5f; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
@@ -300,15 +300,15 @@ class RegistroFragment : Fragment() {
                 addView(appello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(codice, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
-            // casella bassa (metà): lezioni, voti, note in tre tonalità di blu
+            // casella bassa (metà): lezioni, voti, note in tre azzurri pallidi diversi tra loro e dallo sfondo
             fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
-                text = testo; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+                text = testo; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF424242.toInt())
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
-            val voti = tasto("voti", 0xFF1565C0.toInt())
-            val lezioni = tasto("lezioni", 0xFF039BE5.toInt())
-            val note = tasto("note", 0xFF3949AB.toInt())
+            val voti = tasto("voti", 0xFFB3DDF5.toInt())
+            val lezioni = tasto("lezioni", 0xFFD4EEFB.toInt())
+            val note = tasto("note", 0xFFC5D5F2.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 listOf(lezioni, voti, note).forEachIndexed { i, t ->
