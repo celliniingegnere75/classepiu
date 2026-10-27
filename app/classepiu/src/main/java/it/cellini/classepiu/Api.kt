@@ -236,6 +236,42 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return r.codice to r.testo
     }
 
+    /**
+     * Legge l'ora del ritardo breve dal popup di sola consultazione del registro web.
+     * Tutte le richieste sono GET: non viene mai inviato il modulo di cambio stato.
+     * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1.
+     */
+    fun orariRitardoBreveWeb(classeId: String, giorno: String, studentiRitardo: Set<String>): Map<String, String> {
+        if (studentiRitardo.isEmpty()) return emptyMap()
+        val web = sessioneWeb()
+        try {
+            fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+            val data = if (giorno.length == 8) "${giorno.substring(0, 4)}-${giorno.substring(4, 6)}-${giorno.substring(6, 8)}" else giorno
+            val base = "https://web.spaggiari.eu/cvv/app/default/regclasse_conpresenza.php?classe_id=${enc(classeId)}&gruppo_id="
+            val (codicePagina, pagina) = web.chiama(base)
+            if (codicePagina !in 200..299) throw ClasseVivaException("registro presenze web non leggibile (HTTP $codicePagina)")
+            val ultimaOra = Regex("""id\s*=\s*["']ora_posizione["'][^>]*value\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+                .find(pagina)?.groupValues?.get(1)
+                ?: Regex("""value\s*=\s*["']([^"']+)["'][^>]*id\s*=\s*["']ora_posizione["']""", RegexOption.IGNORE_CASE)
+                    .find(pagina)?.groupValues?.get(1)
+                ?: "1"
+            val risultato = linkedMapOf<String, String>()
+            for (studenteId in studentiRitardo) {
+                val url = base + "&action=cambiastato&studente_id=${enc(studenteId)}&data=${enc(data)}&ultimaorafirmata=${enc(ultimaOra)}"
+                val (codice, html) = web.chiama(url, referer = base)
+                if (codice !in 200..299) continue
+                val tag = Regex("""<input\b[^>]*\bid=["']popup_evento_ora["'][^>]*>""", RegexOption.IGNORE_CASE)
+                    .find(html)?.value ?: continue
+                val ora = Regex("""\bvalue\s*=\s*["']((?:[01]\d|2[0-3]):[0-5]\d)["']""", RegexOption.IGNORE_CASE)
+                    .find(tag)?.groupValues?.get(1) ?: continue
+                risultato[studenteId] = ora
+            }
+            return risultato
+        } finally {
+            web.close()
+        }
+    }
+
     /** Lezioni del docente nell'intervallo (yyyyMMdd), risposta grezza. */
     fun lezioniGrezze(da: String, a: String): Pair<Int, String> {
         if (token.isEmpty()) login()

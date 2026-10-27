@@ -135,7 +135,23 @@ class StudentiScheda : Scheda() {
                 }
             }
             val coppia = r.getOrNull()
-            val stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
+            var stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
+            // Per ABR1 l'API REST non restituisce l'ora: la leggiamo dal popup web in sola lettura.
+            val ritardiBrevi = stato.filterValues { it.isRitardoBreve }.keys
+            if (ritardiBrevi.isNotEmpty()) {
+                val orari = withContext(Dispatchers.IO) {
+                    runCatching {
+                        Impostazioni(requireContext()).client().orariRitardoBreveWeb(
+                            classeId, giorno, ritardiBrevi
+                        )
+                    }.getOrDefault(emptyMap())
+                }
+                if (orari.isNotEmpty()) {
+                    stato = stato.mapValues { (id, valore) ->
+                        if (valore.isRitardoBreve && orari[id] != null) valore.copy(ritardoBreve = orari[id]) else valore
+                    }
+                }
+            }
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             val diagnostica = coppia?.let { (g, l) ->
