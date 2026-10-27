@@ -289,12 +289,16 @@ class VotiScheda : Scheda() {
         var valoreScelto = v.valore
         var tipoScelto = v.tipo.lowercase()
         var mediaScelta = v.faMedia
+        // "senza voto" come l'interruttore "nessun voto" dell'app ufficiale: il voto resta ma si salva come "-"
+        val senza = v.valore.trim() == "-"
+        var valorePrima = if (senza) "" else v.valore
         var scelta: java.util.Date? = runCatching { fApi.parse(v.data.take(10)) }.getOrNull()
         lateinit var finestra: androidx.appcompat.app.AlertDialog
         lateinit var txtValore: TextView
         lateinit var txtTipo: TextView
         lateinit var txtData: TextView
         lateinit var media: android.widget.CheckBox
+        lateinit var senzaVoto: android.widget.CheckBox
 
         fun testoModificabile(t: String) = if (modificabile) "$t ▾" else t
         // solo i voti numerici e la "i" possono fare media: per gli altri la spunta non compare
@@ -311,7 +315,11 @@ class VotiScheda : Scheda() {
             // voti ammessi: la tabella di classeviva; se non si legge, una scala numerica di ripiego
             val voci = livelli.map { it.scritta }.ifEmpty { (1..10).flatMap { n -> listOf("$n-", "$n", "$n+", "$n½").filter { n < 10 || it == "10" || it == "10-" } }.drop(1) }
             MaterialAlertDialogBuilder(ctx).setTitle("voto")
-                .setItems(voci.toTypedArray()) { _, i -> valoreScelto = voci[i]; aggiornaValore() }
+                .setItems(voci.toTypedArray()) { _, i ->
+                    valoreScelto = voci[i]; valorePrima = voci[i]
+                    if (senzaVoto.isChecked) senzaVoto.isChecked = false
+                    aggiornaValore()
+                }
                 .show()
         }
         fun sceltaTipo() {
@@ -368,6 +376,20 @@ class VotiScheda : Scheda() {
             addView(txtMateria, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
             addView(media)
         }
+        // sotto la spunta media: "senza voto" (il voto diventa "-", blu, come "nessun voto" dell'app ufficiale)
+        senzaVoto = android.widget.CheckBox(ctx).apply {
+            text = "senza voto"; textSize = 15f; isChecked = senza; isEnabled = modificabile
+            buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
+            setOnCheckedChangeListener { _, c ->
+                if (c) { valoreScelto = "-"; aggiornaValore() }
+                else if (valorePrima.isNotEmpty()) { valoreScelto = valorePrima; mediaScelta = true; media.isChecked = true; aggiornaValore() }
+                else sceltaValore()
+            }
+        }
+        val rigaSenza = LinearLayout(ctx).apply {
+            gravity = Gravity.END or Gravity.CENTER_VERTICAL
+            addView(senzaVoto)
+        }
 
         // riga 3: cancella (solo sui propri voti)
         // pulsante rosso al centro, stessa grandezza di carattere di annulla e salva; il riquadro segue la scritta con pochi px in più
@@ -397,7 +419,9 @@ class VotiScheda : Scheda() {
         val nota = EditText(ctx).apply {
             setText(v.nota); textSize = 15f; minLines = 3; gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
-            setPadding(dp(4), dp(2), dp(4), dp(4)); isEnabled = modificabile
+            setPadding(dp(8), dp(6), dp(8), dp(6)); isEnabled = modificabile
+            // sfondo appena colorato al posto della riga sotto il campo
+            background = GradientDrawable().apply { setColor(0xFFF2F8FC.toInt()); cornerRadius = dp(6).toFloat() }
         }
 
         fun bottone(t: String, azione: () -> Unit) = TextView(ctx).apply {
@@ -411,6 +435,7 @@ class VotiScheda : Scheda() {
             addView(android.view.View(ctx), LinearLayout.LayoutParams(0, 1, 1f))
             if (modificabile) {
                 addView(bottone("salva") {
+                    if (valoreScelto.trim() == "-" && !senzaVoto.isChecked) { sceltaValore(); return@bottone }
                     val dataApi = scelta?.let { fApi.format(it) } ?: v.data
                     val annotazione = nota.text.toString()
                     salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, annotazione)
@@ -421,12 +446,15 @@ class VotiScheda : Scheda() {
 
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(8))
-            addView(riga1); addView(riga2); addView(riga3)
+            addView(riga1); addView(riga2); addView(rigaSenza); addView(riga3)
             if (!modificabile) {
                 addView(TextView(ctx).apply { text = "prof. " + v.docente.ifEmpty { "altro docente" }; textSize = 13f; setTextColor(0xFF777777.toInt()); setPadding(dp(2), dp(8), 0, 0) })
             }
             addView(etichetta); addView(nota)
-            addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(12) })
+            // linea azzurra subito sopra annulla e salva
+            addView(android.view.View(ctx).apply { setBackgroundColor(azzurro) },
+                LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(1)).apply { topMargin = dp(16) })
+            addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         aggiornaValore(); aggiornaTipo(); aggiornaData()
         finestra = MaterialAlertDialogBuilder(ctx).setView(corpo).create()
@@ -457,6 +485,9 @@ class VotiScheda : Scheda() {
             }
             val posTipo = if (cambiaTipo) componente!!.optInt("position", vecchio.optInt("componentPos")) else vecchio.optInt("componentPos")
             val sposta = cambiaTipo || data != vecchio.optString("evtDate")
+            // "senza voto" = "-": la media non c'entra; un voto riscritto al posto di "-" fa media
+            val senzaVoto = valore.trim() == "-"
+            val mediaPrima = if (v.valore.trim() == "-") true else v.faMedia
             fun idEvt(x: org.json.JSONObject) = x.opt("evtId")?.toString().orEmpty()
             fun votiDi(testo: String): List<org.json.JSONObject> {
                 val trovati = ArrayList<org.json.JSONObject>()
@@ -475,7 +506,7 @@ class VotiScheda : Scheda() {
                     val decimale = livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }
                     var avviso = ""
                     // solo la media cambiata: niente PUT, si passa direttamente da classeviva web
-                    val soloMedia = !sposta && valore == v.valore && nota.trim() == v.nota.trim() && media != v.faMedia
+                    val soloMedia = !sposta && valore == v.valore && nota.trim() == v.nota.trim() && media != mediaPrima && !senzaVoto
                     val esito = if (soloMedia) {
                         200 to ""
                     } else if (!sposta) {
@@ -515,7 +546,7 @@ class VotiScheda : Scheda() {
                         e
                     }
                     // media: le API non la gestiscono, si scrive come ClasseViva web sul voto com'è adesso nel registro
-                    if (esito.first in 200..299 && media != v.faMedia) {
+                    if (esito.first in 200..299 && media != mediaPrima && !senzaVoto) {
                         val (cm, adesso) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
                         val attuale = if (cm == 200) votiDi(adesso).firstOrNull {
                             it.optString("studentId") == vecchio.optString("studentId") && it.optString("subjectId") == vecchio.optString("subjectId") &&
@@ -541,7 +572,7 @@ class VotiScheda : Scheda() {
                                 if (ora.valore != valore) add("voto (resta ${ora.valore})")
                                 if (!ora.tipo.equals(tipo, true)) add("tipo (resta ${ora.tipo.lowercase()})")
                                 if (ora.data != data) add("data (resta ${ora.data})")
-                                if (ora.faMedia != media) add(if (ora.faMedia) "media (fa ancora media)" else "media (resta fuori media)")
+                                if (!senzaVoto && ora.faMedia != media) add(if (ora.faMedia) "media (fa ancora media)" else "media (resta fuori media)")
                                 if (ora.nota.trim() != nota.trim()) add("annotazioni")
                             }
                         }
