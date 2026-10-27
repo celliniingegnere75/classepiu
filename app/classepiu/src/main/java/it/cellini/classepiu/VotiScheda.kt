@@ -562,6 +562,21 @@ class VotiScheda : Scheda() {
                             if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(300) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
                         }
                     }
+                    // "senza voto" (chip blu): AJINS no_voto=1 per azzerare decimalValue nel registro web
+                    if (esito.first in 200..299 && senzaVoto) {
+                        val (cm, adesso) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                        val attuale = if (cm == 200) votiDi(adesso).firstOrNull {
+                            it.optString("studentId") == vecchio.optString("studentId") && it.optString("subjectId") == vecchio.optString("subjectId") &&
+                            it.optString("evtDate") == data && it.optString("displayValue").trim() == "-"
+                        } ?: votiDi(adesso).firstOrNull { idEvt(it) == idVecchio } else null
+                        if (attuale == null) avviso += "\nchip blu non applicato: non ritrovo il voto nel registro."
+                        else {
+                            val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
+                                ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
+                            val (cw, rw) = c.senzaVotoWeb(attuale.toString(), casella, decimale)
+                            if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(300) else "classeviva web HTTP $cw ${rw.take(200)}"
+                        }
+                    }
                     // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto
                     var nonApplicati: List<String>? = null
                     if (esito.first in 200..299) {
