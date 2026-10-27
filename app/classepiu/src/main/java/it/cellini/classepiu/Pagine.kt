@@ -25,7 +25,7 @@ const val SOMBRA_BARRA = 6
 /** Spazio da lasciare in fondo alle liste perché l'ultima voce si possa portare sopra la barra (dp). */
 const val SPAZIO_BARRA = ALTEZZA_BARRA + ALZO_BARRA + 12
 
-/** Barra delle pagine (home, registro, bacheca, setting), la stessa in tutte le schermate; la voce attiva ha l'etichetta più scura. */
+/** Barra delle pagine (home, registri, bacheca), la stessa in tutte le schermate; la voce attiva ha l'etichetta più scura. */
 class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
     private val etichette = mutableMapOf<Int, TextView>()
     val vista: LinearLayout = LinearLayout(ctx).apply {
@@ -42,9 +42,8 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
     init {
         listOf(
             Triple(MainActivity.TAB_HOME, "home", R.drawable.ic_nav_home),
-            Triple(MainActivity.TAB_REGISTRO, "registro", R.drawable.ic_nav_registro),
+            Triple(MainActivity.TAB_REGISTRO, "registri", R.drawable.ic_nav_registro),
             Triple(MainActivity.TAB_BACHECA, "bacheca", R.drawable.ic_nav_bacheca),
-            Triple(MainActivity.TAB_IMPOSTAZIONI, "setting", R.drawable.ic_nav_impostazioni),
         ).forEach { (tab, nome, icona) ->
             val img = ImageView(ctx).apply { setImageResource(icona); imageTintList = ColorStateList.valueOf(0xFF3F3F3F.toInt()) }
             val riquadro = FrameLayout(ctx).apply { addView(img, FrameLayout.LayoutParams(ctx.dp(30), ctx.dp(30), Gravity.CENTER)) }

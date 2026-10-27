@@ -28,7 +28,8 @@ import androidx.fragment.app.FragmentManager
 
 /**
  * Schermata principale come la bozza: fascia azzurra con la scritta classePiù, contenitore grigio
- * con angoli arrotondati e pannello bianco, barra delle pagine appoggiata alla fascia azzurra in basso (home, registro, bacheca, setting).
+ * con angoli arrotondati e pannello bianco, barra delle pagine appoggiata alla fascia azzurra in basso (home, registri, bacheca);
+ * l'ingranaggio in alto a destra apre lezioni e funzioni.
  */
 class MainActivity : AppCompatActivity() {
 
@@ -59,7 +60,7 @@ class MainActivity : AppCompatActivity() {
                 setImageResource(R.drawable.logo_bianco)
                 contentDescription = "ClassePiù"
                 adjustViewBounds = true
-            }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER).apply { rightMargin = dp(20) }) // un po' a sinistra, per lasciare posto all'orologio
+            }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             // a sinistra del logo: omino per uscire dall'account (con conferma)
             addView(FrameLayout(this@MainActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x40FFFFFF) }
@@ -68,18 +69,16 @@ class MainActivity : AppCompatActivity() {
                     FrameLayout.LayoutParams(dp(28), dp(28), Gravity.CENTER))
                 setOnClickListener { esciDallAccount() }
             }, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.START or Gravity.CENTER_VERTICAL).apply { leftMargin = dp(14) })
-            // a destra del logo: orologio funzionante e, sotto, il giorno ("mar, 2 ott")
-            val data = TextView(this@MainActivity).apply {
-                textSize = 11f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
-                setSingleLine(true); includeFontPadding = false
-            }
-            val orologio = Orologio(this@MainActivity, sulAzzurro = true).apply { alTick = { data.text = giornoBreve() } }
-            addView(LinearLayout(this@MainActivity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
-                addView(orologio, LinearLayout.LayoutParams(dp(34), dp(34)))
-                addView(data, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(2) })
-            }, FrameLayout.LayoutParams(dp(80), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.END or Gravity.CENTER_VERTICAL).apply { rightMargin = dp(16) })
+            // a destra del logo: ingranaggio bianco che apre lezioni e funzioni (stesso cerchio dell'omino)
+            addView(FrameLayout(this@MainActivity).apply {
+                background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x40FFFFFF) }
+                contentDescription = "lezioni e funzioni"
+                addView(ImageView(this@MainActivity).apply {
+                    setImageResource(R.drawable.ic_nav_impostazioni)
+                    imageTintList = android.content.res.ColorStateList.valueOf(Color.WHITE)
+                }, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER))
+                setOnClickListener { vaiA(TAB_IMPOSTAZIONI) }
+            }, FrameLayout.LayoutParams(dp(40), dp(40), Gravity.END or Gravity.CENTER_VERTICAL).apply { rightMargin = dp(14) })
         }
 
         // --- pannello bianco con angoli superiori arrotondati, da bordo a bordo (come la bozza);
@@ -164,10 +163,6 @@ class MainActivity : AppCompatActivity() {
             .setNegativeButton("annulla", null)
             .show()
     }
-
-    /** Giorno in forma breve, tutto minuscolo: "mar, 2 ott". */
-    private fun giornoBreve(): String =
-        java.text.SimpleDateFormat("EEE, d MMM", java.util.Locale.ITALY).format(java.util.Date()).lowercase().replace(".", "")
 
     /** Una sola volta: chiede di escludere l'app dall'ottimizzazione batteria, così i controlli partono a orario. */
     @SuppressLint("BatteryLife")
