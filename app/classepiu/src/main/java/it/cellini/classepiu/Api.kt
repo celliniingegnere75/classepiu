@@ -772,7 +772,9 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
         when (v) {
             is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), idStudente, livello + 1)
             is JSONObject -> {
-                val valore = v.t("displayValue", "decimalValue", "grade", "value", "gradeValue")
+                // "senza voto" salvato dal registro web può arrivare senza displayValue né decimalValue: si mostra come "-"
+                val senzaValore = v.has("evtId") && v.has("studentId")
+                val valore = v.t("displayValue", "decimalValue", "grade", "value", "gradeValue").ifEmpty { if (senzaValore) "-" else "" }
                 val èVoto = valore.isNotEmpty() && v.opt("grades") == null
                 // un voto ha un proprio "id": per lo studente valgono solo i campi esplicitamente suoi
                 val propri = if (èVoto) v.t("studentId", "student_id", "pupilId") else idDi(v)
