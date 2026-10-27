@@ -18,6 +18,8 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import org.json.JSONArray
+import org.json.JSONObject
 
 /** Elenco studenti con scheda divisa in anagrafica e indicatori delle nove ore. */
 class StudentiScheda : Scheda() {
@@ -120,14 +122,24 @@ class StudentiScheda : Scheda() {
         val giorno = formatoApi.format(selezionato.time)
         lavoro = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
-                runCatching { Impostazioni(requireContext()).client().statoGrezzo(tipo, classeId, giorno) }
+                runCatching {
+                    val client = Impostazioni(requireContext()).client()
+                    val giornaliero = client.statoGrezzo(tipo, classeId, giorno)
+                    val lezioni = client.lezioniClasseGrezze(tipo, classeId, giorno)
+                    giornaliero to lezioni
+                }
             }
-            val stato = r.getOrNull()?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap()
-            mostra(stato, caricamento = false, grezzo = r.getOrNull())
+            val coppia = r.getOrNull()
+            val stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap()
+            val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
+            val diagnostica = coppia?.let { (g, l) ->
+                (g.first to "STATO GIORNALIERO HTTP ${g.first}\\n${g.second}\\n\\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\\n${l.second}")
+            }
+            mostra(stato, statiOre = statiOre, caricamento = false, grezzo = diagnostica)
         }
     }
 
-    private fun mostra(stato: Map<String, Int>, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
+    private fun mostra(stato: Map<String, Int>, statiOre: Map<String, List<Int>> = emptyMap(), caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
         val ctx = requireContext()
 
@@ -184,10 +196,9 @@ class StudentiScheda : Scheda() {
                 val pallino = View(ctx).apply {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
-                        // Il dato orario non è restituito dall'endpoint giornaliero: grigio significa non disponibile.
-                        setColor(coloreOraPerStudente(s.id, ora))
+                        setColor(coloreOraPerStudente(statiOre, s.id, ora))
                     }
-                    contentDescription = "Ora ${ora + 1}: stato non disponibile"
+                    contentDescription = "Ora ${ora + 1}: ${descrizioneOra(statiOre[s.id]?.getOrNull(ora) ?: -1)}"
                 }
                 filaPallini.addView(pallino, LinearLayout.LayoutParams(dp(7), dp(7)).apply {
                     if (ora > 0) leftMargin = dp(3)
@@ -214,12 +225,93 @@ class StudentiScheda : Scheda() {
     }
 
     /**
-     * L'API attualmente letta dall'app fornisce soltanto lo stato giornaliero.
-     * Non si assegnano colori orari inventati: i pallini restano grigi finché non viene
-     * collegata una risposta ClasseViva che riporti la presenza per singola ora.
+     * Legge le presenze per ora dalla risposta lessons2/students.
+     * Ogni lezione contiene studentStatus: lo stato può arrivare come codice ClasseViva
+     * (es. HAB = assente) oppure come descrizione testuale.
+     * Valori normalizzati: 0 presente, 1 ritardo/uscita, 2 assente, -1 non disponibile.
      */
-    private fun coloreOraPerStudente(studentId: String, ora: Int): Int {
-        return grigioOra
+    private fun leggiStatiOre(grezzo: String): Map<String, List<Int>> {
+        val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return emptyMap()
+        val risultati = mutableMapOf<String, MutableList<Int>>()
+
+        fun testo(o: JSONObject, vararg chiavi: String): String {
+            for (chiave in chiavi) {
+                val v = o.opt(chiave)
+                if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty() && s != "null") return s
+                }
+            }
+            return ""
+        }
+
+        fun classifica(v: String): Int {
+            val s = v.trim().uppercase()
+            return when {
+                s.isEmpty() -> -1
+                s.contains("NOLESSON") || s.contains("NO_LESSON") -> -1
+                s.contains("ABSENT") || s.contains("ASSENT") || s == "AL" || s.startsWith("HAB") || s.startsWith("ABA") -> 2
+                s.contains("LATE") || s.contains("LEAV") || s.contains("RITARD") || s.contains("USCIT") ||
+                    s.startsWith("ABR") || s.startsWith("ABU") || s.startsWith("AB") -> 1
+                s.contains("PRESENT") || s.contains("PRESEN") || s == "PL" ||
+                    s.startsWith("HPR") || s.startsWith("AT") -> 0
+                else -> -1
+            }
+        }
+
+        fun cammina(v: Any?, livello: Int) {
+            if (livello > 7) return
+            when (v) {
+                is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), livello + 1)
+                is JSONObject -> {
+                    val ore = v.optJSONArray("studentStatus")
+                    if (ore != null) {
+                        val posizione = testo(v, "evtHPos", "hourPos", "evtHour", "hour", "lessonHour").toIntOrNull()
+                        if (posizione != null && posizione in 1..9) {
+                            for (i in 0 until ore.length()) {
+                                val record = ore.optJSONObject(i) ?: continue
+                                val studente = record.optJSONObject("student") ?: record
+                                val id = testo(record, "studentId", "student_id", "pupilId", "id")
+                                    .ifEmpty { testo(studente, "studentId", "student_id", "pupilId", "id") }
+                                if (id.isEmpty()) continue
+                                val statoRaw = testo(record, "status", "statusDesc", "statusCode", "evtCode", "eventCode", "description", "desc")
+                                    .ifEmpty { testo(studente, "status", "statusDesc", "statusCode", "evtCode", "eventCode", "description", "desc") }
+                                val stato = classifica(statoRaw)
+                                val listaOre = risultati.getOrPut(id) { MutableList(9) { -1 } }
+                                // Se la risposta contiene più firme nella stessa ora, l'assenza prevale.
+                                listaOre[posizione - 1] = when {
+                                    stato == 2 -> 2
+                                    stato == 1 && listaOre[posizione - 1] != 2 -> 1
+                                    stato == 0 && listaOre[posizione - 1] == -1 -> 0
+                                    else -> listaOre[posizione - 1]
+                                }
+                            }
+                        }
+                    }
+                    for (k in v.keys()) {
+                        if (k != "studentStatus") cammina(v.opt(k), livello + 1)
+                    }
+                }
+            }
+        }
+        cammina(radice, 0)
+        return risultati
+    }
+
+    private fun coloreOraPerStudente(statiOre: Map<String, List<Int>>, studentId: String, ora: Int): Int {
+        return when (statiOre[studentId]?.getOrNull(ora) ?: -1) {
+            0 -> verdeOra
+            1 -> gialloOra
+            2 -> rosaOra
+            else -> grigioOra
+        }
+    }
+
+    private fun descrizioneOra(stato: Int): String = when (stato) {
+        0 -> "presente"
+        1 -> "ritardo o uscita anticipata"
+        2 -> "assente"
+        else -> "stato non disponibile"
     }
 
     private fun testo(s: String, codice: Int = 0, corpo: String = "") {
