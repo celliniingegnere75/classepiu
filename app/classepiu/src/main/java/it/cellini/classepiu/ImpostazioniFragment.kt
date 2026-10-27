@@ -387,12 +387,13 @@ class ImpostazioniFragment : Fragment() {
         v.setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
     }
 
-    /** Orario come su classeviva: giorni da lunedì a venerdì in alto, sotto le 8 ore; toccando un'ora si sceglie classe e materia. */
+    /** Orario come su classeviva: giorni da lunedì a venerdì (o sabato) in alto, sotto le 8 ore; toccando un'ora si sceglie classe e materia. */
     private fun vistaOrario(ctx: android.content.Context): View {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
         val orario = Orario(ctx)
         val oggi = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
-        giornoScelto = if (oggi in java.util.Calendar.MONDAY..java.util.Calendar.FRIDAY) oggi - java.util.Calendar.MONDAY else 0
+        val ultimo = if (Impostazioni(ctx).sabato) java.util.Calendar.SATURDAY else java.util.Calendar.FRIDAY
+        giornoScelto = if (oggi in java.util.Calendar.MONDAY..ultimo) oggi - java.util.Calendar.MONDAY else 0
 
         val giorni = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; setPadding(ctx.dp(15), ctx.dp(6), ctx.dp(15), ctx.dp(2)) }
         val pillole = Orario.GIORNI.mapIndexed { i, g ->
@@ -458,14 +459,27 @@ class ImpostazioniFragment : Fragment() {
             }, piena().apply { topMargin = ctx.dp(6) })
             Triple(classe, materia, aulaView)
         }
-        ore.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
+        // "wizard" compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota
+        val tasti = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL }
+        tasti.addView(pillola(ctx, "wizard", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
+            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
+            setOnClickListener { wizard(ctx, orario) }
+        })
+        tasti.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
             setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL; topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(12) })
+        ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
+            topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
+        riga(ctx, ore, "settimana fino a sabato", Impostazioni(ctx).sabato, ctx.dp(10)) { on ->
+            Impostazioni(ctx).sabato = on
+            if (!on && giornoScelto > 4) giornoScelto = 4
+            aggiornaOrario()
+        }
 
         aggiornaOrario = {
+            pillole[5].visibility = if (Impostazioni(ctx).sabato) View.VISIBLE else View.GONE
             pillole.forEachIndexed { i, p ->
                 p.background = GradientDrawable().apply { cornerRadius = ctx.dp(16).toFloat(); setColor(if (i == giornoScelto) azzurro else 0xFFF0F0F0.toInt()) }
                 p.setTextColor(if (i == giornoScelto) Color.WHITE else 0xFF333333.toInt())
@@ -541,6 +555,57 @@ class ImpostazioniFragment : Fragment() {
                     (v as? TextView)?.minHeight = ctx.dp(52)
                 }
         }
+
+    /**
+     * Wizard: classe e materia di ogni ora dalle proprie firme dei 7 giorni prima di oggi (da lunedì a venerdì o sabato).
+     * Le ore senza firma restano vuote; l'aula e gli orari di inizio e fine non si toccano.
+     */
+    private fun wizard(ctx: android.content.Context, orario: Orario) {
+        val imp = Impostazioni(ctx)
+        if (!imp.pronta) { messaggio("prima accedi a classeviva."); return }
+        val giorni = if (imp.sabato) 6 else 5
+        val (da, a) = OrarioDalleFirme.intervallo()
+        fun leggibile(d: String) = "${d.substring(6, 8)}/${d.substring(4, 6)}"
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("compilo l'orario dalle firme?")
+            .setMessage("cerco le tue firme dal ${leggibile(da)} al ${leggibile(a)} e riempio classe e materia da lunedì a ${GIORNI_INTERI[giorni - 1]}. Le ore senza firma restano vuote.")
+            .setPositiveButton("compila") { _, _ ->
+                messaggio("cerco le firme…")
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val esito = withContext(Dispatchers.IO) {
+                        runCatching {
+                            val c = imp.client().also { it.login() }
+                            if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
+                            val (codice, testo) = c.lezioniGrezze(da, a)
+                            Triple(codice, testo, if (codice == 200) OrarioDalleFirme.leggi(testo, c.idDocente(), ordinari(), giorni) else emptyMap())
+                        }
+                    }
+                    if (!isAdded) return@launch
+                    esito.onSuccess { (codice, testo, trovate) ->
+                        if (trovate.isEmpty()) {
+                            // niente da scrivere: l'orario resta com'era
+                            MaterialAlertDialogBuilder(ctx)
+                                .setMessage(if (codice == 200) "nessuna firma trovata dal ${leggibile(da)} al ${leggibile(a)}: l'orario non è cambiato." else "classeviva ha risposto HTTP $codice.")
+                                .setPositiveButton("ok", null)
+                                .setNeutralButton("copia la risposta di classeviva") { _, _ -> copiaTesto(ctx, "HTTP $codice\n$testo") }
+                                .show()
+                            return@onSuccess
+                        }
+                        for (g in 1..giorni) for (o in 1..Orario.ORE) orario.imposta(g, o, trovate[g to o])
+                        aggiornaOrario()
+                        messaggio("orario compilato: ${trovate.size} ore dalle firme.")
+                    }.onFailure { messaggio("wizard non riuscito: ${it.message}") }
+                }
+            }
+            .setNegativeButton("annulla", null)
+            .show()
+    }
+
+    private fun copiaTesto(ctx: android.content.Context, testo: String) {
+        val cm = ctx.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+        cm.setPrimaryClip(android.content.ClipData.newPlainText("risposta", testo))
+        messaggio("risposta di classeviva copiata.")
+    }
 
     /** Svuota classe, materia e aula del giorno scelto o di tutta la settimana (gli orari di inizio e fine restano). */
     private fun pulisci(ctx: android.content.Context, orario: Orario) {
@@ -734,6 +799,6 @@ class ImpostazioniFragment : Fragment() {
 
     companion object {
         val ORE = listOf(2, 4, 8, 24)
-        val GIORNI_INTERI = listOf("lunedì", "martedì", "mercoledì", "giovedì", "venerdì")
+        val GIORNI_INTERI = listOf("lunedì", "martedì", "mercoledì", "giovedì", "venerdì", "sabato")
     }
 }

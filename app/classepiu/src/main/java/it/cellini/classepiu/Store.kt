@@ -95,6 +95,10 @@ class Impostazioni(ctx: Context) {
     var controlloAutomatico: Boolean
         get() = p.getBoolean("automatico", true)
         set(v) = p.edit().putBoolean("automatico", v).apply()
+    /** Settimana fino a sabato nell'orario (altrimenti da lunedì a venerdì). */
+    var sabato: Boolean
+        get() = p.getBoolean("sabato", false)
+        set(v) = p.edit().putBoolean("sabato", v).apply()
     var oreIntervallo: Int
         get() = p.getInt("ore", 2)
         set(v) = p.edit().putInt("ore", v).apply()
@@ -210,7 +214,7 @@ data class Lezione(val giorno: Int, val ora: Int, val fascia: Fascia, val classe
 /**
  * Orario settimanale del docente, solo sul telefono, in un unico file orario.json:
  * {"v":2, "fasce":[[480,540],…], "fissate":[1,3], "celle":{"1-1":{"c":"4ETA","m":"ELETTROTECNICA…","a":"LAB1"},…}}
- * Giorni 1 = lunedì … 5 = venerdì, ore 1…ORE. Le fasce orarie valgono per tutti i giorni.
+ * Giorni 1 = lunedì … 6 = sabato (il sabato si vede solo se acceso in "lezioni"), ore 1…ORE. Le fasce orarie valgono per tutti i giorni.
  * Il file si legge una volta sola e in memoria i dati stanno in due array a indice fisso.
  */
 class Orario(ctx: Context) {
@@ -317,7 +321,7 @@ class Orario(ctx: Context) {
     }
 
     companion object {
-        val GIORNI = listOf("lun", "mar", "mer", "gio", "ven")
+        val GIORNI = listOf("lun", "mar", "mer", "gio", "ven", "sab")
         const val ORE = 9
         const val AULA_MAX = 5
     }
