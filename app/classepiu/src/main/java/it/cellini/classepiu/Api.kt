@@ -410,76 +410,38 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * Se Spaggiari cambia qualcosa torna "" e il destinatario si scrive a mano.
      */
     fun emailRegistrata(): String = runCatching {
-        val biscotti = sessioneWeb()
-        if (biscotti.isEmpty()) return@runCatching ""
-
-        val stato = URL("https://web.spaggiari.eu/auth/app/default/OtpApi.php?a=recStatus").openConnection() as HttpURLConnection
-        stato.connectTimeout = 30_000
-        stato.readTimeout = 30_000
-        stato.setRequestProperty("User-Agent", BROWSER)
-        stato.setRequestProperty("Cookie", biscotti)
-        val testo = (if (stato.responseCode in 200..299) stato.inputStream else stato.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
-        stato.disconnect()
-        val j = JSONObject(testo)
-        (j.optJSONObject("data")?.optString("emailAddress") ?: j.optString("emailAddress")).trim().takeIf { it.contains('@') }.orEmpty()
+        sessioneWeb().use { web ->
+            val (codice, testo) = web.chiama("https://web.spaggiari.eu/auth/app/default/OtpApi.php?a=recStatus")
+            if (codice !in 200..299) return@runCatching ""
+            val j = JSONObject(testo)
+            (j.optJSONObject("data")?.optString("emailAddress") ?: j.optString("emailAddress")).trim().takeIf { it.contains('@') }.orEmpty()
+        }
     }.getOrDefault("")
 
-    private var biscottiWeb = ""
-
-    /** Entra nel portale web di ClasseViva (sessione a cookie, come il browser) e restituisce i cookie, "" se non riesce. */
-    private fun sessioneWeb(): String {
-        if (biscottiWeb.isNotEmpty()) return biscottiWeb
+    /**
+     * Entra nel portale web di ClasseViva dentro un browser invisibile (vedi [WebNascosto]): fatto a mano
+     * con HttpURLConnection la protezione antibot risponde HTTP 403. Va chiuso dopo l'uso.
+     */
+    private fun sessioneWeb(): WebNascosto {
+        val ctx = appContext ?: throw ClasseVivaException("accesso a classeviva web non disponibile qui")
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
-        val barattolo = LinkedHashMap<String, String>()
-        // una richiesta come il browser: manda i cookie raccolti, tiene quelli nuovi, segue a mano i rimandi
-        fun chiama(indirizzo: String, corpo: String? = null, referer: String? = null): Pair<Int, String> {
-            var url = indirizzo
-            var dati = corpo
-            repeat(6) {
-                val c = URL(url).openConnection() as HttpURLConnection
-                c.requestMethod = if (dati != null) "POST" else "GET"
-                c.connectTimeout = 30_000
-                c.readTimeout = 30_000
-                c.instanceFollowRedirects = false
-                c.setRequestProperty("User-Agent", BROWSER)
-                if (barattolo.isNotEmpty()) c.setRequestProperty("Cookie", barattolo.entries.joinToString("; ") { "${it.key}=${it.value}" })
-                if (referer != null) c.setRequestProperty("Referer", referer)
-                if (dati != null) {
-                    c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-                    c.setRequestProperty("X-Requested-With", "XMLHttpRequest")
-                    c.setRequestProperty("Origin", "https://web.spaggiari.eu")
-                    c.doOutput = true
-                    c.outputStream.use { it.write(dati!!.toByteArray()) }
-                }
-                val codice = c.responseCode
-                c.headerFields.filterKeys { it != null && it.equals("Set-Cookie", ignoreCase = true) }.values.flatten().forEach { riga ->
-                    val coppia = riga.substringBefore(';')
-                    val nome = coppia.substringBefore('=').trim()
-                    val valore = coppia.substringAfter('=', "").trim()
-                    if (nome.isNotEmpty()) { if (valore.isEmpty() || valore == "deleted") barattolo.remove(nome) else barattolo[nome] = valore }
-                }
-                val dove = c.getHeaderField("Location")
-                val testo = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
-                c.disconnect()
-                if (codice in 300..399 && !dove.isNullOrBlank()) { url = URL(URL(url), dove).toString(); dati = null } else return codice to testo
+        val web = WebNascosto(ctx)
+        try {
+            web.apri()
+            val (codice, testo) = web.chiama("https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php?a=aLoginPwd",
+                "cid=&uid=${enc(utente)}&pwd=${enc(password)}&pin=&target=")
+            val j = runCatching { JSONObject(testo) }.getOrNull()
+            val auth = j?.optJSONObject("data")?.optJSONObject("auth")
+            val errori = j?.optJSONArray("error")?.let { a -> (0 until a.length()).joinToString(", ") { a.optString(it) } }.orEmpty()
+            if (codice !in 200..299 || j == null || (auth != null && !auth.optBoolean("loggedIn", false)) || errori.isNotBlank()) {
+                val motivo = errori.ifBlank { auth?.optJSONArray("errors")?.toString() ?: testo.replace(Regex("<[^>]*>"), " ").replace(Regex("\\s+"), " ").trim().take(200) }
+                throw ClasseVivaException("accesso a classeviva web non riuscito (HTTP $codice): $motivo")
             }
-            return 0 to "troppi rimandi"
+            return web
+        } catch (e: Exception) {
+            web.close()
+            throw e
         }
-        // come il browser: prima la pagina di accesso (cookie di sessione), poi il login
-        val paginaLogin = "https://web.spaggiari.eu/home/app/default/login.php"
-        chiama(paginaLogin)
-        val (codice, testo) = chiama("https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php?a=aLoginPwd",
-            "cid=&uid=${enc(utente)}&pwd=${enc(password)}&pin=&target=", paginaLogin)
-        val j = runCatching { JSONObject(testo) }.getOrNull()
-        val auth = j?.optJSONObject("data")?.optJSONObject("auth")
-        val errori = j?.optJSONArray("error")?.let { a -> (0 until a.length()).joinToString(", ") { a.optString(it) } }.orEmpty()
-        if (codice !in 200..299 || (auth != null && !auth.optBoolean("loggedIn", false)) || errori.isNotBlank()) {
-            val motivo = errori.ifBlank { auth?.optJSONArray("errors")?.toString() ?: testo.take(200) }
-            throw ClasseVivaException("accesso a classeviva web non riuscito (HTTP $codice): $motivo")
-        }
-        if (barattolo.isEmpty()) throw ClasseVivaException("accesso a classeviva web non riuscito: nessun cookie di sessione (HTTP $codice) ${testo.take(200)}")
-        biscottiWeb = barattolo.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        return biscottiWeb
     }
 
     /**
@@ -487,20 +449,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * con attributi studente_id, evento_id, mydata, voto (vedi loadPopup in regvoti.js). Restituisce (evento_id, casella tipo "S1_3_1").
      * Prima per evento_id uguale all'evtId delle API, poi per studente + data + voto mostrato. Se non lo trova non si manda niente.
      */
-    private fun cellaWeb(o: JSONObject, biscotti: String): Pair<String, String> {
+    private fun cellaWeb(o: JSONObject, web: WebNascosto): Pair<String, String> {
         fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val gruppo = t("classType").equals("G", ignoreCase = true)
         val indirizzo = "https://web.spaggiari.eu/cvv/app/default/regvoti.php?classe_id=${if (gruppo) "" else enc(t("classId"))}" +
             "&materia_id=${enc(t("subjectId"))}&gruppo_id=${if (gruppo) enc(t("classId")) else ""}"
-        val c = URL(indirizzo).openConnection() as HttpURLConnection
-        c.connectTimeout = 30_000
-        c.readTimeout = 60_000
-        c.setRequestProperty("User-Agent", BROWSER)
-        c.setRequestProperty("Cookie", biscotti)
-        val codice = c.responseCode
-        val html = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
-        c.disconnect()
+        val (codice, html) = web.chiama(indirizzo)
         if (codice !in 200..299) throw ClasseVivaException("registro web non leggibile (HTTP $codice)")
         data class Cella(val evento: String, val studente: String, val casella: String, val data: String, val voto: String)
         fun attr(tag: String, nome: String) = Regex("""\b$nome\s*=\s*["']([^"']*)["']""").find(tag)?.groupValues?.get(1).orEmpty()
@@ -528,7 +483,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
      */
     fun mediaVotoWeb(grezzo: String, faMedia: Boolean, casella: String?, decimale: Double? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
-        val biscotti = try { sessioneWeb() } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
+        val web = try { sessioneWeb() } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
+        web.use { return mediaVotoWeb(o, web, faMedia, decimale) }
+    }
+
+    private fun mediaVotoWeb(o: JSONObject, web: WebNascosto, faMedia: Boolean, decimale: Double?): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
         val display = t("displayValue")
@@ -538,7 +497,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val gruppo = t("classType").equals("G", ignoreCase = true)
         // id dell'evento e casella si prendono dalla pagina del registro web: con valori sbagliati
         // AJRECUPERA non tocca il voto e crea un "voto di recupero" vuoto (blu, "-") in un'altra casella
-        val cella = try { cellaWeb(o, biscotti) } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
+        val cella = try { cellaWeb(o, web) } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
         val descrizione = cella.second
         val campi = if (!faMedia) linkedMapOf(
             "ope" to "AJRECUPERA",
@@ -565,22 +524,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "no_voto" to "0",
             "id_uda" to ""
         )
-        val c = URL("https://web.spaggiari.eu/cvv/app/default/votiio.php").openConnection() as HttpURLConnection
-        c.requestMethod = "POST"
-        c.connectTimeout = 30_000
-        c.readTimeout = 30_000
-        c.setRequestProperty("User-Agent", BROWSER)
-        c.setRequestProperty("Cookie", biscotti)
-        c.setRequestProperty("Accept", "application/json, text/javascript, */*")
-        c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded")
-        c.setRequestProperty("X-Requested-With", "XMLHttpRequest")
-        c.setRequestProperty("Origin", "https://web.spaggiari.eu")
-        c.setRequestProperty("Referer", "https://web.spaggiari.eu/cvv/app/default/regvoti.php")
-        c.doOutput = true
-        c.outputStream.use { it.write(campi.entries.joinToString("&") { (k, v) -> "$k=${enc(v)}" }.toByteArray()) }
-        val codice = c.responseCode
-        val testo = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
-        c.disconnect()
+        val (codice, testo) = web.chiama("https://web.spaggiari.eu/cvv/app/default/votiio.php",
+            campi.entries.joinToString("&") { (k, v) -> "$k=${enc(v)}" }, "https://web.spaggiari.eu/cvv/app/default/regvoti.php")
         // AJRECUPERA risponde "OK" oppure "periodo_bloccato"; AJINS {"status":"OK"}
         val ok = testo.trim() == "OK" || runCatching { JSONObject(testo).optString("status") == "OK" }.getOrDefault(false)
         return (if (codice in 200..299 && !ok) 422 else codice) to testo
@@ -590,7 +535,6 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     companion object {
         const val BASE = "https://web.spaggiari.eu/rest/v1"
-        private const val BROWSER = "Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Mobile Safari/537.36"
         const val RITIRATA = "no more active"
     }
 }
