@@ -576,7 +576,7 @@ class VotiScheda : Scheda() {
                             if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
-                            if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(300) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
+                            if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(700) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
                         }
                     }
                     // "senza voto" (chip blu): AJINS no_voto=1 per azzerare decimalValue nel registro web
@@ -593,7 +593,7 @@ class VotiScheda : Scheda() {
                             if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             val (cw, rw) = c.senzaVotoWeb(attuale.toString(), casella, decimale)
-                            if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(300) else "classeviva web HTTP $cw ${rw.take(200)}"
+                            if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(700) else "classeviva web HTTP $cw ${rw.take(200)}"
                         }
                     }
                     // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto

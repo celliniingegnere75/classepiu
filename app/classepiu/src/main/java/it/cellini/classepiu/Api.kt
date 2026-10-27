@@ -479,7 +479,10 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: celle.filter { it.studente == studente && it.evento.isNotEmpty() && it.evento != "0" &&
                     cifre(it.data) == cifre(t("evtDate").take(10)) && it.voto.trim() == t("displayValue").trim() }
                 .singleOrNull()
-            ?: throw ClasseVivaException("non trovo il voto nella pagina del registro web (${celle.size} caselle lette): non ho mandato niente")
+            ?: throw ClasseVivaException("non trovo il voto nella pagina del registro web (${celle.size} caselle lette): non ho mandato niente\n" +
+                "classe=${t("classId")} materia=${t("subjectId")} tipo=${t("classType")} studente=$studente evento=${t("evtId")}\n" +
+                "pagina: ${Regex("(?is)<title>(.*?)</title>").find(html)?.groupValues?.get(1)?.trim().orEmpty()} (${html.length} caratteri, " +
+                "${Regex("button_").findAll(html).count()} button_) " + html.replace(Regex("(?s)<script.*?</script>|<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim().take(200))
         return trovata.evento to trovata.casella
     }
 
