@@ -135,7 +135,7 @@ class StudentiScheda : Scheda() {
                 }
             }
             val coppia = r.getOrNull()
-            val stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap()
+            val stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
             val diagnostica = coppia?.let { (g, l) ->
                 (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}")
@@ -144,12 +144,13 @@ class StudentiScheda : Scheda() {
         }
     }
 
-    private fun mostra(stato: Map<String, Int>, statiOre: Map<String, List<Int>> = emptyMap(), caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
+    private fun mostra(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
         val ctx = requireContext()
 
         studenti.forEach { s ->
-            val valore = stato[s.id] ?: -1
+            val statoStudente = stato[s.id] ?: StatoGiornaliero(-1)
+            val valore = statoStudente.valore
             val coloreAnagrafica = when {
                 caricamento -> 0xFFFCFCFC.toInt()
                 valore == 2 -> rosaAssente
@@ -209,7 +210,29 @@ class StudentiScheda : Scheda() {
                     if (ora > 0) leftMargin = dp(3)
                 })
             }
-            cellaOre.addView(filaPallini, LinearLayout.LayoutParams(0, dp(12), 1f))
+            cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)))
+            if (valore == 1 && statoStudente.ritardoBreve != null) {
+                cellaOre.addView(TextView(ctx).apply {
+                    text = "RB ${statoStudente.ritardoBreve}"
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                    contentDescription = "Ritardo breve alle ${statoStudente.ritardoBreve}"
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
+            } else if (valore == 1) {
+                // Mostra comunque la sigla se ClasseViva indica ABR1 ma non restituisce un orario leggibile.
+                val grezzoStato = TextView(ctx).apply {
+                    text = "RB"
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                }
+                if (statoStudente.ritardoBreve != null) cellaOre.addView(grezzoStato)
+            }
             cellaOre.addView(View(ctx), LinearLayout.LayoutParams(0, dp(1), 1f))
             scheda.addView(cellaOre, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
