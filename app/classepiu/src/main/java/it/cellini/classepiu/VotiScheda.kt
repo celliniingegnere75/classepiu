@@ -156,8 +156,8 @@ class VotiScheda : Scheda() {
             val studenti = if (st.first == 200) leggiStudenti(st.second) else emptyList()
             if (vt.first != 200) { testo("classeviva non ha dato i voti (http ${vt.first})."); return@launch }
             val voti = leggiVoti(vt.second)
-            if (studenti.isEmpty()) { testo("nessuno studente riconosciuto.", st.second); return@launch }
-            if (voti.isEmpty()) { testo("nessun voto riconosciuto nella risposta.", vt.second); return@launch }
+            if (studenti.isEmpty()) { testo("nessuno studente riconosciuto."); return@launch }
+            if (voti.isEmpty()) { testo("nessun voto riconosciuto nella risposta."); return@launch }
             elenco = studenti; tutti = voti
             creaLinguette(materieMie(vt.second))
             mostra(studenti, voti)
