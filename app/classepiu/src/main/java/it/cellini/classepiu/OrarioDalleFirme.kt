@@ -5,18 +5,18 @@ import org.json.JSONObject
 import java.util.Calendar
 
 /**
- * Wizard dell'orario: classe e materia di ogni ora ricavate dalle firme del docente nei 7 giorni prima di oggi
- * (lessons/mine). Così ogni giorno della settimana compare una volta sola: se oggi è lunedì si guarda
- * da lunedì scorso a venerdì (o sabato), se è mercoledì da mercoledì scorso a ieri.
+ * Wizard dell'orario: classe e materia di ogni ora ricavate dalle firme del docente della settimana scorsa
+ * (lessons/mine), da lunedì a venerdì o sabato.
  * I nomi dei campi sono dedotti come nelle altre letture di classeviva: lettura tollerante.
  */
 object OrarioDalleFirme {
 
-    /** Primo e ultimo giorno da cercare (yyyyMMdd): da oggi meno 7 giorni a ieri. */
-    fun intervallo(oggi: Calendar = Calendar.getInstance()): Pair<String, String> {
+    /** Primo e ultimo giorno da cercare (yyyyMMdd): dal lunedì della settimana scorsa al venerdì (o sabato, [giorni] = 6). */
+    fun intervallo(oggi: Calendar = Calendar.getInstance(), giorni: Int = 5): Pair<String, String> {
         fun fmt(c: Calendar) = String.format(java.util.Locale.ROOT, "%04d%02d%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
-        val da = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -7) }
-        val a = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -1) }
+        val dallInizio = (oggi.get(Calendar.DAY_OF_WEEK) + 5) % 7 // giorni passati da lunedì (domenica = 6)
+        val da = (oggi.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, -dallInizio - 7) }
+        val a = (da.clone() as Calendar).apply { add(Calendar.DAY_OF_MONTH, giorni - 1) }
         return fmt(da) to fmt(a)
     }
 

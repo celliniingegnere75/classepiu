@@ -7,9 +7,14 @@ import java.util.Calendar
 
 class OrarioDalleFirmeTest {
     @Test
-    fun intervalloDaOggiMenoSetteAIeri() {
+    fun intervalloSettimanaScorsa() {
         val lunedi = Calendar.getInstance().apply { clear(); set(2026, Calendar.OCTOBER, 26) }
-        assertEquals("20261019" to "20261025", OrarioDalleFirme.intervallo(lunedi))
+        assertEquals("20261019" to "20261023", OrarioDalleFirme.intervallo(lunedi))
+        val martedi = Calendar.getInstance().apply { clear(); set(2026, Calendar.OCTOBER, 27) }
+        assertEquals("20261019" to "20261023", OrarioDalleFirme.intervallo(martedi))
+        assertEquals("20261019" to "20261024", OrarioDalleFirme.intervallo(martedi, 6))
+        val domenica = Calendar.getInstance().apply { clear(); set(2026, Calendar.NOVEMBER, 1) }
+        assertEquals("20261019" to "20261023", OrarioDalleFirme.intervallo(domenica))
     }
 
     @Test

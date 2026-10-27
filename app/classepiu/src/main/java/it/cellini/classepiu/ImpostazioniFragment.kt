@@ -564,11 +564,11 @@ class ImpostazioniFragment : Fragment() {
         val imp = Impostazioni(ctx)
         if (!imp.pronta) { messaggio("prima accedi a classeviva."); return }
         val giorni = if (imp.sabato) 6 else 5
-        val (da, a) = OrarioDalleFirme.intervallo()
+        val (da, a) = OrarioDalleFirme.intervallo(giorni = giorni)
         fun leggibile(d: String) = "${d.substring(6, 8)}/${d.substring(4, 6)}"
         MaterialAlertDialogBuilder(ctx)
             .setTitle("compilo l'orario dalle firme?")
-            .setMessage("cerco le tue firme dal ${leggibile(da)} al ${leggibile(a)} e riempio classe e materia da lunedì a ${GIORNI_INTERI[giorni - 1]}, saltando supplenze e materie non tue. Le ore senza firma restano vuote.")
+            .setMessage("cerco le tue firme dal ${leggibile(da)} al ${leggibile(a)} e riempio classe e materia da lunedì a ${GIORNI_INTERI[giorni - 1]}, saltando supplenze e materie non tue. Le ore senza firma restano come sono.")
             .setPositiveButton("compila") { _, _ ->
                 messaggio("cerco le firme…")
                 viewLifecycleOwner.lifecycleScope.launch {
@@ -598,7 +598,11 @@ class ImpostazioniFragment : Fragment() {
                                 .show()
                             return@onSuccess
                         }
-                        for (g in 1..giorni) for (o in 1..Orario.ORE) orario.imposta(g, o, trovate[g to o])
+                        // solo le ore con una firma: le altre restano come sono
+                        for ((go, voce) in trovate) orario.imposta(go.first, go.second, voce)
+                        // se il giorno mostrato non ha lezioni si passa al primo che ne ha, così l'orario compilato si vede subito
+                        if ((1..Orario.ORE).none { orario.casella(giornoScelto + 1, it) != null })
+                            trovate.keys.minOfOrNull { it.first }?.let { giornoScelto = it - 1 }
                         aggiornaOrario()
                         messaggio("orario compilato: ${trovate.size} ore dalle firme.")
                     }.onFailure { messaggio("wizard non riuscito: ${it.message}") }
