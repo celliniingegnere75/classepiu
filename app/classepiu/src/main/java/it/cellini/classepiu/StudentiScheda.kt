@@ -238,7 +238,7 @@ class StudentiScheda : Scheda() {
                     if (ora > 0) leftMargin = dp(3)
                 })
             }
-            cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)))
+            cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16)))
             if (statoStudente.isRitardoBreve) {
                 cellaOre.addView(TextView(ctx).apply {
                     text = "Rb" + (statoStudente.ritardoBreve?.let { " $it" } ?: "")
@@ -247,6 +247,7 @@ class StudentiScheda : Scheda() {
                     setTextColor(0xFF8A6D00.toInt())
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding(dp(8), 0, dp(4), 0)
+                    translationY = -dp(4).toFloat()
                     contentDescription = "Ritardo breve" + (statoStudente.ritardoBreve?.let { " alle $it" } ?: "")
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
             }
