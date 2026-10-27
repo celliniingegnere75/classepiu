@@ -483,6 +483,43 @@ class ClasseViva(private val utente: String, private val password: String, priva
     }
 
     /**
+     * Trova il voto nella pagina del registro web (regvoti.php): ogni casella è un elemento id="button_<studente><casella>"
+     * con attributi studente_id, evento_id, mydata, voto (vedi loadPopup in regvoti.js). Restituisce (evento_id, casella tipo "S1_3_1").
+     * Prima per evento_id uguale all'evtId delle API, poi per studente + data + voto mostrato. Se non lo trova non si manda niente.
+     */
+    private fun cellaWeb(o: JSONObject, biscotti: String): Pair<String, String> {
+        fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val gruppo = t("classType").equals("G", ignoreCase = true)
+        val indirizzo = "https://web.spaggiari.eu/cvv/app/default/regvoti.php?classe_id=${if (gruppo) "" else enc(t("classId"))}" +
+            "&materia_id=${enc(t("subjectId"))}&gruppo_id=${if (gruppo) enc(t("classId")) else ""}"
+        val c = URL(indirizzo).openConnection() as HttpURLConnection
+        c.connectTimeout = 30_000
+        c.readTimeout = 60_000
+        c.setRequestProperty("User-Agent", BROWSER)
+        c.setRequestProperty("Cookie", biscotti)
+        val codice = c.responseCode
+        val html = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
+        c.disconnect()
+        if (codice !in 200..299) throw ClasseVivaException("registro web non leggibile (HTTP $codice)")
+        data class Cella(val evento: String, val studente: String, val casella: String, val data: String, val voto: String)
+        fun attr(tag: String, nome: String) = Regex("""\b$nome\s*=\s*["']([^"']*)["']""").find(tag)?.groupValues?.get(1).orEmpty()
+        val celle = Regex("""<[^>]*\bid\s*=\s*["']button_([^"']+)["'][^>]*>""").findAll(html).map { m ->
+            val tag = m.value
+            val studente = attr(tag, "studente_id")
+            Cella(attr(tag, "evento_id"), studente, m.groupValues[1].removePrefix(studente), attr(tag, "mydata"), attr(tag, "voto"))
+        }.filter { it.studente.isNotEmpty() && it.casella.isNotEmpty() }.toList()
+        val studente = t("studentId")
+        fun cifre(d: String) = Regex("\\d+").findAll(d).map { it.value.trimStart('0') }.sorted().toList()
+        val trovata = celle.firstOrNull { it.evento.isNotEmpty() && it.evento == t("evtId") && it.studente == studente }
+            ?: celle.filter { it.studente == studente && it.evento.isNotEmpty() && it.evento != "0" &&
+                    cifre(it.data) == cifre(t("evtDate").take(10)) && it.voto.trim() == t("displayValue").trim() }
+                .singleOrNull()
+            ?: throw ClasseVivaException("non trovo il voto nella pagina del registro web (${celle.size} caselle lette): non ho mandato niente")
+        return trovata.evento to trovata.casella
+    }
+
+    /**
      * Mette o toglie un voto dalla media. Le API REST (e l'app ufficiale) non lo permettono: si fa come ClasseViva web
      * (regvoti.js, POST cvv/app/default/votiio.php):
      * - fuori media = "da recuperare ed escluso dalla media": ope=AJRECUPERA con evento_id, studente_id, descrizione_1; risponde "OK";
@@ -499,10 +536,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val valore = t("decimalValue").ifEmpty { decimale?.toString() ?: display.replace(',', '.').filter { it.isDigit() || it == '.' } }
         val data = t("evtDate").take(10).split("-").let { if (it.size == 3) "${it[2]}-${it[1]}-${it[0]}" else t("evtDate") }
         val gruppo = t("classType").equals("G", ignoreCase = true)
-        val descrizione = "${casella ?: "S${o.optInt("periodPos", 1)}_${o.optInt("componentPos")}"}_${o.optInt("displayPos")}"
+        // id dell'evento e casella si prendono dalla pagina del registro web: con valori sbagliati
+        // AJRECUPERA non tocca il voto e crea un "voto di recupero" vuoto (blu, "-") in un'altra casella
+        val cella = try { cellaWeb(o, biscotti) } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
+        val descrizione = cella.second
         val campi = if (!faMedia) linkedMapOf(
             "ope" to "AJRECUPERA",
-            "evento_id" to t("evtId"),
+            "evento_id" to cella.first,
             "studente_id" to t("studentId"),
             "descrizione_1" to descrizione
         ) else linkedMapOf(
@@ -519,7 +559,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "materia_desc" to t("subjectDesc"),
             "causale_codice" to "VA",
             "causale_desc" to "<ztx>Altro</ztx>",
-            "evento_id" to t("evtId"),
+            "evento_id" to cella.first,
             "nota_1" to t("notesForFamily"),
             "nota_2" to t("internalNotes"),
             "no_voto" to "0",
