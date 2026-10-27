@@ -430,20 +430,55 @@ class ClasseViva(private val utente: String, private val password: String, priva
     private fun sessioneWeb(): String {
         if (biscottiWeb.isNotEmpty()) return biscottiWeb
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
-        val login = URL("https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php?a=aLoginPwd").openConnection() as HttpURLConnection
-        login.requestMethod = "POST"
-        login.connectTimeout = 30_000
-        login.readTimeout = 30_000
-        login.instanceFollowRedirects = false
-        login.setRequestProperty("User-Agent", BROWSER)
-        login.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
-        login.doOutput = true
-        login.outputStream.use { it.write("cid=&uid=${enc(utente)}&pwd=${enc(password)}&pin=&target=".toByteArray()) }
-        login.responseCode
-        val biscotti = login.headerFields.filterKeys { it.equals("Set-Cookie", ignoreCase = true) }
-            .values.flatten().map { it.substringBefore(';') }.filter { it.contains('=') }
-        login.disconnect()
-        biscottiWeb = biscotti.joinToString("; ")
+        val barattolo = LinkedHashMap<String, String>()
+        // una richiesta come il browser: manda i cookie raccolti, tiene quelli nuovi, segue a mano i rimandi
+        fun chiama(indirizzo: String, corpo: String? = null, referer: String? = null): Pair<Int, String> {
+            var url = indirizzo
+            var dati = corpo
+            repeat(6) {
+                val c = URL(url).openConnection() as HttpURLConnection
+                c.requestMethod = if (dati != null) "POST" else "GET"
+                c.connectTimeout = 30_000
+                c.readTimeout = 30_000
+                c.instanceFollowRedirects = false
+                c.setRequestProperty("User-Agent", BROWSER)
+                if (barattolo.isNotEmpty()) c.setRequestProperty("Cookie", barattolo.entries.joinToString("; ") { "${it.key}=${it.value}" })
+                if (referer != null) c.setRequestProperty("Referer", referer)
+                if (dati != null) {
+                    c.setRequestProperty("Content-Type", "application/x-www-form-urlencoded; charset=UTF-8")
+                    c.setRequestProperty("X-Requested-With", "XMLHttpRequest")
+                    c.setRequestProperty("Origin", "https://web.spaggiari.eu")
+                    c.doOutput = true
+                    c.outputStream.use { it.write(dati!!.toByteArray()) }
+                }
+                val codice = c.responseCode
+                c.headerFields.filterKeys { it != null && it.equals("Set-Cookie", ignoreCase = true) }.values.flatten().forEach { riga ->
+                    val coppia = riga.substringBefore(';')
+                    val nome = coppia.substringBefore('=').trim()
+                    val valore = coppia.substringAfter('=', "").trim()
+                    if (nome.isNotEmpty()) { if (valore.isEmpty() || valore == "deleted") barattolo.remove(nome) else barattolo[nome] = valore }
+                }
+                val dove = c.getHeaderField("Location")
+                val testo = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
+                c.disconnect()
+                if (codice in 300..399 && !dove.isNullOrBlank()) { url = URL(URL(url), dove).toString(); dati = null } else return codice to testo
+            }
+            return 0 to "troppi rimandi"
+        }
+        // come il browser: prima la pagina di accesso (cookie di sessione), poi il login
+        val paginaLogin = "https://web.spaggiari.eu/home/app/default/login.php"
+        chiama(paginaLogin)
+        val (codice, testo) = chiama("https://web.spaggiari.eu/auth-p7/app/default/AuthApi4.php?a=aLoginPwd",
+            "cid=&uid=${enc(utente)}&pwd=${enc(password)}&pin=&target=", paginaLogin)
+        val j = runCatching { JSONObject(testo) }.getOrNull()
+        val auth = j?.optJSONObject("data")?.optJSONObject("auth")
+        val errori = j?.optJSONArray("error")?.let { a -> (0 until a.length()).joinToString(", ") { a.optString(it) } }.orEmpty()
+        if (codice !in 200..299 || (auth != null && !auth.optBoolean("loggedIn", false)) || errori.isNotBlank()) {
+            val motivo = errori.ifBlank { auth?.optJSONArray("errors")?.toString() ?: testo.take(200) }
+            throw ClasseVivaException("accesso a classeviva web non riuscito (HTTP $codice): $motivo")
+        }
+        if (barattolo.isEmpty()) throw ClasseVivaException("accesso a classeviva web non riuscito: nessun cookie di sessione (HTTP $codice) ${testo.take(200)}")
+        biscottiWeb = barattolo.entries.joinToString("; ") { "${it.key}=${it.value}" }
         return biscottiWeb
     }
 
@@ -456,8 +491,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      */
     fun mediaVotoWeb(grezzo: String, faMedia: Boolean, casella: String?, decimale: Double? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
-        val biscotti = sessioneWeb()
-        if (biscotti.isEmpty()) return 0 to "accesso a classeviva web non riuscito"
+        val biscotti = try { sessioneWeb() } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
         val display = t("displayValue")

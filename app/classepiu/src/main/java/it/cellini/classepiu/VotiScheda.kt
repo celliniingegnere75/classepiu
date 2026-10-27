@@ -526,7 +526,7 @@ class VotiScheda : Scheda() {
                             val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
                             val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
-                            if (cw !in 200..299) avviso += "\nmedia non cambiata: classeviva web ha risposto HTTP $cw ${rw.take(200)}"
+                            if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(300) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
                         }
                     }
                     // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto
