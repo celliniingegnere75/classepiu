@@ -575,15 +575,16 @@ class ImpostazioniFragment : Fragment() {
                     val esito = withContext(Dispatchers.IO) {
                         runCatching {
                             val c = imp.client().also { it.login() }
-                            if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
-                            if (insegnamenti.isEmpty()) {
-                                // servono le proprie classi e materie per scartare le ore che non sono del docente
-                                val (cc, tc) = c.classiGrezze(false)
+                            // classi e materie aggiornate: servono per dare il nome alle classi (le firme hanno solo l'id)
+                            // e per scartare le ore che non sono del docente; se classeviva non risponde vale l'ultima copia
+                            runCatching { c.classiGrezze(false) }.getOrNull()?.let { (cc, tc) ->
                                 if (cc == 200) leggiInsegnamenti(tc).takeIf { it.isNotEmpty() }?.let { insegnamenti = it; runCatching { fileClassi(ctx).writeText(tc) } }
                             }
+                            if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
                             if (insegnamenti.isEmpty()) error("non trovo le tue classi e materie.")
                             val (codice, testo) = c.lezioniGrezze(da, a)
-                            Triple(codice, testo, if (codice == 200) OrarioDalleFirme.leggi(testo, c.idDocente(), ordinari(), giorni) else emptyMap())
+                            val nomi = OrarioDalleFirme.nomiClassi(runCatching { leggiClassi(fileClassi(ctx).readText()) }.getOrDefault(emptyList()))
+                            Triple(codice, testo, if (codice == 200) OrarioDalleFirme.leggi(testo, c.idDocente(), ordinari(), giorni, nomi) else emptyMap())
                         }
                     }
                     if (!isAdded) return@launch

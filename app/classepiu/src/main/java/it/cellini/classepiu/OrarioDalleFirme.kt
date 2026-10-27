@@ -26,7 +26,8 @@ object OrarioDalleFirme {
      * e le ore in cui classe e materia non sono tra le proprie ([insegnamenti], "le mie classi"); classe e materia
      * si scrivono come nelle tendine.
      */
-    fun leggi(grezzo: String, mioId: String, insegnamenti: List<Insegnamento>, giorni: Int): Map<Pair<Int, Int>, Insegnamento> {
+    fun leggi(grezzo: String, mioId: String, insegnamenti: List<Insegnamento>, giorni: Int,
+              nomiClassi: Map<String, String> = emptyMap()): Map<Pair<Int, Int>, Insegnamento> {
         val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
         val out = LinkedHashMap<Pair<Int, Int>, Insegnamento>()
         fun JSONObject.t(vararg ks: String): String {
@@ -42,8 +43,11 @@ object OrarioDalleFirme {
                     val ora = v.t("evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
                     val materia = v.t("subjectDesc", "subjectName", "subject").ifEmpty { v.optJSONObject("subject")?.t("subjectDesc", "description", "name").orEmpty() }
                     val c = v.optJSONObject("classroom") ?: v.optJSONObject("class")
-                    val classe = siglaClasse(v.t("classDesc", "className", "classroomName", "classCode").ifEmpty { c?.t("classDesc", "className", "name", "classCode").orEmpty() }).uppercase()
-                    if (data.isEmpty() || ora == null || classe.isEmpty()) { for (k in v.keys()) cammina(v.opt(k), livello + 1); return }
+                    // lessons/mine dà solo classId (e classType: C classe, G gruppo): il nome si prende da "le mie classi"
+                    val id = v.t("classId", "classroomId")
+                    val classe = siglaClasse(v.t("classDesc", "className", "classroomName", "classCode").ifEmpty { c?.t("classDesc", "className", "name", "classCode").orEmpty() }
+                        .ifEmpty { nomiClassi["${v.t("classType")}|$id"] ?: nomiClassi[id].orEmpty() }).uppercase()
+                    if (data.isEmpty() || ora == null || (classe.isEmpty() && id.isEmpty())) { for (k in v.keys()) cammina(v.opt(k), livello + 1); return }
                     // educazione civica non sta nelle tendine dell'orario: si salta (se nella stessa ora c'è un'altra firma, vale quella)
                     if (materia.lowercase().contains("civica")) return
                     if (v.t("lessonType", "lessonTypeDesc", "lessonTypeCode").lowercase().contains("supplen")) return
@@ -61,6 +65,18 @@ object OrarioDalleFirme {
         return out
     }
 
+    /** Sigla della classe per id, da [leggiClassi]: chiavi "tipo|id" e "id". */
+    fun nomiClassi(classi: List<Classe>): Map<String, String> {
+        val out = HashMap<String, String>()
+        for (c in classi) {
+            val parti = c.chiave.split("|")
+            if (parti.size < 3 || parti[1].isEmpty()) continue
+            out["${parti[0]}|${parti[1]}"] = c.nome
+            out.putIfAbsent(parti[1], c.nome)
+        }
+        return out
+    }
+
     /** 1 = lunedì … 7 = domenica, da "2026-10-20", "20261020" o con l'ora in coda. */
     fun giornoDellaSettimana(data: String): Int? {
         val n = data.take(10).replace("-", "").take(8)
@@ -72,6 +88,8 @@ object OrarioDalleFirme {
     /** La coppia di "le mie classi" con la stessa classe e materia, o null se in quell'ora non c'è una materia del docente. */
     private fun comeNelleTendine(classe: String, materia: String, insegnamenti: List<Insegnamento>): Insegnamento? {
         if (materia.isEmpty()) return null
+        // classe sconosciuta (id non trovato in "le mie classi"): va bene solo se la materia si insegna in una classe sola
+        if (classe.isEmpty()) return insegnamenti.filter { it.materia.equals(materia, ignoreCase = true) }.singleOrNull()
         val stessa = insegnamenti.filter { it.classe.equals(classe, ignoreCase = true) && it.materia.isNotEmpty() }
         return stessa.firstOrNull { it.materia.equals(materia, ignoreCase = true) }
             ?: stessa.firstOrNull { it.materia.contains(materia, true) || materia.contains(it.materia, true) }

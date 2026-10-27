@@ -42,4 +42,25 @@ class OrarioDalleFirmeTest {
         assertNull(r[6 to 1]) // sabato spento
         assertEquals(Insegnamento("5ETA", "TPSEE"), OrarioDalleFirme.leggi(grezzo, "5753831", ins, 6)[6 to 1])
     }
+
+    @Test
+    fun firmeVereSoloConClassId() {
+        // come risponde lessons/mine: niente nome della classe, solo classId e classType (C classe, G gruppo)
+        val grezzo = """{"lessons":[
+            {"evtDate":"2026-10-21","authorId":5753831,"classType":"C","classId":2163613,"subjectDesc":"SCIENZE E TECNOLOGIE APPLICATE","evtHPos":6,"evtDuration":1,"lessonType":"Lezione"},
+            {"evtDate":"2026-10-22","authorId":5753831,"classType":"G","classId":38296817,"subjectDesc":"TECNOLOGIE E PROGETTAZIONE DI SISTEMI ELETTRICI ED ELETTRONICI","evtHPos":1,"evtDuration":1,"lessonType":"Lezione"},
+            {"evtDate":"2026-10-23","authorId":5753831,"classType":"G","classId":38296124,"subjectDesc":"ELETTROTECNICA, ELETTRONICA E AUTOMAZIONE","evtHPos":1,"evtDuration":1,"lessonType":"Assemblea di classe"}
+        ]}"""
+        val classi = listOf(Classe("C|2163613|2ETA", "2ETA", "", ""), Classe("G|38296817|4ETB", "4ETB", "", ""))
+        val ins = listOf(
+            Insegnamento("2ETA", "SCIENZE E TECNOLOGIE APPLICATE"),
+            Insegnamento("4ETB", "TECNOLOGIE E PROGETTAZIONE DI SISTEMI ELETTRICI ED ELETTRONICI"),
+            Insegnamento("5ETA", "ELETTROTECNICA, ELETTRONICA E AUTOMAZIONE"),
+        )
+        val r = OrarioDalleFirme.leggi(grezzo, "5753831", ins, 5, OrarioDalleFirme.nomiClassi(classi))
+        assertEquals(Insegnamento("2ETA", "SCIENZE E TECNOLOGIE APPLICATE"), r[3 to 6])
+        assertEquals(Insegnamento("4ETB", "TECNOLOGIE E PROGETTAZIONE DI SISTEMI ELETTRICI ED ELETTRONICI"), r[4 to 1])
+        // id non in "le mie classi": la materia è insegnata in una sola classe, quindi è quella
+        assertEquals(Insegnamento("5ETA", "ELETTROTECNICA, ELETTRONICA E AUTOMAZIONE"), r[5 to 1])
+    }
 }
