@@ -462,13 +462,15 @@ class ImpostazioniFragment : Fragment() {
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
         // I due tasti hanno la stessa grandezza: la scritta del wizard va su due righe più piccole, con il cappello da mago
         val larghezzaTasto = ctx.dp(118)
-        val altezzaTasto = ctx.dp(36)
-        val tasti = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL }
+        val altezzaTasto = ctx.dp(44)
+        val tasti = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL; isBaselineAligned = false
+        }
         tasti.addView(pillola(ctx, "compilazione\nmagica", 11f, Color.WHITE, azzurro, altezzaTasto).apply {
             setTypeface(typeface, Typeface.BOLD); includeFontPadding = false; setLineSpacing(0f, 0.95f)
-            setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(2))
+            maxLines = 2; setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(2))
             ContextCompat.getDrawable(ctx, R.drawable.ic_cappello_mago)?.let { cappello ->
-                cappello.setBounds(0, 0, ctx.dp(20), ctx.dp(20))
+                cappello.setBounds(0, 0, ctx.dp(18), ctx.dp(18))
                 setCompoundDrawablesRelative(cappello, null, null, null)
                 compoundDrawablePadding = ctx.dp(6)
             }
@@ -481,7 +483,7 @@ class ImpostazioniFragment : Fragment() {
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
-        riga(ctx, ore, "settimana fino a sabato", Impostazioni(ctx).sabato, ctx.dp(10)) { on ->
+        riga(ctx, ore, "settimana fino a sabato", Impostazioni(ctx).sabato, ctx.dp(16), piccola = true) { on ->
             Impostazioni(ctx).sabato = on
             if (!on && giornoScelto > 4) giornoScelto = 4
             aggiornaOrario()
@@ -756,30 +758,33 @@ class ImpostazioniFragment : Fragment() {
         aggiorna()
     }
 
-    /** Riga con testo a sinistra e interruttore azzurro a destra; si salva appena lo tocchi. Restituisce il row container (LinearLayout) se storeRow=true, altrimenti il switch. */
-    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, storeRow: Boolean = false, cambia: (Boolean) -> Unit): Any {
+    /** Riga con testo a sinistra e interruttore azzurro a destra; si salva appena lo tocchi. Restituisce il row container (LinearLayout) se storeRow=true, altrimenti il switch. piccola=true riduce testo e interruttore al 70%. */
+    private fun riga(ctx: android.content.Context, col: LinearLayout, testo: String, acceso: Boolean, sopra: Int, storeRow: Boolean = false, piccola: Boolean = false, cambia: (Boolean) -> Unit): Any {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        val pillW = if (piccola) ctx.dp(36) else ctx.dp(52)
+        val pillH = if (piccola) ctx.dp(21) else ctx.dp(30)
+        val knobSz = if (piccola) ctx.dp(15) else ctx.dp(22)
+        val knobMarg = if (piccola) ctx.dp(3) else ctx.dp(4)
         fun pillola(colore: Int) = GradientDrawable().apply {
-            setColor(colore); cornerRadius = ctx.dp(15).toFloat(); setSize(ctx.dp(52), ctx.dp(30))
+            setColor(colore); cornerRadius = pillH / 2f; setSize(pillW, pillH)
         }
         val sfondo = android.graphics.drawable.StateListDrawable().apply {
             addState(intArrayOf(android.R.attr.state_checked), pillola(azzurro))
             addState(intArrayOf(), pillola(0xFFE3E3E3.toInt()))
         }
-        // pallino bianco di 22 dp con 4 dp di margine: sta sempre dentro lo sfondo, uguale acceso e spento
         val pallino = android.graphics.drawable.InsetDrawable(
-            GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(ctx.dp(22), ctx.dp(22)) }, ctx.dp(4))
+            GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.WHITE); setSize(knobSz, knobSz) }, knobMarg)
         val sw = androidx.appcompat.widget.SwitchCompat(ctx, null, 0).apply {
             trackDrawable = sfondo
             thumbDrawable = pallino
-            switchMinWidth = ctx.dp(52)
+            switchMinWidth = pillW
             showText = false
             background = null
             isChecked = acceso
             setOnCheckedChangeListener { _, on -> cambia(on) }
         }
         val t = TextView(ctx).apply {
-            text = testo; textSize = 16f; setTextColor(nero) // va a capo se lo spazio non basta
+            text = testo; textSize = if (piccola) 11.2f else 16f; setTextColor(nero) // va a capo se lo spazio non basta
         }
         val row = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
