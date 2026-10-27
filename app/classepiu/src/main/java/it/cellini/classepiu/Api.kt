@@ -448,9 +448,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
     }
 
     /**
-     * Mette o toglie un voto dalla media. Le API REST (e l'app ufficiale) non lo permettono: si fa come ClasseViva web,
-     * che salva il voto con POST cvv/app/default/votiio.php (ope=AJINS) e no_voto=1 per "non fa media".
-     * Richiesta copiata dal browser il 27/10/2026; [casella] è "S1_3" (periodo_componente, dal componentId "Q1:S1_3:PRA:0").
+     * Mette o toglie un voto dalla media. Le API REST (e l'app ufficiale) non lo permettono: si fa come ClasseViva web
+     * (regvoti.js, POST cvv/app/default/votiio.php):
+     * - fuori media = "da recuperare ed escluso dalla media": ope=AJRECUPERA con evento_id, studente_id, descrizione_1; risponde "OK";
+     * - di nuovo in media = si riscrive il voto con ope=AJINS (no_voto=0, che invece vorrebbe dire "senza valutazione").
+     * [casella] è "S1_3" (periodo_componente, dal componentId "Q1:S1_3:PRA:0"); descrizione_1 aggiunge la posizione: "S1_3_1".
      */
     fun mediaVotoWeb(grezzo: String, faMedia: Boolean, casella: String?, decimale: Double? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
@@ -463,7 +465,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val valore = t("decimalValue").ifEmpty { decimale?.toString() ?: display.replace(',', '.').filter { it.isDigit() || it == '.' } }
         val data = t("evtDate").take(10).split("-").let { if (it.size == 3) "${it[2]}-${it[1]}-${it[0]}" else t("evtDate") }
         val gruppo = t("classType").equals("G", ignoreCase = true)
-        val campi = linkedMapOf(
+        val descrizione = "${casella ?: "S${o.optInt("periodPos", 1)}_${o.optInt("componentPos")}"}_${o.optInt("displayPos")}"
+        val campi = if (!faMedia) linkedMapOf(
+            "ope" to "AJRECUPERA",
+            "evento_id" to t("evtId"),
+            "studente_id" to t("studentId"),
+            "descrizione_1" to descrizione
+        ) else linkedMapOf(
             "ope" to "AJINS",
             "studente_id" to t("studentId"),
             "classe" to if (gruppo) "" else t("classId"),
@@ -471,7 +479,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "valore" to valore,
             "evento_codice" to "VG",
             "valore_display" to display,
-            "descrizione_1" to "${casella ?: "S${o.optInt("periodPos", 1)}_${o.optInt("componentPos")}"}_${o.optInt("displayPos")}",
+            "descrizione_1" to descrizione,
             "data" to data,
             "materia_id" to t("subjectId"),
             "materia_desc" to t("subjectDesc"),
@@ -480,7 +488,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "evento_id" to t("evtId"),
             "nota_1" to t("notesForFamily"),
             "nota_2" to t("internalNotes"),
-            "no_voto" to if (faMedia) "0" else "1",
+            "no_voto" to "0",
             "id_uda" to ""
         )
         val c = URL("https://web.spaggiari.eu/cvv/app/default/votiio.php").openConnection() as HttpURLConnection
@@ -499,7 +507,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val codice = c.responseCode
         val testo = (if (codice in 200..299) c.inputStream else c.errorStream)?.use { String(it.readBytes(), Charsets.UTF_8) }.orEmpty()
         c.disconnect()
-        return codice to testo
+        // AJRECUPERA risponde "OK" oppure "periodo_bloccato"; AJINS {"status":"OK"}
+        val ok = testo.trim() == "OK" || runCatching { JSONObject(testo).optString("status") == "OK" }.getOrDefault(false)
+        return (if (codice in 200..299 && !ok) 422 else codice) to testo
     }
 
     class CircolareRitirata : Exception("circolare ritirata dalla scuola")
