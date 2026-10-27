@@ -47,7 +47,6 @@ class VotiScheda : Scheda() {
     /** Materia della linguetta aperta e linguette disegnate (materia, vista). */
     private var materiaScelta = ""
     private var schede: List<Pair<String, TextView>> = emptyList()
-    private val memoria by lazy { requireContext().getSharedPreferences("voti_modificati", android.content.Context.MODE_PRIVATE) }
 
     override fun crea(savedInstanceState: Bundle?) {
         primoGiorno = Scuola.primoGiorno(requireContext()) // poi si aggiorna con i periodi letti da classeviva
@@ -237,7 +236,7 @@ class VotiScheda : Scheda() {
                 // intestazione fissa a sinistra, voti che scorrono a destra sulla stessa riga
                 val chip = LinearLayout(ctx)
                 elenco.sortedBy { it.data }.forEach { v ->
-                    chip.addView(chipVoto(modificato(v)), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply { rightMargin = dp(8) })
+                    chip.addView(chipVoto(v), LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(38)).apply { rightMargin = dp(8) })
                 }
                 scatola.addView(LinearLayout(ctx).apply {
                     gravity = Gravity.CENTER_VERTICAL
@@ -280,19 +279,6 @@ class VotiScheda : Scheda() {
         else { setTextColor(colore); background = GradientDrawable().apply { setColor(0xFFFFFFFF.toInt()); setStroke(dp(2), colore); cornerRadius = dp(12).toFloat() } }
         // modificabile solo se l'ha inserito il docente che guarda (io); se non si sa chi l'ha inserito, sola lettura
         setOnClickListener { apriVoto(v, mioId.isNotEmpty() && v.autore == mioId) }
-    }
-
-    /** Valore, tipo, media, data e annotazioni modificati a mano restano sul telefono finché non si riescono a scrivere su classeviva. */
-    private fun modificato(v: Voto): Voto {
-        val valore = memoria.getString("${v.chiave}|valore", null) ?: v.valore
-        return v.copy(
-            valore = valore,
-            numero = numeroDa(valore) ?: v.numero,
-            tipo = memoria.getString("${v.chiave}|tipo", null) ?: v.tipo,
-            faMedia = memoria.getString("${v.chiave}|media", null)?.toBooleanStrictOrNull() ?: v.faMedia,
-            data = memoria.getString("${v.chiave}|data", null) ?: v.data,
-            nota = memoria.getString("${v.chiave}|nota", null) ?: v.nota
-        )
     }
 
     private fun apriVoto(v: Voto, modificabile: Boolean) {
@@ -428,10 +414,6 @@ class VotiScheda : Scheda() {
                     val dataApi = scelta?.let { fApi.format(it) } ?: v.data
                     val annotazione = nota.text.toString()
                     salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, annotazione)
-                    memoria.edit().putString("${v.chiave}|valore", valoreScelto).putString("${v.chiave}|tipo", tipoScelto)
-                        .putString("${v.chiave}|media", mediaScelta.toString()).putString("${v.chiave}|data", dataApi)
-                        .putString("${v.chiave}|nota", nota.text.toString()).apply()
-                    mostra(elenco, tutti)
                     finestra.dismiss()
                 })
             }
@@ -505,18 +487,46 @@ class VotiScheda : Scheda() {
                             dettaglio = "Il server ha risposto HTTP ${esito.first}, ma non ho verificato con certezza il nuovo voto: il vecchio non è stato cancellato. Risposta: ${esito.second.take(300)}"
                         }
                     }
-                    Triple(esito.first, esito.second, dettaglio)
+                    // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto
+                    var nonApplicati: List<String>? = null
+                    if (esito.first in 200..299) {
+                        val (cv, testoVoti) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                        if (cv == 200) {
+                            val letti = leggiVoti(testoVoti)[v.studente].orEmpty()
+                            val idOriginale = vecchio?.opt("evtId")?.toString().orEmpty()
+                            fun idEvt(x: Voto) = runCatching { org.json.JSONObject(x.grezzo).opt("evtId")?.toString().orEmpty() }.getOrDefault("")
+                            // stesso evtId; se il cambio di tipo ha creato un nuovo voto, quello con tipo, data e valore chiesti
+                            val ora = letti.firstOrNull { idEvt(it) == idOriginale }
+                                ?: letti.firstOrNull { it.tipo.equals(tipo, true) && it.data == data && it.valore == valore }
+                            nonApplicati = if (ora == null) listOf("voto non trovato rileggendo il registro") else buildList {
+                                if (ora.valore != valore) add("voto (resta ${ora.valore})")
+                                if (!ora.tipo.equals(tipo, true)) add("tipo (resta ${ora.tipo.lowercase()})")
+                                if (ora.faMedia != media) add(if (ora.faMedia) "media (fa ancora media)" else "media (resta fuori media)")
+                                if (ora.data != data) add("data (resta ${ora.data})")
+                                if (ora.nota.trim() != nota.trim()) add("annotazioni")
+                            }
+                        }
+                    }
+                    Triple(esito.first, if (esito.first in 200..299) dettaglio else esito.second.take(300), nonApplicati)
                 }
             }
-            val (codice, risposta, dettaglio) = r.getOrElse {
-                android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}; resta sul telefono", android.widget.Toast.LENGTH_LONG).show(); return@launch
+            val (codice, dettaglio, nonApplicati) = r.getOrElse {
+                android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}", android.widget.Toast.LENGTH_LONG).show(); carica(); return@launch
             }
             if (codice in 200..299) {
-                android.widget.Toast.makeText(ctx, if (dettaglio.isBlank()) "salvato su classeviva" else dettaglio, android.widget.Toast.LENGTH_LONG).show()
-                mostra(elenco, tutti)
+                when {
+                    nonApplicati == null -> android.widget.Toast.makeText(ctx, "salvato, ma non sono riuscito a rileggere il registro per verificarlo", android.widget.Toast.LENGTH_LONG).show()
+                    nonApplicati.isEmpty() -> android.widget.Toast.makeText(ctx, "salvato e verificato su classeviva", android.widget.Toast.LENGTH_LONG).show()
+                    else -> MaterialAlertDialogBuilder(ctx)
+                        .setMessage("ClasseViva ha risposto ok ma non ha applicato: ${nonApplicati.joinToString(", ")}.\nVedi il voto com'è davvero sul registro." + if (dettaglio.isBlank()) "" else "\n\n$dettaglio")
+                        .setPositiveButton("chiudi", null)
+                        .show()
+                }
+                // si mostra sempre quello che c'è davvero su classeviva
+                carica()
             } else {
                 MaterialAlertDialogBuilder(ctx)
-                    .setMessage("ClasseViva non ha accettato il salvataggio (HTTP $codice). Il vecchio voto non è stato cancellato.")
+                    .setMessage("ClasseViva non ha accettato il salvataggio (HTTP $codice). Il voto resta com'era.\n\n$dettaglio")
                     .setPositiveButton("chiudi", null)
                     .show()
             }
