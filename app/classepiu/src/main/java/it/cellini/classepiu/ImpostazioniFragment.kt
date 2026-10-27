@@ -461,7 +461,7 @@ class ImpostazioniFragment : Fragment() {
         }
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
         // I due tasti hanno la stessa grandezza: la scritta del wizard va su due righe più piccole, con il cappello da mago
-        val larghezzaTasto = ctx.dp(118)
+        val larghezzaTasto = ctx.dp(130)
         val altezzaTasto = ctx.dp(44)
         val tasti = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL; isBaselineAligned = false
