@@ -290,7 +290,7 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
             }
             val codice = TextView(ctx).apply {
-                textSize = 10.5f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(2), 0, 0)
+                textSize = 10.5f; setTextColor(celeste); setPadding(0, ctx.dp(2), 0, 0)
                 maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
             }
             val sopra = LinearLayout(ctx).apply {
@@ -344,7 +344,13 @@ class RegistroFragment : Fragment() {
             h.descrizioneClasse.visibility = if (descrizioneBreve.isEmpty()) View.GONE else View.VISIBLE
             h.descrizione.text = "appello rapido"
             h.descrizione.visibility = View.VISIBLE
-            h.codice.text = c.codice
+            val codiceOriginale = c.codice.trim()
+            val codiceMostrato = if (c.nome.isNotEmpty() && codiceOriginale.startsWith(c.nome, ignoreCase = true)) {
+                codiceOriginale.drop(c.nome.length).trimStart(' ', '-', ':', '–', '—')
+            } else {
+                codiceOriginale
+            }
+            h.codice.text = codiceMostrato
             h.codice.visibility = if (c.codice.isEmpty()) View.GONE else View.VISIBLE
             val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
