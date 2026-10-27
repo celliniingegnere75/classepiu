@@ -502,6 +502,21 @@ class VotiScheda : Scheda() {
                 cerca(runCatching { org.json.JSONTokener(testo).nextValue() }.getOrNull())
                 return trovati
             }
+            // Trova il subjectId del wrapper che contiene il voto con quell'evtId nella struttura di votiGrezzi
+            fun subjectIdDi(jsonAdesso: String, evtId: String): String {
+                val arr = runCatching { org.json.JSONTokener(jsonAdesso).nextValue() }.getOrNull() as? org.json.JSONArray ?: return ""
+                for (i in 0 until arr.length()) {
+                    val w = arr.optJSONObject(i) ?: continue
+                    val sid = w.optString("subjectId").takeIf { it.isNotEmpty() } ?: continue
+                    fun haEvtId(x: Any?): Boolean = when (x) {
+                        is org.json.JSONObject -> x.optString("evtId") == evtId || x.keys().asSequence().any { haEvtId(x.opt(it)) }
+                        is org.json.JSONArray -> (0 until x.length()).any { haEvtId(x.opt(it)) }
+                        else -> false
+                    }
+                    if (haEvtId(w.opt("data"))) return sid
+                }
+                return ""
+            }
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val c = Impostazioni(ctx).client()
@@ -558,6 +573,7 @@ class VotiScheda : Scheda() {
                         else {
                             val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
+                            if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
                             if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(300) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
@@ -574,6 +590,7 @@ class VotiScheda : Scheda() {
                         else {
                             val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
+                            if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             val (cw, rw) = c.senzaVotoWeb(attuale.toString(), casella, decimale)
                             if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(300) else "classeviva web HTTP $cw ${rw.take(200)}"
