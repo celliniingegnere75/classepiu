@@ -241,6 +241,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * Tutte le richieste sono GET: non viene mai inviato il modulo di cambio stato.
      * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1.
      */
+    // Lettura aggiuntiva in sola consultazione per visualizzare l'orario Rb.
     fun orariRitardoBreveWeb(classeId: String, giorno: String, studentiRitardo: Set<String>): Map<String, String> {
         if (studentiRitardo.isEmpty()) return emptyMap()
         val web = sessioneWeb()
