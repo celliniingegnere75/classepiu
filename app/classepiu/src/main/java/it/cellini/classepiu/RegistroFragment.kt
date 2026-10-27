@@ -285,7 +285,9 @@ class RegistroFragment : Fragment() {
             // casella alta (metà): etichetta verde "appello rapido" e sotto la materia; apre l'elenco dei ragazzi
             val appello = TextView(ctx).apply {
                 text = "appello rapido"
-                textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF424242.toInt())
+                textSize = 12f
+                typeface = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
+                setTextColor(0xFF3186AD.toInt())
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
                 background = GradientDrawable().apply { setColor(0xFFC8E6C9.toInt()); cornerRadius = ctx.dp(10).toFloat() }
@@ -302,7 +304,9 @@ class RegistroFragment : Fragment() {
             }
             // casella bassa (metà): lezioni, voti, note in tre azzurri pallidi diversi tra loro e dallo sfondo
             fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
-                text = testo; textSize = 11f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF424242.toInt())
+                text = testo; textSize = 11f
+                typeface = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
+                setTextColor(0xFF3186AD.toInt())
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
