@@ -165,7 +165,7 @@ class BachecaFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val esito = withContext(Dispatchers.IO) { runCatching { Controllo.esegui(ctx.applicationContext) } }
             v.isEnabled = true
-            val msg = esito.fold({ it.messaggio + if (!Impostazioni(ctx).mailPronta) " (mail non configurata)" else "" }, { "errore: ${it.message}" })
+            val msg = esito.fold({ it.riassunto() }, { "email non inviate: ${it.message}" })
             view?.let { Snackbar.make(it, msg, Snackbar.LENGTH_LONG).show() }
             carica()
         }

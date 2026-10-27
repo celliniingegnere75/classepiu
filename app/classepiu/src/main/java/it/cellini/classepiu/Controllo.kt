@@ -22,8 +22,27 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
-/** Esito di un controllo della bacheca. */
-data class Esito(val nuove: Int, val nonInviate: Int, val primoAvvio: Boolean, val messaggio: String)
+/**
+ * Esito di un controllo della bacheca: [presenti] circolari in bacheca, [allegatiInviati] allegati mandati in ritardo,
+ * [allegatiInAttesa] circolari i cui allegati non sono ancora scaricabili, [inviate] se le mail sono partite davvero.
+ */
+data class Esito(val nuove: Int, val nonInviate: Int, val primoAvvio: Boolean, val messaggio: String,
+                 val presenti: Int = 0, val allegatiInviati: Int = 0, val allegatiInAttesa: Int = 0, val inviate: Boolean = false) {
+    /** Cosa è successo, detto in breve per il pulsante "invia email". */
+    fun riassunto(): String = when {
+        primoAvvio -> messaggio
+        presenti == 0 -> "nessuna circolare presente."
+        !inviate && nuove > 0 -> "invio per email spento: $nuove circolar${if (nuove == 1) "e nuova" else "i nuove"} non inviat${if (nuove == 1) "a" else "e"}."
+        nuove > 0 || allegatiInviati > 0 -> listOfNotNull(
+            if (nuove > 0) "inviat${if (nuove == 1) "a 1 circolare" else "e $nuove circolari"} per email" else null,
+            if (allegatiInviati > 0) "inviat${if (allegatiInviati == 1) "o 1 allegato arrivato" else "i $allegatiInviati allegati arrivati"} in ritardo" else null,
+            if (nonInviate > 0) "$nonInviate non partit${if (nonInviate == 1) "a" else "e"} (si riprova)" else null,
+        ).joinToString(", ") + "."
+        nonInviate > 0 -> "nessuna email partita: $nonInviate circolar${if (nonInviate == 1) "e" else "i"} non inviat${if (nonInviate == 1) "a" else "e"}, si riprova."
+        allegatiInAttesa > 0 -> "nessuna circolare nuova. $allegatiInAttesa circolar${if (allegatiInAttesa == 1) "e aspetta" else "i aspettano"} ancora gli allegati da classeviva."
+        else -> "nessuna circolare nuova: tutte le circolari e gli allegati sono già stati inviati."
+    }
+}
 
 /** Controlla la bacheca e invia per mail le circolari nuove (stessa logica di cv.py run). */
 object Controllo {
@@ -65,12 +84,21 @@ object Controllo {
         val items = cv.bacheca()
         var nuove = 0
         var errori = 0
+        var allegatiInviati = 0
+        var inAttesa = 0
 
         for (c in items) {
             val stato = viste[c.chiave]
             if (stato == 1L) continue
             if (primo) { viste[c.chiave] = 1L; continue }
-            if (stato != null) { riprovaAllegati(ctx, imp, cv, c, viste, stato); continue }
+            if (stato != null) {
+                when (riprovaAllegati(ctx, imp, cv, c, viste, stato)) {
+                    true -> allegatiInviati++
+                    false -> errori++
+                    null -> if (viste[c.chiave] != 1L) inAttesa++
+                }
+                continue
+            }
             try {
                 val scaricati = try {
                     cv.tuttiGliAllegati(c, 3, apriSeServe = true)
@@ -104,23 +132,24 @@ object Controllo {
         else "controllo fatto. circolari nuove: $nuove" + if (errori > 0) ", non inviate: $errori" else ""
         Diario.scrivi(ctx, msg)
         ctx.getSharedPreferences("app", Context.MODE_PRIVATE).edit().putLong("ultimo_controllo", System.currentTimeMillis()).apply()
-        return Esito(nuove, errori, primo, msg)
+        return Esito(nuove, errori, primo, msg, items.size, allegatiInviati, inAttesa, imp.invioMail && imp.mailPronta)
     }
 
-    private fun riprovaAllegati(ctx: Context, imp: Impostazioni, cv: ClasseViva, c: Circolare, viste: MutableMap<String, Long>, dal: Long) {
+    /** true = allegati mandati, false = invio non riuscito, null = nulla da mandare (ancora in attesa o rinuncia). */
+    private fun riprovaAllegati(ctx: Context, imp: Impostazioni, cv: ClasseViva, c: Circolare, viste: MutableMap<String, Long>, dal: Long): Boolean? {
         val scaricati = try {
             cv.tuttiGliAllegati(c, 1, apriSeServe = true) // come cv.py: se manca, apre la circolare e riprova
         } catch (r: ClasseViva.CircolareRitirata) {
             viste[c.chiave] = 1L
             Diario.scrivi(ctx, "Ritirata dalla scuola, allegato non più disponibile: ${c.titolo}")
-            return
+            return null
         }
         if (scaricati.size < c.allegati.size) {
             if (System.currentTimeMillis() - dal > ATTESA_ALLEGATI_MS) {
                 viste[c.chiave] = 1L
                 Diario.scrivi(ctx, "Allegati ancora non disponibili dopo 48 ore, rinuncio: ${c.titolo}")
             }
-            return
+            return null
         }
         try {
             if (imp.invioMail && imp.mailPronta) {
@@ -128,8 +157,10 @@ object Controllo {
             }
             viste[c.chiave] = 1L
             Diario.scrivi(ctx, "Inviato allegato: ${c.titolo}")
+            return if (imp.invioMail && imp.mailPronta) true else null
         } catch (e: Exception) {
             Diario.scrivi(ctx, "Allegato NON inviato (si riprova): ${c.titolo} -> ${e.message}")
+            return false
         }
     }
 
