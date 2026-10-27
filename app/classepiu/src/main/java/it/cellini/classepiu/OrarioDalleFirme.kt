@@ -22,8 +22,9 @@ object OrarioDalleFirme {
 
     /**
      * Ore trovate nelle firme: chiave (giorno 1 = lunedì … 6 = sabato, ora 1…ORE).
-     * Una firma di più ore (evtDuration) riempie le ore consecutive. Le firme di altri docenti si scartano.
-     * Classe e materia si scrivono come nelle tendine, se tra [insegnamenti] c'è la stessa coppia.
+     * Una firma di più ore (evtDuration) riempie le ore consecutive. Si scartano le firme di altri docenti, le supplenze
+     * e le ore in cui classe e materia non sono tra le proprie ([insegnamenti], "le mie classi"); classe e materia
+     * si scrivono come nelle tendine.
      */
     fun leggi(grezzo: String, mioId: String, insegnamenti: List<Insegnamento>, giorni: Int): Map<Pair<Int, Int>, Insegnamento> {
         val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
@@ -45,12 +46,13 @@ object OrarioDalleFirme {
                     if (data.isEmpty() || ora == null || classe.isEmpty()) { for (k in v.keys()) cammina(v.opt(k), livello + 1); return }
                     // educazione civica non sta nelle tendine dell'orario: si salta (se nella stessa ora c'è un'altra firma, vale quella)
                     if (materia.lowercase().contains("civica")) return
+                    if (v.t("lessonType", "lessonTypeDesc", "lessonTypeCode").lowercase().contains("supplen")) return
                     val autore = v.t("authorId", "teacherId")
                     if (mioId.isNotEmpty() && autore.isNotEmpty() && autore != mioId) return
                     val giorno = giornoDellaSettimana(data) ?: return
                     if (giorno !in 1..giorni) return
                     val durata = (v.t("evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceIn(1, Orario.ORE)
-                    val voce = comeNelleTendine(classe, materia, insegnamenti)
+                    val voce = comeNelleTendine(classe, materia, insegnamenti) ?: return
                     for (o in ora until ora + durata) if (o in 1..Orario.ORE) out.putIfAbsent(giorno to o, voce)
                 }
             }
@@ -67,10 +69,11 @@ object OrarioDalleFirme {
         return (c.get(Calendar.DAY_OF_WEEK) + 5) % 7 + 1
     }
 
-    private fun comeNelleTendine(classe: String, materia: String, insegnamenti: List<Insegnamento>): Insegnamento {
-        val stessa = insegnamenti.filter { it.classe.equals(classe, ignoreCase = true) }
-        val m = stessa.firstOrNull { it.materia.equals(materia, ignoreCase = true) }
-            ?: stessa.firstOrNull { materia.isNotEmpty() && it.materia.isNotEmpty() && (it.materia.contains(materia, true) || materia.contains(it.materia, true)) }
-        return m ?: Insegnamento(classe, materia)
+    /** La coppia di "le mie classi" con la stessa classe e materia, o null se in quell'ora non c'è una materia del docente. */
+    private fun comeNelleTendine(classe: String, materia: String, insegnamenti: List<Insegnamento>): Insegnamento? {
+        if (materia.isEmpty()) return null
+        val stessa = insegnamenti.filter { it.classe.equals(classe, ignoreCase = true) && it.materia.isNotEmpty() }
+        return stessa.firstOrNull { it.materia.equals(materia, ignoreCase = true) }
+            ?: stessa.firstOrNull { it.materia.contains(materia, true) || materia.contains(it.materia, true) }
     }
 }

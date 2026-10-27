@@ -568,7 +568,7 @@ class ImpostazioniFragment : Fragment() {
         fun leggibile(d: String) = "${d.substring(6, 8)}/${d.substring(4, 6)}"
         MaterialAlertDialogBuilder(ctx)
             .setTitle("compilo l'orario dalle firme?")
-            .setMessage("cerco le tue firme dal ${leggibile(da)} al ${leggibile(a)} e riempio classe e materia da lunedì a ${GIORNI_INTERI[giorni - 1]}. Le ore senza firma restano vuote.")
+            .setMessage("cerco le tue firme dal ${leggibile(da)} al ${leggibile(a)} e riempio classe e materia da lunedì a ${GIORNI_INTERI[giorni - 1]}, saltando supplenze e materie non tue. Le ore senza firma restano vuote.")
             .setPositiveButton("compila") { _, _ ->
                 messaggio("cerco le firme…")
                 viewLifecycleOwner.lifecycleScope.launch {
@@ -576,6 +576,12 @@ class ImpostazioniFragment : Fragment() {
                         runCatching {
                             val c = imp.client().also { it.login() }
                             if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
+                            if (insegnamenti.isEmpty()) {
+                                // servono le proprie classi e materie per scartare le ore che non sono del docente
+                                val (cc, tc) = c.classiGrezze(false)
+                                if (cc == 200) leggiInsegnamenti(tc).takeIf { it.isNotEmpty() }?.let { insegnamenti = it; runCatching { fileClassi(ctx).writeText(tc) } }
+                            }
+                            if (insegnamenti.isEmpty()) error("non trovo le tue classi e materie.")
                             val (codice, testo) = c.lezioniGrezze(da, a)
                             Triple(codice, testo, if (codice == 200) OrarioDalleFirme.leggi(testo, c.idDocente(), ordinari(), giorni) else emptyMap())
                         }
@@ -585,7 +591,7 @@ class ImpostazioniFragment : Fragment() {
                         if (trovate.isEmpty()) {
                             // niente da scrivere: l'orario resta com'era
                             MaterialAlertDialogBuilder(ctx)
-                                .setMessage(if (codice == 200) "nessuna firma trovata dal ${leggibile(da)} al ${leggibile(a)}: l'orario non è cambiato." else "classeviva ha risposto HTTP $codice.")
+                                .setMessage(if (codice == 200) "nessuna firma valida trovata dal ${leggibile(da)} al ${leggibile(a)}: l'orario non è cambiato." else "classeviva ha risposto HTTP $codice.")
                                 .setPositiveButton("ok", null)
                                 .setNeutralButton("copia la risposta di classeviva") { _, _ -> copiaTesto(ctx, "HTTP $codice\n$testo") }
                                 .show()
