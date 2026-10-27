@@ -610,7 +610,7 @@ fun leggiStudenti(grezzo: String): List<Studente> {
  * Stato di presenza per id studente: -1 nessuna lezione/nessun dato, 0 presente, 1 ritardo/uscita, 2 assente.
  * L'app ufficiale usa gli stati present, absent, late, shortLate, leaving, noLesson, presentInternship, presentEducationalTrip.
  */
-data class StatoGiornaliero(val valore: Int, val ritardoBreve: String? = null)
+data class StatoGiornaliero(val valore: Int, val ritardoBreve: String? = null, val isRitardoBreve: Boolean = false)
 
 /**
  * Stato di presenza per id studente. Per ABR1 conserva anche l'ora inserita dal docente,
@@ -649,14 +649,14 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
             else -> -1
         }
         val ritardoBreve = if (codici.any { it.startsWith("ABR") }) {
-            val orario = Regex("""(?:[01]\\d|2[0-3]):[0-5]\\d""")
+            val orario = Regex("""(?:[01]\d|2[0-3]):[0-5]\d""")
             val campiOrario = campi.filter { (chiave, testo) ->
                 chiave.contains("time") || chiave.contains("ora") || chiave.contains("hour") ||
                     chiave.contains("late") || chiave.contains("ritard") || orario.matches(testo.trim())
             }
             campiOrario.firstNotNullOfOrNull { (_, testo) -> orario.find(testo)?.value }
         } else null
-        val nuovo = StatoGiornaliero(valore, ritardoBreve)
+        val nuovo = StatoGiornaliero(valore, ritardoBreve, codici.any { it.startsWith("ABR") })
         val precedente = m[id]
         m[id] = when {
             precedente == null -> nuovo
