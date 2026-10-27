@@ -13,6 +13,8 @@ import android.widget.TextView
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
@@ -128,10 +130,19 @@ class StudentiScheda : Scheda() {
         lavoro = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val client = Impostazioni(requireContext()).client()
-                    val giornaliero = client.statoGrezzo(tipo, classeId, giorno)
-                    val lezioni = client.lezioniClasseGrezze(tipo, classeId, giorno)
-                    giornaliero to lezioni
+                    // Le due letture sono indipendenti: eseguirle in parallelo evita di sommare
+                    // i tempi di attesa delle due richieste HTTP.
+                    coroutineScope {
+                        val giornaliero = async {
+                            Impostazioni(requireContext().applicationContext).client()
+                                .statoGrezzo(tipo, classeId, giorno)
+                        }
+                        val lezioni = async {
+                            Impostazioni(requireContext().applicationContext).client()
+                                .lezioniClasseGrezze(tipo, classeId, giorno)
+                        }
+                        giornaliero.await() to lezioni.await()
+                    }
                 }
             }
             val coppia = r.getOrNull()
