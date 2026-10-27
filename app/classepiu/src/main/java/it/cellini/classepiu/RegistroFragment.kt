@@ -306,9 +306,10 @@ class RegistroFragment : Fragment() {
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
-            val voti = tasto("voti", 0xFFFFD54F.toInt()).apply { setTextColor(0xFF333333.toInt()) }
-            val lezioni = tasto("lezioni", celeste)
-            val note = tasto("note", 0xFFF0A040.toInt())
+            // Tre tonalità di blu distinte, tutte leggibili sul fondo chiaro della scheda.
+            val voti = tasto("voti", 0xFF1565C0.toInt())
+            val lezioni = tasto("lezioni", 0xFF039BE5.toInt())
+            val note = tasto("note", 0xFF3949AB.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 listOf(lezioni, voti, note).forEachIndexed { i, t ->
