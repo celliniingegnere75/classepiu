@@ -133,7 +133,7 @@ class StudentiScheda : Scheda() {
             val stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap()
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
             val diagnostica = coppia?.let { (g, l) ->
-                (g.first to "STATO GIORNALIERO HTTP ${g.first}\\n${g.second}\\n\\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\\n${l.second}")
+                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}")
             }
             mostra(stato, statiOre = statiOre, caricamento = false, grezzo = diagnostica)
         }
