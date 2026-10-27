@@ -211,27 +211,16 @@ class StudentiScheda : Scheda() {
                 })
             }
             cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)))
-            if (valore == 1 && statoStudente.ritardoBreve != null) {
+            if (statoStudente.isRitardoBreve) {
                 cellaOre.addView(TextView(ctx).apply {
-                    text = "RB ${statoStudente.ritardoBreve}"
+                    text = "RB" + (statoStudente.ritardoBreve?.let { " $it" } ?: "")
                     textSize = 12f
                     typeface = outfitBold
                     setTextColor(0xFF8A6D00.toInt())
                     gravity = Gravity.CENTER_VERTICAL
                     setPadding(dp(8), 0, dp(4), 0)
-                    contentDescription = "Ritardo breve alle ${statoStudente.ritardoBreve}"
+                    contentDescription = "Ritardo breve" + (statoStudente.ritardoBreve?.let { " alle $it" } ?: "")
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
-            } else if (valore == 1) {
-                // Mostra comunque la sigla se ClasseViva indica ABR1 ma non restituisce un orario leggibile.
-                val grezzoStato = TextView(ctx).apply {
-                    text = "RB"
-                    textSize = 12f
-                    typeface = outfitBold
-                    setTextColor(0xFF8A6D00.toInt())
-                    gravity = Gravity.CENTER_VERTICAL
-                    setPadding(dp(8), 0, dp(4), 0)
-                }
-                if (statoStudente.ritardoBreve != null) cellaOre.addView(grezzoStato)
             }
             cellaOre.addView(View(ctx), LinearLayout.LayoutParams(0, dp(1), 1f))
             scheda.addView(cellaOre, LinearLayout.LayoutParams(
