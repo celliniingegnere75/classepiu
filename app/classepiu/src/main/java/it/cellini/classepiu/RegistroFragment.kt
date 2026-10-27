@@ -287,7 +287,7 @@ class RegistroFragment : Fragment() {
                 textSize = 11.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER; maxLines = 1; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(4), ctx.dp(4), ctx.dp(4), ctx.dp(4))
-                background = GradientDrawable().apply { setColor(0xFF2E8B57.toInt()); cornerRadius = ctx.dp(10).toFloat() }
+                background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
             }
             val codice = TextView(ctx).apply {
                 textSize = 10.5f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(2), 0, 0)
@@ -297,7 +297,7 @@ class RegistroFragment : Fragment() {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(ctx.dp(10), ctx.dp(4), ctx.dp(10), ctx.dp(4))
-                background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = ctx.dp(10).toFloat() }
+                // Contenitore trasparente: evita l’effetto di un pulsante dentro un altro.
                 addView(descrizione); addView(codice)
             }
             // casella bassa (1/3): voti, lezioni, note con colori diversi
