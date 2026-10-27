@@ -274,7 +274,7 @@ class RegistroFragment : Fragment() {
             // casella alta (2/3): nome esteso della classe e materia, carattere piccolo; apre l'elenco dei ragazzi
             val descrizione = TextView(ctx).apply {
                 textSize = 11.5f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF4E4E4E.toInt())
-                maxLines = 2; ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
+                maxLines = 1; setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
             }
             val codice = TextView(ctx).apply {
                 textSize = 10.5f; setTextColor(0xFF333333.toInt()); setPadding(0, ctx.dp(2), 0, 0)
@@ -304,8 +304,8 @@ class RegistroFragment : Fragment() {
             }
             val testi = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 2f))
-                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = ctx.dp(6) })
+                addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 2f).apply { topMargin = ctx.dp(6) })
             }
             val riga = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
