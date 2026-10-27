@@ -340,7 +340,14 @@ class RegistroFragment : Fragment() {
         override fun onBindViewHolder(h: VH, pos: Int) {
             val c = dati[pos]
             h.nome.text = c.nome
-            val descrizioneBreve = c.descrizione.trim()
+            val descrizioneOriginale = c.descrizione.trim()
+            val prefissiDaRimuovere = listOf(c.codice.trim(), c.nome.trim())
+                .filter { it.isNotEmpty() }
+            val descrizioneBreve = prefissiDaRimuovere.firstOrNull {
+                descrizioneOriginale.startsWith(it, ignoreCase = true)
+            }?.let {
+                descrizioneOriginale.drop(it.length).trimStart(' ', '-', ':', '–', '—')
+            } ?: descrizioneOriginale
             h.descrizioneClasse.text = if (descrizioneBreve.length > 12) descrizioneBreve.take(11) + "…" else descrizioneBreve
             h.descrizioneClasse.visibility = if (descrizioneBreve.isEmpty()) View.GONE else View.VISIBLE
             h.descrizione.text = "appello rapido"
