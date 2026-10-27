@@ -458,12 +458,20 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * con attributi studente_id, evento_id, mydata, voto (vedi loadPopup in regvoti.js). Restituisce (evento_id, casella tipo "S1_3_1").
      * Prima per evento_id uguale all'evtId delle API, poi per studente + data + voto mostrato. Se non lo trova non si manda niente.
      */
+    /** Gruppo (classType G) oppure classId non numerico come "5EA_AUA": i voti di grades2 non portano classType. */
+    private fun eGruppo(o: JSONObject): Boolean {
+        val tipo = o.optString("classType")
+        return tipo.equals("G", ignoreCase = true) || tipo.startsWith("group", ignoreCase = true) ||
+            o.optString("classId").let { it.isNotEmpty() && !it.all { c -> c.isDigit() } }
+    }
+
     private fun cellaWeb(o: JSONObject, web: WebNascosto): Pair<String, String> {
         fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
-        val gruppo = t("classType").equals("G", ignoreCase = true)
+        val gruppo = eGruppo(o)
+        // come il registro web: per un gruppo (es. 5EA_AUA) classe_id e materia_id restano vuoti
         val indirizzo = "https://web.spaggiari.eu/cvv/app/default/regvoti.php?classe_id=${if (gruppo) "" else enc(t("classId"))}" +
-            "&materia_id=${enc(t("subjectId"))}&gruppo_id=${if (gruppo) enc(t("classId")) else ""}"
+            "&gruppo_id=${if (gruppo) enc(t("classId")) else ""}&materia_id=${if (gruppo) "" else enc(t("subjectId"))}"
         val (codice, html) = web.chiama(indirizzo)
         if (codice !in 200..299) throw ClasseVivaException("registro web non leggibile (HTTP $codice)")
         data class Cella(val evento: String, val studente: String, val casella: String, val data: String, val voto: String)
@@ -479,7 +487,10 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: celle.filter { it.studente == studente && it.evento.isNotEmpty() && it.evento != "0" &&
                     cifre(it.data) == cifre(t("evtDate").take(10)) && it.voto.trim() == t("displayValue").trim() }
                 .singleOrNull()
-            ?: throw ClasseVivaException("non trovo il voto nella pagina del registro web (${celle.size} caselle lette): non ho mandato niente")
+            ?: throw ClasseVivaException("non trovo il voto nella pagina del registro web (${celle.size} caselle lette): non ho mandato niente\n" +
+                "classe=${t("classId")} materia=${t("subjectId")} tipo=${t("classType")} studente=$studente evento=${t("evtId")}\n" +
+                "pagina: ${Regex("(?is)<title>(.*?)</title>").find(html)?.groupValues?.get(1)?.trim().orEmpty()} (${html.length} caratteri, " +
+                "${Regex("button_").findAll(html).count()} button_) " + html.replace(Regex("(?s)<script.*?</script>|<[^>]+>"), " ").replace(Regex("\\s+"), " ").trim().take(200))
         return trovata.evento to trovata.casella
     }
 
@@ -510,7 +521,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         // i voti fuori media hanno decimalValue vuoto: si usa quello del livello scelto
         val valore = t("decimalValue").ifEmpty { decimale?.toString() ?: display.replace(',', '.').filter { it.isDigit() || it == '.' } }
         val data = t("evtDate").take(10).split("-").let { if (it.size == 3) "${it[2]}-${it[1]}-${it[0]}" else t("evtDate") }
-        val gruppo = t("classType").equals("G", ignoreCase = true)
+        val gruppo = eGruppo(o)
         // id dell'evento e casella si prendono dalla pagina del registro web: con valori sbagliati
         // AJRECUPERA non tocca il voto e crea un "voto di recupero" vuoto (blu, "-") in un'altra casella
         val cella = try { cellaWeb(o, web) } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }

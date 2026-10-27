@@ -349,7 +349,7 @@ class VotiScheda : Scheda() {
             ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(8), dp(6), dp(8), dp(6))
         }
         txtData = TextView(ctx).apply {
-            textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF333333.toInt()); setPadding(dp(8), dp(6), dp(2), dp(6))
+            textSize = 13f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF333333.toInt()); setPadding(dp(8), dp(6), dp(2), dp(6))
             if (modificabile) { setOnClickListener { sceltaData() } }
         }
         // tipo (scritto/grafico, orale, pratico): occupa lo spazio in mezzo tra voto e data
@@ -373,11 +373,6 @@ class VotiScheda : Scheda() {
             buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
             setOnCheckedChangeListener { _, c -> mediaScelta = c }
         }
-        val riga2 = LinearLayout(ctx).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(txtMateria, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
-            addView(media)
-        }
         // sotto la spunta media: "senza voto" (il voto diventa "-", blu, come "nessun voto" dell'app ufficiale)
         senzaVoto = android.widget.CheckBox(ctx).apply {
             text = "senza voto"; textSize = 15f; isChecked = senza; isEnabled = modificabile
@@ -388,9 +383,16 @@ class VotiScheda : Scheda() {
                 else sceltaValore()
             }
         }
-        val rigaSenza = LinearLayout(ctx).apply {
-            gravity = Gravity.END or Gravity.CENTER_VERTICAL
-            addView(senzaVoto)
+        // "media" e "senza voto" in colonna, con le caselle allineate
+        val spunte = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(media, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(senzaVoto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+        }
+        val riga2 = LinearLayout(ctx).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(txtMateria, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+            addView(spunte)
         }
 
         // riga 3: cancella (solo sui propri voti)
@@ -413,17 +415,17 @@ class VotiScheda : Scheda() {
         }
         val riga3 = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            addView(cancella, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8); bottomMargin = dp(4) })
+            addView(cancella, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14); bottomMargin = dp(20) })
         }
 
         // annotazioni: etichetta quasi attaccata al campo di testo
-        val etichetta = TextView(ctx).apply { text = "annotazioni per la famiglia"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(28), 0, 0) }
+        val etichetta = TextView(ctx).apply { text = "annotazioni per la famiglia"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, 0, 0, 0) }
         val nota = EditText(ctx).apply {
             setText(v.nota); textSize = 15f; minLines = 3; gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
             setPadding(dp(8), dp(6), dp(8), dp(6)); isEnabled = modificabile
             // sfondo appena colorato al posto della riga sotto il campo
-            background = GradientDrawable().apply { setColor(0xFFF2F8FC.toInt()); cornerRadius = dp(6).toFloat() }
+            background = GradientDrawable().apply { setColor(Color.WHITE); cornerRadius = dp(6).toFloat() }
         }
 
         fun bottone(t: String, azione: () -> Unit) = TextView(ctx).apply {
@@ -448,7 +450,8 @@ class VotiScheda : Scheda() {
 
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), dp(8))
-            addView(riga1); addView(riga2); addView(rigaSenza); addView(riga3)
+            addView(riga1); addView(riga2)
+            addView(riga3, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             if (!modificabile) {
                 addView(TextView(ctx).apply { text = "prof. " + v.docente.ifEmpty { "altro docente" }; textSize = 13f; setTextColor(0xFF777777.toInt()); setPadding(dp(2), dp(8), 0, 0) })
             }
@@ -459,8 +462,12 @@ class VotiScheda : Scheda() {
             addView(pulsanti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
         }
         aggiornaValore(); aggiornaTipo(); aggiornaData()
-        finestra = MaterialAlertDialogBuilder(ctx).setView(corpo).create()
+        finestra = MaterialAlertDialogBuilder(ctx).setView(corpo)
+            .setBackground(GradientDrawable().apply { setColor(0xFFF4F4F4.toInt()); cornerRadius = dp(28).toFloat() })
+            .create()
         finestra.show()
+        // finestra più larga del normale: 92% dello schermo
+        finestra.window?.setLayout((resources.displayMetrics.widthPixels * 0.92f).toInt(), ViewGroup.LayoutParams.WRAP_CONTENT)
     }
 
     /**
@@ -575,8 +582,9 @@ class VotiScheda : Scheda() {
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
                             if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
+                            if (attuale.optString("classType").isEmpty() && this@VotiScheda.tipo.isNotEmpty()) attuale.put("classType", this@VotiScheda.tipo)
                             val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
-                            if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(300) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
+                            if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(700) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
                         }
                     }
                     // "senza voto" (chip blu): AJINS no_voto=1 per azzerare decimalValue nel registro web
@@ -592,8 +600,9 @@ class VotiScheda : Scheda() {
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
                             if (attuale.optString("subjectId").isEmpty()) subjectIdDi(adesso, idEvt(attuale)).takeIf { it.isNotEmpty() }?.let { attuale.put("subjectId", it) }
                             if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
+                            if (attuale.optString("classType").isEmpty() && this@VotiScheda.tipo.isNotEmpty()) attuale.put("classType", this@VotiScheda.tipo)
                             val (cw, rw) = c.senzaVotoWeb(attuale.toString(), casella, decimale)
-                            if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(300) else "classeviva web HTTP $cw ${rw.take(200)}"
+                            if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(700) else "classeviva web HTTP $cw ${rw.take(200)}"
                         }
                     }
                     // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto
