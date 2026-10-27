@@ -468,7 +468,8 @@ class ImpostazioniFragment : Fragment() {
         }
         tasti.addView(pillola(ctx, "compilazione\nmagica", 11f, Color.WHITE, azzurro, altezzaTasto).apply {
             setTypeface(typeface, Typeface.BOLD); includeFontPadding = false; setLineSpacing(0f, 0.95f)
-            maxLines = 2; setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(2))
+            maxLines = 2; hyphenationFrequency = android.text.Layout.HYPHENATION_FREQUENCY_NONE
+            setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(2))
             ContextCompat.getDrawable(ctx, R.drawable.ic_cappello_mago)?.let { cappello ->
                 cappello.setBounds(0, 0, ctx.dp(18), ctx.dp(18))
                 setCompoundDrawablesRelative(cappello, null, null, null)
