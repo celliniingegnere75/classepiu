@@ -259,7 +259,7 @@ class StudentiScheda : Scheda() {
                 s.contains("LATE") || s.contains("LEAV") || s.contains("RITARD") || s.contains("USCIT") ||
                     s.startsWith("ABR") || s.startsWith("ABU") || s.startsWith("AB") -> 1
                 s.contains("PRESENT") || s.contains("PRESEN") || s == "PL" ||
-                    s.startsWith("HPR") || s.startsWith("AT") -> 0
+                    s.startsWith("HAT") || s.startsWith("HPR") || s.startsWith("AT") -> 0
                 else -> -1
             }
         }
