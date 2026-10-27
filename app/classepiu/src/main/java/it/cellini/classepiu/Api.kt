@@ -250,9 +250,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             val base = "https://web.spaggiari.eu/cvv/app/default/regclasse_conpresenza.php?classe_id=${enc(classeId)}&gruppo_id="
             val (codicePagina, pagina) = web.chiama(base)
             if (codicePagina !in 200..299) throw ClasseVivaException("registro presenze web non leggibile (HTTP $codicePagina)")
-            val ultimaOra = Regex("""id\\s*=\\s*["']ora_posizione["'][^>]*value\\s*=\\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+            val ultimaOra = Regex("""id\s*=\s*["']ora_posizione["'][^>]*value\s*=\s*["']([^"']+)["']""", RegexOption.IGNORE_CASE)
                 .find(pagina)?.groupValues?.get(1)
-                ?: Regex("""value\\s*=\\s*["']([^"']+)["'][^>]*id\\s*=\\s*["']ora_posizione["']""", RegexOption.IGNORE_CASE)
+                ?: Regex("""value\s*=\s*["']([^"']+)["'][^>]*id\s*=\s*["']ora_posizione["']""", RegexOption.IGNORE_CASE)
                     .find(pagina)?.groupValues?.get(1)
                 ?: "1"
             val risultato = linkedMapOf<String, String>()
@@ -260,9 +260,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 val url = base + "&action=cambiastato&studente_id=${enc(studenteId)}&data=${enc(data)}&ultimaorafirmata=${enc(ultimaOra)}"
                 val (codice, html) = web.chiama(url, referer = base)
                 if (codice !in 200..299) continue
-                val tag = Regex("""<input\\b[^>]*\\bid=["']popup_evento_ora["'][^>]*>""", RegexOption.IGNORE_CASE)
+                val tag = Regex("""<input\b[^>]*\bid=["']popup_evento_ora["'][^>]*>""", RegexOption.IGNORE_CASE)
                     .find(html)?.value ?: continue
-                val ora = Regex("""\\bvalue\\s*=\\s*["']((?:[01]\\d|2[0-3]):[0-5]\\d)["']""", RegexOption.IGNORE_CASE)
+                val ora = Regex("""\bvalue\s*=\s*["']((?:[01]\d|2[0-3]):[0-5]\d)["']""", RegexOption.IGNORE_CASE)
                     .find(tag)?.groupValues?.get(1) ?: continue
                 risultato[studenteId] = ora
             }
