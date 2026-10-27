@@ -415,11 +415,11 @@ class VotiScheda : Scheda() {
         }
         val riga3 = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_HORIZONTAL
-            addView(cancella, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14); bottomMargin = dp(2) })
+            addView(cancella, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(14); bottomMargin = dp(20) })
         }
 
         // annotazioni: etichetta quasi attaccata al campo di testo
-        val etichetta = TextView(ctx).apply { text = "annotazioni per la famiglia"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(28), 0, 0) }
+        val etichetta = TextView(ctx).apply { text = "annotazioni per la famiglia"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, 0, 0, 0) }
         val nota = EditText(ctx).apply {
             setText(v.nota); textSize = 15f; minLines = 3; gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE
