@@ -343,7 +343,7 @@ class StudentiScheda : Scheda() {
                 is JSONObject -> {
                     val codice = v.opt("evtHPos")?.toString()?.toIntOrNull()
                     val durata = v.opt("evtDuration")?.toString()?.toIntOrNull()?.coerceAtLeast(1) ?: 1
-                    if (codice != null && codice in 1..9) massimo = maxOf(massimo, (codice + durata - 1).coerceAtMost(9))
+                    if (v.has("studentStatus") && codice != null && codice in 1..9) massimo = maxOf(massimo, (codice + durata - 1).coerceAtMost(9))
                     for (k in v.keys()) cammina(v.opt(k), livello + 1)
                 }
             }
