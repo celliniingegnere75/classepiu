@@ -496,7 +496,14 @@ class ClasseViva(private val utente: String, private val password: String, priva
         web.use { return mediaVotoWeb(o, web, faMedia, decimale) }
     }
 
-    private fun mediaVotoWeb(o: JSONObject, web: WebNascosto, faMedia: Boolean, decimale: Double?): Pair<Int, String> {
+    /** Salva il voto come "senza voto" (chip blu, decimalValue null) tramite AJINS con no_voto=1. */
+    fun senzaVotoWeb(grezzo: String, casella: String?, decimale: Double? = null): Pair<Int, String> {
+        val o = ClasseVivaPayloadValidation.voto(grezzo)
+        val web = try { sessioneWeb() } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
+        web.use { return mediaVotoWeb(o, web, faMedia = true, decimale = decimale, senzaVoto = true) }
+    }
+
+    private fun mediaVotoWeb(o: JSONObject, web: WebNascosto, faMedia: Boolean, decimale: Double?, senzaVoto: Boolean = false): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         fun t(k: String) = o.opt(k)?.takeIf { it != JSONObject.NULL }?.toString().orEmpty()
         val display = t("displayValue")
@@ -508,7 +515,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         // AJRECUPERA non tocca il voto e crea un "voto di recupero" vuoto (blu, "-") in un'altra casella
         val cella = try { cellaWeb(o, web) } catch (e: Exception) { return 0 to (e.message ?: e.toString()) }
         val descrizione = cella.second
-        val campi = if (!faMedia) linkedMapOf(
+        val campi = if (!faMedia && !senzaVoto) linkedMapOf(
             "ope" to "AJRECUPERA",
             "evento_id" to cella.first,
             "studente_id" to t("studentId"),
@@ -518,7 +525,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "studente_id" to t("studentId"),
             "classe" to if (gruppo) "" else t("classId"),
             "gruppo" to if (gruppo) t("classId") else "",
-            "valore" to valore,
+            "valore" to if (senzaVoto) "" else valore,
             "evento_codice" to "VG",
             "valore_display" to display,
             "descrizione_1" to descrizione,
@@ -530,7 +537,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             "evento_id" to cella.first,
             "nota_1" to t("notesForFamily"),
             "nota_2" to t("internalNotes"),
-            "no_voto" to "0",
+            "no_voto" to if (senzaVoto) "1" else "0",
             "id_uda" to ""
         )
         val (codice, testo) = web.chiama("https://web.spaggiari.eu/cvv/app/default/votiio.php",
