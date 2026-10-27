@@ -283,10 +283,10 @@ class RegistroFragment : Fragment() {
                 text = "appello rapido"
                 textSize = 12f
                 typeface = outfitBold
-                setTextColor(celesteTesto)
+                setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
-                background = GradientDrawable().apply { setColor(0xFFC8E6C9.toInt()); cornerRadius = ctx.dp(10).toFloat() }
+                background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
             }
             val codice = TextView(ctx).apply {
                 textSize = 10.5f; typeface = outfitRegular; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
