@@ -27,7 +27,7 @@ object OrarioDalleFirme {
      * si scrivono come nelle tendine.
      */
     fun leggi(grezzo: String, mioId: String, insegnamenti: List<Insegnamento>, giorni: Int,
-              nomiClassi: Map<String, String> = emptyMap()): Map<Pair<Int, Int>, Insegnamento> {
+              nomiClassi: Map<String, String> = emptyMap(), dal: String = ""): Map<Pair<Int, Int>, Insegnamento> {
         val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
         val out = LinkedHashMap<Pair<Int, Int>, Insegnamento>()
         fun JSONObject.t(vararg ks: String): String {
@@ -53,6 +53,8 @@ object OrarioDalleFirme {
                     if (v.t("lessonType", "lessonTypeDesc", "lessonTypeCode").lowercase().contains("supplen")) return
                     val autore = v.t("authorId", "teacherId")
                     if (mioId.isNotEmpty() && autore.isNotEmpty() && autore != mioId) return
+                    // si chiede a classeviva un giorno in più (il primo giorno dell'intervallo potrebbe non essere compreso): qui si scarta
+                    if (dal.isNotEmpty() && data.take(10).replace("-", "") < dal) return
                     val giorno = giornoDellaSettimana(data) ?: return
                     if (giorno !in 1..giorni) return
                     val durata = (v.t("evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceIn(1, Orario.ORE)
@@ -63,6 +65,12 @@ object OrarioDalleFirme {
         }
         cammina(radice, 0)
         return out
+    }
+
+    /** Il giorno prima di [d] (yyyyMMdd). */
+    fun giornoPrima(d: String): String {
+        val c = Calendar.getInstance().apply { clear(); set(d.take(4).toInt(), d.substring(4, 6).toInt() - 1, d.substring(6, 8).toInt()); add(Calendar.DAY_OF_MONTH, -1) }
+        return String.format(java.util.Locale.ROOT, "%04d%02d%02d", c.get(Calendar.YEAR), c.get(Calendar.MONTH) + 1, c.get(Calendar.DAY_OF_MONTH))
     }
 
     /** Sigla della classe per id, da [leggiClassi]: chiavi "tipo|id" e "id". */

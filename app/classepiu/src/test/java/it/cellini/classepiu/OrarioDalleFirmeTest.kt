@@ -63,4 +63,17 @@ class OrarioDalleFirmeTest {
         // id non in "le mie classi": la materia è insegnata in una sola classe, quindi è quella
         assertEquals(Insegnamento("5ETA", "ELETTROTECNICA, ELETTRONICA E AUTOMAZIONE"), r[5 to 1])
     }
+
+    @Test
+    fun giornoInPiuScartato() {
+        assertEquals("20261019", OrarioDalleFirme.giornoPrima("20261020"))
+        assertEquals("20260930", OrarioDalleFirme.giornoPrima("20261001"))
+        val grezzo = """{"lessons":[
+            {"evtDate":"2026-10-19","authorId":1,"classDesc":"5ETA","subjectDesc":"TPSEE","evtHPos":1},
+            {"evtDate":"2026-10-26","authorId":1,"classDesc":"5ETA","subjectDesc":"TPSEE","evtHPos":2}
+        ]}"""
+        val r = OrarioDalleFirme.leggi(grezzo, "1", listOf(Insegnamento("5ETA", "TPSEE")), 5, emptyMap(), "20261020")
+        assertNull(r[1 to 1])
+        assertEquals(Insegnamento("5ETA", "TPSEE"), r[1 to 2])
+    }
 }

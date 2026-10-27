@@ -582,9 +582,9 @@ class ImpostazioniFragment : Fragment() {
                             }
                             if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
                             if (insegnamenti.isEmpty()) error("non trovo le tue classi e materie.")
-                            val (codice, testo) = c.lezioniGrezze(da, a)
+                            val (codice, testo) = c.lezioniGrezze(OrarioDalleFirme.giornoPrima(da), a)
                             val nomi = OrarioDalleFirme.nomiClassi(runCatching { leggiClassi(fileClassi(ctx).readText()) }.getOrDefault(emptyList()))
-                            Triple(codice, testo, if (codice == 200) OrarioDalleFirme.leggi(testo, c.idDocente(), ordinari(), giorni, nomi) else emptyMap())
+                            Triple(codice, testo, if (codice == 200) OrarioDalleFirme.leggi(testo, c.idDocente(), ordinari(), giorni, nomi, da) else emptyMap())
                         }
                     }
                     if (!isAdded) return@launch
