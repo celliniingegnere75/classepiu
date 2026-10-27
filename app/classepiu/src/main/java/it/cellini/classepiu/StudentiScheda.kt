@@ -137,14 +137,15 @@ class StudentiScheda : Scheda() {
             val coppia = r.getOrNull()
             val stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
+            val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             val diagnostica = coppia?.let { (g, l) ->
                 (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}")
             }
-            mostra(stato, statiOre = statiOre, caricamento = false, grezzo = diagnostica)
+            mostra(stato, statiOre = statiOre, numeroOre = numeroOre, caricamento = false, grezzo = diagnostica)
         }
     }
 
-    private fun mostra(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
+    private fun mostra(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), numeroOre: Int = 9, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
         val ctx = requireContext()
 
@@ -158,7 +159,7 @@ class StudentiScheda : Scheda() {
                 else -> 0xFFEEEEEE.toInt()
             }
 
-            // Scheda unica con due celle sovrapposte: anagrafica sopra, nove ore sotto.
+            // Scheda unica con due celle sovrapposte: anagrafica sopra, ore effettive del giorno sotto.
             val scheda = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 background = GradientDrawable().apply {
@@ -193,12 +194,12 @@ class StudentiScheda : Scheda() {
                 setBackgroundColor(0xFFFFFFFF.toInt())
             }
 
-            // La fila dei nove indicatori occupa metà della larghezza disponibile.
+            // Mostra solo le ore effettivamente presenti nel registro per la giornata selezionata.
             val filaPallini = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
-            repeat(9) { ora ->
+            repeat(numeroOre.coerceIn(1, 9)) { ora ->
                 val pallino = View(ctx).apply {
                     background = GradientDrawable().apply {
                         shape = GradientDrawable.OVAL
@@ -213,7 +214,7 @@ class StudentiScheda : Scheda() {
             cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)))
             if (statoStudente.isRitardoBreve) {
                 cellaOre.addView(TextView(ctx).apply {
-                    text = "RB" + (statoStudente.ritardoBreve?.let { " $it" } ?: "")
+                    text = "Rb" + (statoStudente.ritardoBreve?.let { " $it" } ?: "")
                     textSize = 12f
                     typeface = outfitBold
                     setTextColor(0xFF8A6D00.toInt())
@@ -313,6 +314,26 @@ class StudentiScheda : Scheda() {
         }
         cammina(radice, 0)
         return risultati
+    }
+
+    /** Numero di ore effettive: usa evtHPos + evtDuration, anche se studentStatus è null. */
+    private fun leggiNumeroOre(grezzo: String): Int {
+        val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return 9
+        var massimo = 0
+        fun cammina(v: Any?, livello: Int = 0) {
+            if (livello > 7) return
+            when (v) {
+                is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), livello + 1)
+                is JSONObject -> {
+                    val codice = v.opt("evtHPos")?.toString()?.toIntOrNull()
+                    val durata = v.opt("evtDuration")?.toString()?.toIntOrNull()?.coerceAtLeast(1) ?: 1
+                    if (codice != null && codice in 1..9) massimo = maxOf(massimo, (codice + durata - 1).coerceAtMost(9))
+                    for (k in v.keys()) cammina(v.opt(k), livello + 1)
+                }
+            }
+        }
+        cammina(radice)
+        return if (massimo in 1..9) massimo else 9
     }
 
     private fun coloreOraPerStudente(statiOre: Map<String, List<Int>>, studentId: String, ora: Int): Int {
