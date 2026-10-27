@@ -1,1 +1,19 @@
+# Gradle e build
+.gradle/
+build/
+local.properties
+
+# Android Studio / IntelliJ
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+
+# Varie
 __pycache__/
+*.log
