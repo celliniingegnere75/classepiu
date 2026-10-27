@@ -25,6 +25,8 @@ import org.json.JSONObject
 // Build verificata: lettura dello stato giornaliero e della risposta lessons2/students.
 class StudentiScheda : Scheda() {
     private val azzurro = 0xFF69BCE8.toInt()
+    private lateinit var outfitRegular: Typeface
+    private lateinit var outfitBold: Typeface
     private lateinit var lista: LinearLayout
     private lateinit var striscia: StrisciaGiorni
     private var studenti: List<Studente> = emptyList()
@@ -47,13 +49,15 @@ class StudentiScheda : Scheda() {
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         val ctx = requireContext()
+        outfitRegular = Typeface.createFromAsset(ctx.assets, "outfit_regular.ttf")
+        outfitBold = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
 
         val chiudi = TextView(ctx).apply {
-            text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER
+            text = "✕"; textSize = 22f; typeface = outfitRegular; setTextColor(Color.WHITE); gravity = Gravity.CENTER
             setOnClickListener { finish() }
         }
         val titolo = TextView(ctx).apply {
-            text = nome; textSize = 22f; setTypeface(typeface, Typeface.BOLD); setTextColor(Color.WHITE)
+            text = nome; textSize = 22f; typeface = outfitBold; setTextColor(Color.WHITE)
             gravity = Gravity.CENTER; setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END
         }
         val barra = LinearLayout(ctx).apply {
@@ -166,7 +170,7 @@ class StudentiScheda : Scheda() {
             val cellaNome = TextView(ctx).apply {
                 text = s.nome
                 textSize = 17f
-                setTypeface(typeface, Typeface.BOLD)
+                typeface = outfitBold
                 setTextColor(0xFF111111.toInt())
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(11), dp(14), dp(11))
@@ -318,7 +322,7 @@ class StudentiScheda : Scheda() {
     private fun testo(s: String, codice: Int = 0, corpo: String = "") {
         lista.removeAllViews()
         lista.addView(TextView(requireContext()).apply {
-            text = s; textSize = 15f; setTextColor(0xFF555555.toInt())
+            text = s; textSize = 15f; typeface = outfitRegular; setTextColor(0xFF555555.toInt())
             setPadding(dp(8), dp(24), dp(8), 0)
         })
         if (corpo.isNotEmpty()) copiaRisposta("mostra la risposta di classeviva (tocca per copiare)", codice, corpo)
@@ -326,7 +330,7 @@ class StudentiScheda : Scheda() {
 
     private fun copiaRisposta(etichetta: String, codice: Int, corpo: String) {
         lista.addView(TextView(requireContext()).apply {
-            text = etichetta; textSize = 14f; setTextColor(azzurro)
+            text = etichetta; textSize = 14f; typeface = outfitRegular; setTextColor(azzurro)
             setPadding(dp(8), dp(12), dp(8), dp(12))
             setOnClickListener {
                 val cm = requireContext().getSystemService(android.content.ClipboardManager::class.java)
