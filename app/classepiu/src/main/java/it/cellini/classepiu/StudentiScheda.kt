@@ -234,7 +234,7 @@ class StudentiScheda : Scheda() {
                     }
                     contentDescription = "Ora ${ora + 1}: ${descrizioneOra(statiOre[s.id]?.getOrNull(ora) ?: -1)}"
                 }
-                filaPallini.addView(pallino, LinearLayout.LayoutParams(dp(7), dp(7)).apply {
+                filaPallini.addView(pallino, LinearLayout.LayoutParams(dp(14), dp(14)).apply {
                     if (ora > 0) leftMargin = dp(3)
                 })
             }
