@@ -459,16 +459,25 @@ class ImpostazioniFragment : Fragment() {
             }, piena().apply { topMargin = ctx.dp(6) })
             Triple(classe, materia, aulaView)
         }
-        // "wizard" compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota
+        // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
+        // I due tasti hanno la stessa grandezza: la scritta del wizard va su due righe più piccole, con il cappello da mago
+        val larghezzaTasto = ctx.dp(118)
+        val altezzaTasto = ctx.dp(36)
         val tasti = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL }
-        tasti.addView(pillola(ctx, "wizard", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
-            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
+        tasti.addView(pillola(ctx, "compilazione\nmagica", 11f, Color.WHITE, azzurro, altezzaTasto).apply {
+            setTypeface(typeface, Typeface.BOLD); includeFontPadding = false; setLineSpacing(0f, 0.95f)
+            setPadding(ctx.dp(10), ctx.dp(2), ctx.dp(10), ctx.dp(2))
+            ContextCompat.getDrawable(ctx, R.drawable.ic_cappello_mago)?.let { cappello ->
+                cappello.setBounds(0, 0, ctx.dp(20), ctx.dp(20))
+                setCompoundDrawablesRelative(cappello, null, null, null)
+                compoundDrawablePadding = ctx.dp(6)
+            }
             setOnClickListener { wizard(ctx, orario) }
-        })
-        tasti.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, ctx.dp(32)).apply {
-            setPadding(ctx.dp(28), ctx.dp(4), ctx.dp(28), ctx.dp(4))
+        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto))
+        tasti.addView(pillola(ctx, "pulisci", 15f, Color.WHITE, azzurro, altezzaTasto).apply {
+            setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(12) })
+        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto).apply { leftMargin = ctx.dp(40) })
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
