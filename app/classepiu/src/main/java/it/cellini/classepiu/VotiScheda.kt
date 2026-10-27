@@ -558,6 +558,7 @@ class VotiScheda : Scheda() {
                         else {
                             val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
+                            if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             val (cw, rw) = c.mediaVotoWeb(attuale.toString(), media, casella, decimale)
                             if (cw !in 200..299) avviso += "\nmedia non cambiata: " + if (cw == 0) rw.take(300) else "classeviva web ha risposto HTTP $cw ${rw.take(200)}"
                         }
@@ -573,6 +574,7 @@ class VotiScheda : Scheda() {
                         else {
                             val casella = (componente ?: componenti.firstOrNull { it.optInt("position") == attuale.optInt("componentPos") && (periodo == null || it.optString("periodCode") == periodo) })
                                 ?.optString("componentId")?.split(":")?.getOrNull(1)?.takeIf { it.isNotBlank() }
+                            if (attuale.optString("classId").isEmpty()) attuale.put("classId", classeId)
                             val (cw, rw) = c.senzaVotoWeb(attuale.toString(), casella, decimale)
                             if (cw !in 200..299) avviso += "\nchip blu non applicato: " + if (cw == 0) rw.take(300) else "classeviva web HTTP $cw ${rw.take(200)}"
                         }
