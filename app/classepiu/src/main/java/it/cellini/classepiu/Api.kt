@@ -610,38 +610,64 @@ fun leggiStudenti(grezzo: String): List<Studente> {
  * Stato di presenza per id studente: -1 nessuna lezione/nessun dato, 0 presente, 1 ritardo/uscita, 2 assente.
  * L'app ufficiale usa gli stati present, absent, late, shortLate, leaving, noLesson, presentInternship, presentEducationalTrip.
  */
-fun leggiStato(grezzo: String): Map<String, Int> {
+data class StatoGiornaliero(val valore: Int, val ritardoBreve: String? = null)
+
+/**
+ * Stato di presenza per id studente. Per ABR1 conserva anche l'ora inserita dal docente,
+ * se presente nella risposta di status2.
+ */
+fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
     val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
     val a = trovaArrayGenerico(radice, listOf("students", "items", "data", "status", "pupils")) ?: return emptyMap()
-    fun stringhe(v: Any?, out: MutableList<String>) {
+
+    fun raccogli(v: Any?, out: MutableList<Pair<String, String>>, livello: Int = 0) {
+        if (livello > 8) return
         when (v) {
-            is String -> out.add(v.lowercase())
-            is JSONObject -> v.keys().forEach { stringhe(v.opt(it), out) }
-            is JSONArray -> for (i in 0 until v.length()) stringhe(v.opt(i), out)
+            is JSONObject -> for (k in v.keys()) {
+                val valore = v.opt(k)
+                if (valore == null || valore == JSONObject.NULL) continue
+                if (valore is String || valore is Number || valore is Boolean) out += k.lowercase() to valore.toString()
+                else raccogli(valore, out, livello + 1)
+            }
+            is JSONArray -> for (i in 0 until v.length()) raccogli(v.opt(i), out, livello + 1)
         }
     }
-    val m = HashMap<String, Int>()
+
+    val m = HashMap<String, StatoGiornaliero>()
     val senzaCodice = ArrayList<String>()
     for (i in 0 until a.length()) {
         val o = a.optJSONObject(i) ?: continue
         val id = idDi(o)
         if (id.isEmpty()) continue
-        // codici di ClasseViva: AT00 presente, ABA0 assente, ABU0/ABR* uscita/ritardo
-        val ss = mutableListOf<String>().also { stringhe(o, it) }
-        val codici = ss.map { it.uppercase() }.filter { it.length == 4 && it[0].isLetter() }
+        val campi = mutableListOf<Pair<String, String>>().also { raccogli(o, it) }
+        val codici = campi.map { it.second.uppercase() }.filter { it.length == 4 && it[0].isLetter() }
         if (codici.isEmpty()) { senzaCodice.add(id); continue }
-        val v = when {
-            codici.any { it.startsWith("ABA") } -> 2
-            codici.any { it.startsWith("AB") } -> 1
-            codici.any { it.startsWith("AT") } -> 0
+        val valore = when {
+            codici.any { it.startsWith("ABA") || it.startsWith("HAB") } -> 2
+            codici.any { it.startsWith("ABR") || it.startsWith("ABU") || it.startsWith("AB") } -> 1
+            codici.any { it.startsWith("AT") || it.startsWith("HAT") || it.startsWith("HPR") } -> 0
             else -> -1
         }
-        m[id] = maxOf(m[id] ?: -1, v)
+        val ritardoBreve = if (codici.any { it.startsWith("ABR") }) {
+            val orario = Regex("""(?:[01]\\d|2[0-3]):[0-5]\\d""")
+            val campiOrario = campi.filter { (chiave, testo) ->
+                chiave.contains("time") || chiave.contains("ora") || chiave.contains("hour") ||
+                    chiave.contains("late") || chiave.contains("ritard") || orario.matches(testo.trim())
+            }
+            campiOrario.firstNotNullOfOrNull { (_, testo) -> orario.find(testo)?.value }
+        } else null
+        val nuovo = StatoGiornaliero(valore, ritardoBreve)
+        val precedente = m[id]
+        m[id] = when {
+            precedente == null -> nuovo
+            nuovo.valore == 2 -> nuovo
+            precedente.valore == 2 -> precedente
+            nuovo.ritardoBreve != null -> nuovo
+            else -> precedente
+        }
     }
-    // Senza segnalazioni lo studente è presente, ma solo se quel giorno c'è lezione:
-    // se nella classe nessuno ha un codice (domenica, festivo, giorno futuro) restano tutti senza dato.
     val giornoDiLezione = m.isNotEmpty()
-    for (id in senzaCodice) m[id] = if (giornoDiLezione) 0 else -1
+    for (id in senzaCodice) m[id] = StatoGiornaliero(if (giornoDiLezione) 0 else -1)
     return m
 }
 
