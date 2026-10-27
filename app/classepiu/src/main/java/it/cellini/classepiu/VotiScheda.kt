@@ -288,7 +288,6 @@ class VotiScheda : Scheda() {
         val tipi = listOf("scritto/grafico", "orale", "pratico")
         var valoreScelto = v.valore
         var tipoScelto = v.tipo.lowercase()
-        var mediaScelta = v.faMedia
         var scelta: java.util.Date? = runCatching { fApi.parse(v.data.take(10)) }.getOrNull()
         lateinit var finestra: androidx.appcompat.app.AlertDialog
         lateinit var txtValore: TextView
@@ -303,7 +302,6 @@ class VotiScheda : Scheda() {
             txtValore.text = testoModificabile(valoreScelto); txtValore.setTextColor(coloreVoto(numeroDa(valoreScelto)))
             val puoMedia = puoFareMedia(valoreScelto)
             media.visibility = if (puoMedia) android.view.View.VISIBLE else android.view.View.GONE
-            if (!puoMedia) { mediaScelta = false; media.isChecked = false }
         }
         fun aggiornaTipo() { txtTipo.text = testoModificabile(tipoScelto); txtTipo.setTextColor(colorePerRiga(if (tipoScelto.contains("scritt")) "scritto" else tipoScelto)) }
         fun aggiornaData() { txtData.text = scelta?.let { fIt.format(it) } ?: "data" }
@@ -357,11 +355,15 @@ class VotiScheda : Scheda() {
             addView(txtData)
         }
 
-        // riga 2: materia e spunta "media" (spuntata = il voto fa media)
+        // riga 2: materia e spunta "media" (spuntata = il voto fa media), solo da leggere:
+        // le API di classeviva (e l'app ufficiale) non hanno un campo per togliere un voto dalla media
         media = android.widget.CheckBox(ctx).apply {
-            text = "media"; textSize = 15f; isChecked = mediaScelta; isEnabled = modificabile
+            text = "media"; textSize = 15f; isChecked = v.faMedia
             buttonTintList = android.content.res.ColorStateList.valueOf(azzurro)
-            setOnCheckedChangeListener { _, c -> mediaScelta = c }
+            setOnCheckedChangeListener { b, _ ->
+                b.isChecked = v.faMedia
+                if (modificabile) android.widget.Toast.makeText(ctx, "la media si cambia solo da classeviva web", android.widget.Toast.LENGTH_LONG).show()
+            }
         }
         val riga2 = LinearLayout(ctx).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -413,7 +415,7 @@ class VotiScheda : Scheda() {
                 addView(bottone("salva") {
                     val dataApi = scelta?.let { fApi.format(it) } ?: v.data
                     val annotazione = nota.text.toString()
-                    salvaSuClasseviva(v, valoreScelto, tipoScelto, mediaScelta, dataApi, annotazione)
+                    salvaSuClasseviva(v, valoreScelto, tipoScelto, dataApi, annotazione)
                     finestra.dismiss()
                 })
             }
@@ -433,59 +435,82 @@ class VotiScheda : Scheda() {
         finestra.show()
     }
 
-    /** Prova a scrivere la modifica su classeviva; se non riesce resta salvata sul telefono e lo si dice. */
-    private fun salvaSuClasseviva(v: Voto, valore: String, tipo: String, media: Boolean, data: String, nota: String) {
+    /**
+     * Scrive la modifica su classeviva come l'app ufficiale, poi rilegge il registro e mostra il voto com'è davvero.
+     * Stessa data e stesso tipo: si riscrive la stessa casella. Data o tipo diversi: classeviva identifica il voto
+     * con data + tipo + posizione, quindi si crea il voto nella casella nuova e, solo dopo averlo ritrovato, si cancella il vecchio.
+     */
+    private fun salvaSuClasseviva(v: Voto, valore: String, tipo: String, data: String, nota: String) {
         if (v.grezzo.isEmpty()) return
         lifecycleScope.launch {
             val ctx = requireContext()
             val livello = livelli.firstOrNull { it.scritta == valore }
-            val vecchio = runCatching { org.json.JSONObject(v.grezzo) }.getOrNull()
-            // componente del nuovo tipo nello stesso periodo del voto
-            val periodo = codiciPeriodo[vecchio?.optInt("periodPos") ?: 0]
+            val vecchio = runCatching { org.json.JSONObject(v.grezzo) }.getOrNull() ?: return@launch
+            val idVecchio = vecchio.opt("evtId")?.toString().orEmpty()
+            val periodo = codiciPeriodo[vecchio.optInt("periodPos")]
+            // componente del tipo scelto nello stesso periodo del voto (la sua position è il componentPos)
             val componente = componenti.firstOrNull { it.optString("componentName").lowercase() == tipo && (periodo == null || it.optString("periodCode") == periodo) }
+                ?: componenti.firstOrNull { it.optString("componentName").lowercase() == tipo }
+            val cambiaTipo = !vecchio.optString("componentDesc").equals(tipo, ignoreCase = true)
+            if (cambiaTipo && componente == null) {
+                MaterialAlertDialogBuilder(ctx).setMessage("non trovo il tipo \"$tipo\" tra quelli di classeviva per questa materia: voto non modificato.")
+                    .setPositiveButton("chiudi", null).show()
+                return@launch
+            }
+            val posTipo = if (cambiaTipo) componente!!.optInt("position", vecchio.optInt("componentPos")) else vecchio.optInt("componentPos")
+            val sposta = cambiaTipo || data != vecchio.optString("evtDate")
+            fun idEvt(x: org.json.JSONObject) = x.opt("evtId")?.toString().orEmpty()
+            fun votiDi(testo: String): List<org.json.JSONObject> {
+                val trovati = ArrayList<org.json.JSONObject>()
+                fun cerca(x: Any?) {
+                    when (x) {
+                        is org.json.JSONObject -> if (x.has("evtId") && x.has("studentId")) trovati.add(x) else x.keys().forEach { cerca(x.opt(it)) }
+                        is org.json.JSONArray -> for (k in 0 until x.length()) cerca(x.opt(k))
+                    }
+                }
+                cerca(runCatching { org.json.JSONTokener(testo).nextValue() }.getOrNull())
+                return trovati
+            }
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val c = Impostazioni(ctx).client()
-                    val esito = c.salvaVoto(v.grezzo, valore, livello?.codice, livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }, tipo, media, data, nota, componente)
-                    var dettaglio = ""
-                    val componenteOriginale = vecchio?.optString("componentDesc").orEmpty()
-                    if (esito.first in 200..299 && !componenteOriginale.equals(tipo, ignoreCase = true)) {
-                        val lettura = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
-                        val radice = runCatching { org.json.JSONTokener(lettura.second).nextValue() }.getOrNull()
-                        val idOriginale = vecchio?.opt("evtId")?.toString().orEmpty()
-                        val idInserito = runCatching { org.json.JSONObject(esito.second).optJSONArray("grades")?.optJSONObject(0)?.opt("insertId")?.toString().orEmpty() }.getOrDefault("")
-                        val votiLetti = mutableListOf<org.json.JSONObject>()
-                        fun raccogli(x: Any?) {
-                            when (x) {
-                                is org.json.JSONObject -> {
-                                    if (x.has("evtId") && x.optString("evtId").isNotBlank()) votiLetti.add(x)
-                                    val it = x.keys()
-                                    while (it.hasNext()) raccogli(x.opt(it.next()))
+                    val decimale = livello?.decimale?.takeIf { !it.isNaN() && it >= 0 }
+                    var avviso = ""
+                    val esito = if (!sposta) {
+                        c.salvaVoto(v.grezzo, valore, decimale, data, nota)
+                    } else {
+                        // casella libera (1..30, come l'app ufficiale) nel tipo e periodo di arrivo, per non sovrascrivere altri voti
+                        val (cl, prima) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                        if (cl != 200) error("non riesco a leggere il registro (HTTP $cl): voto non spostato")
+                        val stessi = votiDi(prima).filter {
+                            it.optString("subjectId") == vecchio.optString("subjectId") &&
+                            it.optInt("periodPos") == vecchio.optInt("periodPos") && it.optInt("componentPos") == posTipo
+                        }
+                        val occupate = stessi.map { it.optInt("displayPos") }.toSet()
+                        val occupateGiorno = stessi.filter { it.optString("evtDate") == data }.map { it.optInt("displayPos") }.toSet()
+                        val libera = (1..30).firstOrNull { it !in occupate } ?: (1..30).firstOrNull { it !in occupateGiorno }
+                            ?: error("nessuna casella libera per il voto in quel giorno")
+                        val e = c.salvaVoto(v.grezzo, valore, decimale, data, nota, componentPos = posTipo, displayPos = libera)
+                        if (e.first in 200..299) {
+                            // il vecchio si cancella solo se il nuovo c'è davvero e il vecchio è ancora lì
+                            val (cd, dopo) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
+                            val letti = if (cd == 200) votiDi(dopo) else emptyList()
+                            val nuovo = letti.firstOrNull {
+                                idEvt(it) != idVecchio && it.optString("studentId") == vecchio.optString("studentId") &&
+                                it.optString("subjectId") == vecchio.optString("subjectId") && it.optInt("componentPos") == posTipo &&
+                                it.optInt("displayPos") == libera && it.optString("evtDate") == data
+                            }
+                            val vecchioPresente = letti.any { idEvt(it) == idVecchio }
+                            avviso = when {
+                                nuovo == null -> "non ritrovo il voto nella nuova posizione: il vecchio non è stato cancellato."
+                                !vecchioPresente -> ""
+                                else -> {
+                                    val (cc, _) = c.cancellaVoto(v.grezzo)
+                                    if (cc in 200..299) "" else "nuovo voto creato, ma classeviva non ha cancellato il vecchio (HTTP $cc): cancellalo a mano."
                                 }
-                                is org.json.JSONArray -> for (i in 0 until x.length()) raccogli(x.opt(i))
                             }
                         }
-                        raccogli(radice)
-                        val nuovo = votiLetti.firstOrNull { g ->
-                            val id = g.opt("evtId")?.toString().orEmpty()
-                            id.isNotBlank() && id != idOriginale &&
-                            (idInserito.isBlank() || id == idInserito) &&
-                            g.optString("studentId") == vecchio?.optString("studentId") &&
-                            g.optString("subjectId") == vecchio?.optString("subjectId") &&
-                            g.optString("componentDesc").equals(tipo, ignoreCase = true) &&
-                            g.optString("evtDate") == data &&
-                            g.optString("displayValue") == valore
-                        }
-                        if (nuovo != null) {
-                            // La cancellazione è consentita solo dopo aver trovato il nuovo voto nel registro.
-                            val (codCanc, risCanc) = c.cancellaVoto(v.grezzo)
-                            val dopoCanc = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
-                            val ancoraVecchio = Regex("\\\"evtId\\\"\\s*:\\s*${Regex.escape(idOriginale)}(?:[,}])").containsMatchIn(dopoCanc.second)
-                            val ancoraNuovo = Regex("\\\"evtId\\\"\\s*:\\s*${Regex.escape(nuovo.optString("evtId"))}(?:[,}])").containsMatchIn(dopoCanc.second)
-                            dettaglio = "Nuovo voto verificato (${nuovo.optString("componentDesc")}, evtId=${nuovo.optString("evtId")}). Cancellazione vecchio HTTP $codCanc; vecchio ancora presente=$ancoraVecchio; nuovo presente=$ancoraNuovo. ${risCanc.take(250)}"
-                        } else {
-                            dettaglio = "Il server ha risposto HTTP ${esito.first}, ma non ho verificato con certezza il nuovo voto: il vecchio non è stato cancellato. Risposta: ${esito.second.take(300)}"
-                        }
+                        e
                     }
                     // HTTP 2xx non basta: si rilegge il registro e si confronta il voto con quello chiesto
                     var nonApplicati: List<String>? = null
@@ -493,43 +518,39 @@ class VotiScheda : Scheda() {
                         val (cv, testoVoti) = c.votiGrezzi(tipo = this@VotiScheda.tipo, classeId = classeId)
                         if (cv == 200) {
                             val letti = leggiVoti(testoVoti)[v.studente].orEmpty()
-                            val idOriginale = vecchio?.opt("evtId")?.toString().orEmpty()
-                            fun idEvt(x: Voto) = runCatching { org.json.JSONObject(x.grezzo).opt("evtId")?.toString().orEmpty() }.getOrDefault("")
-                            // stesso evtId; se il cambio di tipo ha creato un nuovo voto, quello con tipo, data e valore chiesti
-                            val ora = letti.firstOrNull { idEvt(it) == idOriginale }
-                                ?: letti.firstOrNull { it.tipo.equals(tipo, true) && it.data == data && it.valore == valore }
+                            val ora = letti.firstOrNull { it.tipo.equals(tipo, true) && it.data == data && it.valore == valore }
+                                ?: letti.firstOrNull { runCatching { idEvt(org.json.JSONObject(it.grezzo)) }.getOrDefault("") == idVecchio }
                             nonApplicati = if (ora == null) listOf("voto non trovato rileggendo il registro") else buildList {
                                 if (ora.valore != valore) add("voto (resta ${ora.valore})")
                                 if (!ora.tipo.equals(tipo, true)) add("tipo (resta ${ora.tipo.lowercase()})")
-                                if (ora.faMedia != media) add(if (ora.faMedia) "media (fa ancora media)" else "media (resta fuori media)")
                                 if (ora.data != data) add("data (resta ${ora.data})")
                                 if (ora.nota.trim() != nota.trim()) add("annotazioni")
                             }
                         }
                     }
-                    Triple(esito.first, if (esito.first in 200..299) dettaglio else esito.second.take(300), nonApplicati)
+                    Triple(esito, avviso, nonApplicati)
                 }
             }
-            val (codice, dettaglio, nonApplicati) = r.getOrElse {
-                android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}", android.widget.Toast.LENGTH_LONG).show(); carica(); return@launch
+            val (esito, avviso, nonApplicati) = r.getOrElse {
+                MaterialAlertDialogBuilder(ctx).setMessage("non riuscito: ${it.message}").setPositiveButton("chiudi", null).show(); carica(); return@launch
             }
+            val (codice, risposta) = esito
             if (codice in 200..299) {
+                val problemi = (nonApplicati.orEmpty().takeIf { it.isNotEmpty() }?.let { "classeviva non ha applicato: ${it.joinToString(", ")}." } ?: "") +
+                    (if (avviso.isBlank()) "" else "\n$avviso")
                 when {
+                    problemi.isNotBlank() -> MaterialAlertDialogBuilder(ctx).setMessage(problemi.trim()).setPositiveButton("chiudi", null).show()
                     nonApplicati == null -> android.widget.Toast.makeText(ctx, "salvato, ma non sono riuscito a rileggere il registro per verificarlo", android.widget.Toast.LENGTH_LONG).show()
-                    nonApplicati.isEmpty() -> android.widget.Toast.makeText(ctx, "salvato e verificato su classeviva", android.widget.Toast.LENGTH_LONG).show()
-                    else -> MaterialAlertDialogBuilder(ctx)
-                        .setMessage("ClasseViva ha risposto ok ma non ha applicato: ${nonApplicati.joinToString(", ")}.\nVedi il voto com'è davvero sul registro." + if (dettaglio.isBlank()) "" else "\n\n$dettaglio")
-                        .setPositiveButton("chiudi", null)
-                        .show()
+                    else -> android.widget.Toast.makeText(ctx, "salvato e verificato su classeviva", android.widget.Toast.LENGTH_LONG).show()
                 }
-                // si mostra sempre quello che c'è davvero su classeviva
-                carica()
             } else {
                 MaterialAlertDialogBuilder(ctx)
-                    .setMessage("ClasseViva non ha accettato il salvataggio (HTTP $codice). Il voto resta com'era.\n\n$dettaglio")
+                    .setMessage("classeviva non ha accettato il salvataggio (HTTP $codice). Il voto resta com'era.\n\n${risposta.take(300)}")
                     .setPositiveButton("chiudi", null)
                     .show()
             }
+            // si mostra sempre quello che c'è davvero su classeviva
+            carica()
         }
     }
 

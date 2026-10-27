@@ -264,56 +264,39 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return null
     }
 
-    /** Salva un voto modificato (data e annotazioni per la famiglia) rimandando l'oggetto del voto così come l'ha dato classeviva. */
-    fun salvaVoto(grezzo: String, valore: String, livelloCodice: String?, decimale: Double?, tipo: String, media: Boolean, data: String, nota: String,
-                  componente: JSONObject? = null): Pair<Int, String> {
+    /**
+     * Scrive un voto come l'app ufficiale ClasseViva Docenti (PUT grades2 con GradeCreationConfigurationRequest).
+     * Un voto non ha evtId nella richiesta: la "casella" è data + componentPos + displayPos + periodPos + studente.
+     * Per spostare un voto (altra data o altro tipo) si passa la casella nuova: classeviva crea un voto nuovo
+     * e quello vecchio va poi cancellato con [cancellaVoto]. L'app ufficiale non ha nessun campo per "fa media".
+     */
+    fun salvaVoto(grezzo: String, valore: String, decimale: Double?, data: String, nota: String,
+                  componentPos: Int? = null, displayPos: Int? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
         if (token.isEmpty()) login()
-        // ClasseViva richiede decimalValue numerico: inviare null provoca HTTP 412.
-        // Il fatto che il voto faccia media si rappresenta con weightFactor, non con decimalValue=null.
-        if (valore.isNotBlank()) {
-            o.put("displayValue", valore.trim())
-            if (livelloCodice != null) {
-                if (o.has("levelCode")) o.put("levelCode", livelloCodice)
-                if (o.has("levelId")) o.put("levelId", "$livelloCodice:0")
-            }
-        }
-        val decimaleOriginale = o.opt("decimalValue")
-            ?.takeIf { it != JSONObject.NULL }
-            ?.let { it.toString().toDoubleOrNull() }
-        val decimaleDaInviare = decimale
-            ?.takeIf { it.isFinite() && it >= 0.0 }
-            ?: decimaleOriginale?.takeIf { it.isFinite() && it >= 0.0 }
-            ?: valore.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
+        val scritta = valore.trim().ifEmpty { o.optString("displayValue") }
+        // decimalValue è obbligatorio e numerico (null → HTTP 412)
+        val numero = decimale?.takeIf { it.isFinite() && it >= 0.0 }
+            ?: o.opt("decimalValue")?.takeIf { it != JSONObject.NULL }?.toString()?.toDoubleOrNull()
+            ?: scritta.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
             ?: 0.0
-        o.put("decimalValue", decimaleDaInviare)
-        // L’API di ClasseViva espone esplicitamente noAverage: true per i voti blu esclusi dalla media.
-        // weightFactor da solo non basta: il server può rispondere 200 senza aggiornare l’esclusione.
-        o.put("noAverage", !media)
-        o.put("weightFactor", if (media) o.optDouble("weightFactor", 1.0).takeIf { it > 0.0 } ?: 1.0 else 0.0)
-        componentiTipo[tipo]?.let { (desc, pos) -> o.put("componentDesc", desc); o.put("componentPos", pos) }
-        // il voto letto non ha componentId: senza, classeviva può ignorare il cambio di tipo; si mette quello del periodo giusto
-        if (componente != null) {
-            o.put("componentId", componente.optString("componentId"))
-            o.put("componentCode", componente.optString("componentCode"))
-            o.put("componentPos", componente.optInt("position", o.optInt("componentPos")))
-            o.put("componentDesc", componente.optString("componentName"))
-        }
-        if (data.isNotBlank()) o.put("evtDate", data)
-        o.put("notesForFamily", nota)
-        // grades2 valida anche evtDate sul payload principale: conserva la data originale se il campo UI è vuoto.
-        val dataVoto = o.optString("evtDate").ifBlank { data.trim() }
-        if (dataVoto.isNotBlank()) o.put("evtDate", dataVoto)
+        val voto = JSONObject()
+            .put("evtCode", o.optString("evtCode"))
+            .put("studentId", o.opt("studentId"))
+            .put("decimalValue", numero)
+            .put("displayValue", scritta)
         val richiesta = JSONObject()
-            .put("grades", JSONArray().put(o))
-            .put("evtDate", dataVoto)
-            // grades2 valida alcuni campi anche al livello principale del payload.
+            .put("evtDate", data.trim().ifEmpty { o.optString("evtDate") })
             .put("classType", o.optString("classType"))
             .put("classId", o.opt("classId") ?: JSONObject.NULL)
             .put("subjectId", o.opt("subjectId") ?: JSONObject.NULL)
-            .put("displayPos", o.opt("displayPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
-            .put("componentPos", o.opt("componentPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
+            .put("displayPos", displayPos ?: o.optInt("displayPos"))
+            .put("componentPos", componentPos ?: o.optInt("componentPos"))
             .put("periodPos", o.optInt("periodPos", 1))
+            .put("notesForFamily", nota)
+            .put("internalNotes", o.opt("internalNotes")?.takeIf { it != JSONObject.NULL } ?: "")
+            .put("skillsOnly", false)
+            .put("grades", JSONArray().put(voto))
         val r = http("PUT", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }
@@ -377,16 +360,19 @@ class ClasseViva(private val utente: String, private val password: String, priva
     fun cancellaVoto(grezzo: String): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
         if (token.isEmpty()) login()
-        // grades2 richiede l'array "grades" anche per DELETE (altrimenti risponde 412 missing grades).
+        // come l'app ufficiale (GradeDeletionConfigurationRequest): la casella del voto e, per ogni studente, evtCode e studentId
         val richiesta = JSONObject()
-            .put("grades", JSONArray().put(o))
             .put("evtDate", o.optString("evtDate"))
             .put("classType", o.optString("classType"))
             .put("classId", o.opt("classId") ?: JSONObject.NULL)
             .put("subjectId", o.opt("subjectId") ?: JSONObject.NULL)
-            .put("displayPos", o.opt("displayPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
-            .put("componentPos", o.opt("componentPos").takeIf { it != null && it != JSONObject.NULL } ?: JSONObject.NULL)
+            .put("displayPos", o.optInt("displayPos"))
+            .put("componentPos", o.optInt("componentPos"))
             .put("periodPos", o.optInt("periodPos", 1))
+            .put("notesForFamily", "")
+            .put("internalNotes", "")
+            .put("skillsOnly", false)
+            .put("grades", JSONArray().put(JSONObject().put("evtCode", o.optString("evtCode")).put("studentId", o.opt("studentId"))))
         val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }
@@ -540,7 +526,6 @@ fun leggiStato(grezzo: String): Map<String, Int> {
 }
 
 /** Componenti dei voti: tipo della pagina -> nome e posizione come li dà classeviva. */
-private val componentiTipo = mapOf("scritto/grafico" to ("Scritto/Grafico" to 1), "orale" to ("Orale" to 2), "pratico" to ("Pratico" to 3))
 
 /** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */
 data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String)
@@ -680,7 +665,7 @@ fun leggiVoti(grezzo: String): Map<String, List<Voto>> {
                         val num = v.t("decimalValue").toDoubleOrNull() ?: valore.replace(',', '.').toDoubleOrNull()
                         val id = v.t("evtId", "gradeId", "id").ifEmpty { "${out[sid]?.size ?: 0}" }
                         out.getOrPut(sid) { ArrayList() }.add(Voto("$sid|$id|$data", sid, tipo, valore, num, data, v.t("notesForFamily", "note", "notes", "annotations"), v.toString(), materiaCorrente.ifEmpty { v.t("subjectDesc") }, v.t("authorId", "teacherId", "teacher_id"), // non fa media: peso 0 oppure valore decimale assente (nei dati di classeviva sono i voti "blu", per esempio superati da un recupero)
-            !v.optBoolean("noAverage", false) && (v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true) && v.opt("decimalValue") != JSONObject.NULL, v.t("teacherName", "authorName")))
+            (v.t("weightFactor").toDoubleOrNull()?.let { it != 0.0 } ?: true) && v.opt("decimalValue") != JSONObject.NULL, v.t("teacherName", "authorName")))
                     }
                 } else {
                     val sid = propri.ifEmpty { idStudente }
