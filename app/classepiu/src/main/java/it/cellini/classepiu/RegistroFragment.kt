@@ -59,7 +59,6 @@ class RegistroFragment : Fragment() {
         val ctx = requireContext()
         val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
 
-        // --- titolo e lente di ricerca
         campoCerca = EditText(ctx).apply {
             hint = "cerca una classe"
             setSingleLine(true)
@@ -81,7 +80,6 @@ class RegistroFragment : Fragment() {
                 if (campoCerca.visibility == View.GONE) campoCerca.setText("") else campoCerca.requestFocus()
             }
         }
-        // lente e campo di ricerca stanno sotto le linguette e solo su "tutte le classi"
         rigaCerca = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -90,7 +88,6 @@ class RegistroFragment : Fragment() {
             addView(lente, LinearLayout.LayoutParams(ctx.dp(44), ctx.dp(44)))
         }
 
-        // --- le due schede a pillola
         fun scheda(testo: String, prima: Boolean) = TextView(ctx).apply {
             text = testo; textSize = 15f; gravity = Gravity.CENTER; includeFontPadding = false
             setSingleLine(true); ellipsize = null
@@ -105,7 +102,6 @@ class RegistroFragment : Fragment() {
             addView(schedaTutte, LinearLayout.LayoutParams(0, ctx.dp(44), 1f).apply { leftMargin = ctx.dp(10) })
         }
 
-        // --- elenco
         elenco = RecyclerView(ctx).apply {
             layoutManager = LinearLayoutManager(ctx)
             adapter = adattatore
@@ -170,7 +166,6 @@ class RegistroFragment : Fragment() {
         }
         stile(schedaMie, mie)
         stile(schedaTutte, !mie)
-        // la ricerca serve solo su "tutte le classi"
         rigaCerca.visibility = if (mie) View.GONE else View.VISIBLE
         if (mie) { campoCerca.visibility = View.GONE; campoCerca.setText("") }
     }
@@ -226,7 +221,6 @@ class RegistroFragment : Fragment() {
         dettagli.visibility = if (base.isEmpty() && ultimaRisposta.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
-    /** Mostra il testo esatto che ClasseViva ha risposto, copiabile: serve se l'elenco non compare. */
     private fun mostraRisposta() {
         val ctx = requireContext()
         val t = TextView(ctx).apply {
@@ -247,7 +241,6 @@ class RegistroFragment : Fragment() {
             .show()
     }
 
-    /** Compatibilità con il tasto indietro della schermata principale. */
     fun indietro(): Boolean = false
 
     private inner class Adattatore : RecyclerView.Adapter<Adattatore.VH>() {
@@ -263,13 +256,16 @@ class RegistroFragment : Fragment() {
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): VH {
             val ctx = parent.context
             val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
-            // tessera a sinistra: sigla grande e sotto la descrizione della classe (una riga, 12 caratteri al massimo)
+            val outfitRegular = Typeface.createFromAsset(ctx.assets, "outfit_regular.ttf")
+            val outfitBold = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
+            val celesteTesto = 0xFF4AA7CF.toInt()
+
             val nome = TextView(ctx).apply {
-                textSize = 28f; setTypeface(typeface, Typeface.BOLD); setTextColor(celeste)
-                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false // sigla lunga: va a capo come in classeviva (5AN_C / AA)
+                textSize = 28f; typeface = Typeface.create(outfitBold, Typeface.BOLD); setTextColor(celeste)
+                gravity = Gravity.CENTER; maxLines = 2; includeFontPadding = false
             }
             val descrizioneClasse = TextView(ctx).apply {
-                textSize = 10f; setTextColor(0xFF3B97CC.toInt()) // blu appena più scuro della sigla
+                textSize = 10f; typeface = outfitRegular; setTextColor(0xFF3B97CC.toInt())
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 setPadding(0, ctx.dp(3), 0, 0)
@@ -282,18 +278,18 @@ class RegistroFragment : Fragment() {
                 addView(nome, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(descrizioneClasse, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
-            // casella alta (metà): etichetta verde "appello rapido" e sotto la materia; apre l'elenco dei ragazzi
+
             val appello = TextView(ctx).apply {
                 text = "appello rapido"
                 textSize = 12f
-                typeface = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
-                setTextColor(0xFF3B97CC.toInt())
+                typeface = outfitBold
+                setTextColor(celesteTesto)
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
                 background = GradientDrawable().apply { setColor(0xFFC8E6C9.toInt()); cornerRadius = ctx.dp(10).toFloat() }
             }
             val codice = TextView(ctx).apply {
-                textSize = 10.5f; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
+                textSize = 10.5f; typeface = outfitRegular; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
                 setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; includeFontPadding = false
             }
             val sopra = LinearLayout(ctx).apply {
@@ -302,11 +298,11 @@ class RegistroFragment : Fragment() {
                 addView(appello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(codice, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
-            // casella bassa (metà): lezioni, voti, note in tre azzurri pallidi diversi tra loro e dallo sfondo
+
             fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
                 text = testo; textSize = 11f
-                typeface = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
-                setTextColor(0xFF3B97CC.toInt())
+                typeface = outfitBold
+                setTextColor(celesteTesto)
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
@@ -340,7 +336,6 @@ class RegistroFragment : Fragment() {
             return VH(riga, tessera, sopra, nome, descrizioneClasse, appello, codice, voti, lezioni, note)
         }
 
-        /** Toglie dall'inizio del testo la sigla o il codice della classe (es. "5AN_C - ELETTRONICA" -> "ELETTRONICA"). */
         private fun senzaPrefisso(testo: String, vararg prefissi: String): String {
             val t = testo.trim()
             val p = prefissi.map { it.trim() }.filter { it.isNotEmpty() }.firstOrNull { t.startsWith(it, ignoreCase = true) } ?: return t
@@ -363,7 +358,6 @@ class RegistroFragment : Fragment() {
             }
             h.tessera.setOnClickListener(apriStudenti)
             h.sopra.setOnClickListener(apriStudenti)
-            // in "tutte le classi" il tasto voti c'è solo per le classi in cui insegno (stesso id tra quelle di "le mie classi")
             val idClasse = c.chiave.split("|", limit = 3).getOrElse(1) { "" }
             val mia = mie || datiMie.any { it.chiave.split("|", limit = 3).getOrElse(1) { "" } == idClasse }
             h.voti.visibility = if (mia) View.VISIBLE else View.GONE
