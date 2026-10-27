@@ -22,6 +22,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 
 /** Elenco studenti con scheda divisa in anagrafica e indicatori delle nove ore. */
+// Build verificata: lettura dello stato giornaliero e della risposta lessons2/students.
 class StudentiScheda : Scheda() {
     private val azzurro = 0xFF69BCE8.toInt()
     private lateinit var lista: LinearLayout
