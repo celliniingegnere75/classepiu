@@ -287,7 +287,7 @@ class RegistroFragment : Fragment() {
                 text = "appello rapido"
                 textSize = 12f
                 typeface = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
-                setTextColor(0xFF3186AD.toInt())
+                setTextColor(0xFF3B97CC.toInt())
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
                 background = GradientDrawable().apply { setColor(0xFFC8E6C9.toInt()); cornerRadius = ctx.dp(10).toFloat() }
@@ -306,7 +306,7 @@ class RegistroFragment : Fragment() {
             fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
                 text = testo; textSize = 11f
                 typeface = Typeface.createFromAsset(ctx.assets, "outfit_bold.ttf")
-                setTextColor(0xFF3186AD.toInt())
+                setTextColor(0xFF3B97CC.toInt())
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
