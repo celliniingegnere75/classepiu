@@ -281,7 +281,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: scritta.replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() && it >= 0.0 }
             ?: 0.0
         val voto = JSONObject()
-            .put("evtCode", o.optString("evtCode"))
+            .put("evtCode", codiceVoto(o, componentPos))
             .put("studentId", o.opt("studentId"))
             .put("decimalValue", numero)
             .put("displayValue", scritta)
@@ -357,6 +357,15 @@ class ClasseViva(private val utente: String, private val password: String, priva
     }
 
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
+    /**
+     * evtCode da mandare come l'app ufficiale: non quello letto dal voto (un voto "nessun voto" ne ha un altro e
+     * la cancellazione dava HTTP 413) ma GRV0 se il voto ha un componentPos, altrimenti GRT1 (voto di recupero).
+     */
+    private fun codiceVoto(o: JSONObject, componentPos: Int? = null): String {
+        val pos = componentPos ?: o.opt("componentPos")?.takeIf { it != JSONObject.NULL }
+        return if (pos != null) "GRV0" else "GRT1"
+    }
+
     fun cancellaVoto(grezzo: String): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
         if (token.isEmpty()) login()
@@ -372,7 +381,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("notesForFamily", "")
             .put("internalNotes", "")
             .put("skillsOnly", false)
-            .put("grades", JSONArray().put(JSONObject().put("evtCode", o.optString("evtCode")).put("studentId", o.opt("studentId"))))
+            .put("grades", JSONArray().put(JSONObject().put("evtCode", codiceVoto(o)).put("studentId", o.opt("studentId"))))
         val r = http("DELETE", "$BASE/teachers/$id/evaluations/grades2", richiesta)
         return r.codice to r.testo
     }

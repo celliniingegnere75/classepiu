@@ -275,7 +275,9 @@ class VotiScheda : Scheda() {
         setPadding(dp(14), 0, dp(14), 0); minWidth = dp(46)
         val colore = coloreVoto(v.numero)
         // i voti che non fanno media (peso 0) hanno il bordo e lo sfondo chiaro
-        if (v.faMedia) { setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(colore); cornerRadius = dp(12).toFloat() } }
+        // "senza voto" ("-"): blu pieno come su classeviva
+        if (v.valore.trim() == "-") { setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(0xFF2F6FD6.toInt()); cornerRadius = dp(12).toFloat() } }
+        else if (v.faMedia) { setTextColor(Color.WHITE); background = GradientDrawable().apply { setColor(colore); cornerRadius = dp(12).toFloat() } }
         else { setTextColor(colore); background = GradientDrawable().apply { setColor(0xFFFFFFFF.toInt()); setStroke(dp(2), colore); cornerRadius = dp(12).toFloat() } }
         // modificabile solo se l'ha inserito il docente che guarda (io); se non si sa chi l'ha inserito, sola lettura
         setOnClickListener { apriVoto(v, mioId.isNotEmpty() && v.autore == mioId) }
