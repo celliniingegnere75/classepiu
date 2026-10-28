@@ -158,7 +158,13 @@ class VotiScheda : Scheda() {
             if (studenti.isEmpty()) { testo("nessuno studente riconosciuto."); return@launch }
             if (voti.isEmpty()) { testo("nessun voto riconosciuto nella risposta."); return@launch }
             elenco = studenti; tutti = voti
-            creaLinguette(materieMie(vt.second))
+            // Le linguette derivano dall'elenco delle materie assegnate al docente, non soltanto
+            // dalle materie che hanno già voti registrati.
+            val materieDocente = withContext(Dispatchers.IO) {
+                runCatching { Impostazioni(requireContext()).client().materieMie(tipo, classeId) }
+                    .getOrDefault(emptyList())
+            }
+            creaLinguette(materieDocente.ifEmpty { materieMie(vt.second) })
             mostra(studenti, voti)
         }
     }
