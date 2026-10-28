@@ -252,14 +252,21 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return r.codice to r.testo
     }
 
+    /** Orario di ritardo (breve o normale) e di uscita anticipata letti per uno studente dal popup web. */
+    data class OrariEvento(val ritardo: String? = null, val uscita: String? = null)
+
     /**
-     * Legge l'ora del ritardo breve o dell'uscita anticipata dal popup di sola consultazione del registro web.
-     * Tutte le richieste sono GET: non viene mai inviato il modulo di cambio stato.
-     * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1 o ABU0.
+     * Legge l'ora del ritardo (breve o normale) e/o dell'uscita anticipata dal popup di sola consultazione
+     * del registro web. Tutte le richieste sono GET: non viene mai inviato il modulo di cambio stato.
+     * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1/AT.. o ABU0.
+     *
+     * Il popup "Cambia Evento" ha un campo orario per il ritardo e uno per l'uscita, con lo stesso id
+     * (`popup_evento_ora`, riusato per i due tipi di evento): a distinguerli è l'aria-label del campo
+     * stesso, che per l'uscita contiene "uscita" (verificato sull'HTML reale del popup).
      */
-    // Lettura aggiuntiva in sola consultazione per visualizzare l'orario Rb e U.
-    fun orariRitardoBreveWeb(classeId: String, giorno: String, studentiRitardo: Set<String>): Map<String, String> {
-        if (studentiRitardo.isEmpty()) return emptyMap()
+    fun orariEventoWeb(classeId: String, giorno: String, studentiRitardo: Set<String>, studentiUscita: Set<String>): Map<String, OrariEvento> {
+        val studenti = studentiRitardo + studentiUscita
+        if (studenti.isEmpty()) return emptyMap()
         val web = sessioneWeb()
         try {
             fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
@@ -272,16 +279,20 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 ?: Regex("""value\s*=\s*["']([^"']+)["'][^>]*id\s*=\s*["']ora_posizione["']""", RegexOption.IGNORE_CASE)
                     .find(pagina)?.groupValues?.get(1)
                 ?: "1"
-            val risultato = linkedMapOf<String, String>()
-            for (studenteId in studentiRitardo) {
+            val campoOra = Regex("""<input\b[^>]*\bid=["']popup_evento_ora["'][^>]*>""", RegexOption.IGNORE_CASE)
+            val valoreOra = Regex("""\bvalue\s*=\s*["']((?:[01]\d|2[0-3]):[0-5]\d)["']""", RegexOption.IGNORE_CASE)
+            val risultato = linkedMapOf<String, OrariEvento>()
+            for (studenteId in studenti) {
                 val url = base + "&action=cambiastato&studente_id=${enc(studenteId)}&data=${enc(data)}&ultimaorafirmata=${enc(ultimaOra)}"
                 val (codice, html) = web.chiama(url, referer = base)
                 if (codice !in 200..299) continue
-                val tag = Regex("""<input\b[^>]*\bid=["']popup_evento_ora["'][^>]*>""", RegexOption.IGNORE_CASE)
-                    .find(html)?.value ?: continue
-                val ora = Regex("""\bvalue\s*=\s*["']((?:[01]\d|2[0-3]):[0-5]\d)["']""", RegexOption.IGNORE_CASE)
-                    .find(tag)?.groupValues?.get(1) ?: continue
-                risultato[studenteId] = ora
+                var oraRitardo: String? = null
+                var oraUscita: String? = null
+                for (m in campoOra.findAll(html)) {
+                    val ora = valoreOra.find(m.value)?.groupValues?.get(1) ?: continue
+                    if (m.value.contains("uscita", ignoreCase = true)) oraUscita = ora else oraRitardo = ora
+                }
+                if (oraRitardo != null || oraUscita != null) risultato[studenteId] = OrariEvento(oraRitardo, oraUscita)
             }
             return risultato
         } finally {
