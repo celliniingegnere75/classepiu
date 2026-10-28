@@ -467,6 +467,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("lessonTypeId", numero(lezione.codice))
             .put("lessonArg", "")
             .put("lessonPrivNote", "")
+            // sigStamp = secondi unix della firma seguiti dall'id docente, come nelle firme vere
+            // (es. "17931711813236598" = 1793171181, cioè 28/10/2026 07:06:21 UTC, + docente 3236598); 412 "missing sigStamp" se manca
+            .put("sigStamp", "${System.currentTimeMillis() / 1000}$id")
         log.append("PUT lessons/sigs\n${o.toString(2)}\n\n")
         val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
         log.append("risposta HTTP ${r.codice}\n${r.testo.take(3000)}\n\n")
