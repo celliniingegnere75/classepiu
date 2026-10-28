@@ -264,7 +264,10 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * (`popup_evento_ora`, riusato per i due tipi di evento): a distinguerli è l'aria-label del campo
      * stesso, che per l'uscita contiene "uscita" (verificato sull'HTML reale del popup).
      */
-    fun orariEventoWeb(classeId: String, giorno: String, studentiRitardo: Set<String>, studentiUscita: Set<String>): Map<String, OrariEvento> {
+    fun orariEventoWeb(
+        classeId: String, giorno: String, studentiRitardo: Set<String>, studentiUscita: Set<String>,
+        debug: StringBuilder? = null
+    ): Map<String, OrariEvento> {
         val studenti = studentiRitardo + studentiUscita
         if (studenti.isEmpty()) return emptyMap()
         val web = sessioneWeb()
@@ -285,6 +288,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
             for (studenteId in studenti) {
                 val url = base + "&action=cambiastato&studente_id=${enc(studenteId)}&data=${enc(data)}&ultimaorafirmata=${enc(ultimaOra)}"
                 val (codice, html) = web.chiama(url, referer = base)
+                debug?.append("studente $studenteId: HTTP $codice\n$html\n\n")
                 if (codice !in 200..299) continue
                 var oraRitardo: String? = null
                 var oraUscita: String? = null

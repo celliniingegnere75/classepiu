@@ -171,11 +171,14 @@ class StudentiScheda : Scheda() {
             // dall'aria-label), quindi li recuperiamo entrambi anche quando capitano lo stesso giorno.
             val ritardiSenzaOra = stato.filterValues { it.isRitardoBreve && it.ritardoBreve == null }.keys
             val usciteSenzaOra = stato.filterValues { it.isUscita && it.uscita == null }.keys
+            // Tenuto qui (non dentro il blocco IO) così arriva comunque nella diagnostica anche se
+            // la lettura fallisce o non trova niente: serve per vedere l'HTML grezzo del popup web.
+            val debugOrari = StringBuilder()
             if (ritardiSenzaOra.isNotEmpty() || usciteSenzaOra.isNotEmpty()) {
                 val orari = withContext(Dispatchers.IO) {
                     runCatching {
                         Impostazioni(requireContext()).client().orariEventoWeb(
-                            classeId, giorno, ritardiSenzaOra, usciteSenzaOra
+                            classeId, giorno, ritardiSenzaOra, usciteSenzaOra, debugOrari
                         )
                     }.getOrDefault(emptyMap())
                 }
@@ -192,7 +195,8 @@ class StudentiScheda : Scheda() {
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             val diagnostica = coppia?.let { (g, l) ->
-                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}")
+                val popup = if (debugOrari.isEmpty()) "" else "\n\nPOPUP WEB ORARIO RITARDO/USCITA\n$debugOrari"
+                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$popup")
             }
             mostra(stato, statiOre = statiOre, numeroOre = numeroOre, caricamento = false, grezzo = diagnostica)
         }
