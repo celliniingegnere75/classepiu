@@ -138,7 +138,7 @@ object FinestraRientro {
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(activity.dp(12), 0, activity.dp(12), 0)
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(20) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(8) })
 
         // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
         val statoFirma = TextView(activity).apply {
