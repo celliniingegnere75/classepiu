@@ -207,9 +207,15 @@ object FinestraRientro {
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed || !etichetta.isAttachedToWindow) return@runOnUiThread
                 esito.fold(
-                    onSuccess = { firmata ->
-                        etichetta.text = if (firmata) "ora firmata" else "ora da firmare"
-                        etichetta.setTextColor(if (firmata) 0xFF16803C.toInt() else 0xFFD32F2F.toInt())
+                    onSuccess = { risultato ->
+                        if (risultato == null) {
+                            etichetta.text = "ora da firmare"
+                            etichetta.setTextColor(0xFFD32F2F.toInt())
+                        } else {
+                            val materiaRegistro = risultato.materia
+                            etichetta.text = if (materiaRegistro.isNotBlank()) "ora firmata\\n$materiaRegistro" else "ora firmata"
+                            etichetta.setTextColor(0xFF16803C.toInt())
+                        }
                     },
                     onFailure = {
                         etichetta.text = "firma non verificata"
@@ -220,13 +226,15 @@ object FinestraRientro {
         }.start()
     }
 
+    private data class EsitoFirma(val materia: String)
+
     private fun firmaCorrispondente(
         grezzo: String,
         mioId: String,
         data: String,
         lezione: Lezione,
         nomiClassi: Map<String, String>
-    ): Boolean {
+    ): EsitoFirma? {
         val radice = org.json.JSONTokener(grezzo).nextValue()
         fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
             for (k in chiavi) {
@@ -239,10 +247,12 @@ object FinestraRientro {
             return ""
         }
         fun normalizza(s: String) = s.trim().replace(Regex("\\s+"), " ").uppercase(java.util.Locale.ROOT)
-        fun cerca(v: Any?, livello: Int = 0): Boolean {
-            if (livello > 7) return false
-            return when (v) {
-                is org.json.JSONArray -> (0 until v.length()).any { cerca(v.opt(it), livello + 1) }
+        fun cerca(v: Any?, livello: Int = 0): EsitoFirma? {
+            if (livello > 7) return null
+            when (v) {
+                is org.json.JSONArray -> {
+                    for (i in 0 until v.length()) cerca(v.opt(i), livello + 1)?.let { return it }
+                }
                 is org.json.JSONObject -> {
                     val dataFirma = testo(v, "evtDate", "lessonDate", "date").take(10).replace("-", "")
                     val ora = testo(v, "evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
@@ -252,16 +262,21 @@ object FinestraRientro {
                     val idClasse = testo(v, "classId", "classroomId")
                     val classeFirmata = testo(v, "classDesc", "className", "classroomName", "classCode")
                         .ifEmpty { nomiClassi["$tipo|$idClasse"] ?: nomiClassi[idClasse].orEmpty() }
-                    // La firma vale anche se inserita in ritardo. Non vincolare la verifica alla materia:
-                    // la descrizione può differire da quella salvata nell'orario. Se il nome della classe
-                    // è disponibile, però, deve corrispondere alla lezione visualizzata.
                     val stessaClasse = classeFirmata.isBlank() || normalizza(classeFirmata) == normalizza(lezione.classe)
                     val firmaQuestaOra = dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
                         (mioId.isBlank() || autore == mioId) && stessaClasse
-                    firmaQuestaOra || v.keys().asSequence().any { cerca(v.opt(it), livello + 1) }
+                    if (firmaQuestaOra) {
+                        val materia = testo(v, "subjectDesc", "subjectName", "subjectDescription", "subject")
+                            .ifEmpty {
+                                val oggettoMateria = v.optJSONObject("subject")
+                                if (oggettoMateria != null) testo(oggettoMateria, "subjectDesc", "description", "name") else ""
+                            }
+                        return EsitoFirma(materia)
+                    }
+                    for (k in v.keys()) cerca(v.opt(k), livello + 1)?.let { return it }
                 }
-                else -> false
             }
+            return null
         }
         return cerca(radice)
     }
