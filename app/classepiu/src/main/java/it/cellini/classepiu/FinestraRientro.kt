@@ -38,6 +38,7 @@ object FinestraRientro {
         dialog?.dismiss()
         val azzurro = 0xFF69BCE8.toInt()
         val scuro = 0xFF333333.toInt()
+        val celesteClasse = 0xFF5598BD.toInt()
         val outfitRegular = runCatching { Typeface.createFromAsset(activity.assets, "outfit_regular.ttf") }.getOrDefault(Typeface.DEFAULT)
         val outfitBold = runCatching { Typeface.createFromAsset(activity.assets, "outfit_bold.ttf") }.getOrDefault(Typeface.DEFAULT_BOLD)
         // scheda bianca arrotondata; la fascia azzurra in alto col logo bianco è quella della schermata principale
@@ -84,14 +85,14 @@ object FinestraRientro {
             })
         }
         radice.addView(intestazione, LinearLayout.LayoutParams(-1, -2))
-        // Riga superiore: prima l'aula, poi il codice della classe.
+        // Riga superiore: aula ben distinta dal codice classe, con spaziatura più ampia.
         radice.addView(LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             if (lezione.aula.isNotBlank()) addView(TextView(activity).apply {
                 text = "aula ${lezione.aula}"
-                textSize = 18f
-                typeface = outfitRegular
+                textSize = 22f
+                typeface = outfitBold
                 setTextColor(azzurro)
                 setSingleLine(true)
             })
@@ -99,14 +100,14 @@ object FinestraRientro {
                 text = lezione.classe
                 textSize = 22f
                 typeface = outfitBold
-                setTextColor(scuro)
+                setTextColor(celesteClasse)
                 setSingleLine(true)
-            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(12) })
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(12) })
+            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(22) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(18) })
 
-        // Ghiera subito sotto la riga aula/classe.
+        // Ghiera sotto la riga aula/classe, con margine uniforme.
         radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
-            topMargin = activity.dp(12)
+            topMargin = activity.dp(18)
         })
 
         // Materia in una sola riga, con ellissi e carattere dimezzato rispetto a prima.
@@ -119,7 +120,7 @@ object FinestraRientro {
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(activity.dp(12), 0, activity.dp(12), 0)
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(4) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(10) })
 
         // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
         val statoFirma = TextView(activity).apply {
@@ -159,7 +160,7 @@ object FinestraRientro {
                     if (dialog === d) dialog = null
                 }.start()
             }
-        }, 7780) // 8 secondi in tutto, compresa la dissolvenza
+        }, 9580) // circa 9,8 secondi in tutto, compresa la dissolvenza
     }
 
     /**
