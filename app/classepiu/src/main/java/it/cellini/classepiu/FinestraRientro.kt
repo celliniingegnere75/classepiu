@@ -53,7 +53,7 @@ object FinestraRientro {
         }
         val intestazione = FrameLayout(activity).apply {
             setBackgroundColor(azzurro)
-            setPadding(0, activity.dp(12), 0, activity.dp(12))
+            setPadding(0, activity.dp(16), 0, activity.dp(16))
             addView(ImageView(activity).apply {
                 setImageResource(R.drawable.logo_bianco)
                 adjustViewBounds = true
@@ -89,25 +89,39 @@ object FinestraRientro {
         radice.addView(LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            if (lezione.aula.isNotBlank()) addView(TextView(activity).apply {
-                text = "aula ${lezione.aula}"
-                textSize = 22f
-                typeface = outfitBold
-                setTextColor(azzurro)
-                setSingleLine(true)
-            })
+            if (lezione.aula.isNotBlank()) {
+                // Indicazione "aula" distinta dal codice, che risalta in grassetto.
+                addView(LinearLayout(activity).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER
+                    addView(TextView(activity).apply {
+                        text = "aula"
+                        textSize = 22f
+                        typeface = outfitRegular
+                        setTextColor(azzurro)
+                        setSingleLine(true)
+                    })
+                    addView(TextView(activity).apply {
+                        text = lezione.aula
+                        textSize = 22f
+                        typeface = outfitBold
+                        setTextColor(azzurro)
+                        setSingleLine(true)
+                    }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(5) })
+                })
+            }
             addView(TextView(activity).apply {
                 text = lezione.classe
                 textSize = 22f
                 typeface = outfitBold
                 setTextColor(celesteClasse)
                 setSingleLine(true)
-            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(22) })
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(18) })
+            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(34) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(28) })
 
         // Ghiera sotto la riga aula/classe, con margine uniforme.
         radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
-            topMargin = activity.dp(18)
+            topMargin = activity.dp(28)
         })
 
         // Materia in una sola riga, con ellissi e carattere dimezzato rispetto a prima.
@@ -120,7 +134,7 @@ object FinestraRientro {
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(activity.dp(12), 0, activity.dp(12), 0)
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(10) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(20) })
 
         // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
         val statoFirma = TextView(activity).apply {
@@ -129,9 +143,9 @@ object FinestraRientro {
             typeface = outfitBold
             gravity = Gravity.CENTER
             setTextColor(0xFF777777.toInt())
-            setPadding(activity.dp(8), activity.dp(4), activity.dp(8), activity.dp(8))
+            setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(12))
         }
-        radice.addView(statoFirma, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(12) })
+        radice.addView(statoFirma, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
         verificaFirma(activity, lezione, statoFirma, outfitBold)
 
         val d = Dialog(activity)
