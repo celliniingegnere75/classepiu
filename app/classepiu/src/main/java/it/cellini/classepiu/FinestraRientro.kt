@@ -50,14 +50,40 @@ object FinestraRientro {
             }
             clipToOutline = true
         }
-        radice.addView(FrameLayout(activity).apply {
+        val intestazione = FrameLayout(activity).apply {
             setBackgroundColor(azzurro)
             setPadding(0, activity.dp(12), 0, activity.dp(12))
             addView(ImageView(activity).apply {
                 setImageResource(R.drawable.logo_bianco)
                 adjustViewBounds = true
             }, FrameLayout.LayoutParams(activity.dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-        }, LinearLayout.LayoutParams(-1, -2))
+            // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
+            addView(TextView(activity).apply {
+                text = "×"
+                textSize = 30f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                contentDescription = "Chiudi finestra"
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0x35FFFFFF)
+                    setStroke(activity.dp(1), 0x70FFFFFF)
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    handler.removeCallbacksAndMessages(null)
+                    val daChiudere = dialog
+                    dialog = null
+                    daChiudere?.dismiss()
+                }
+            }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.END).apply {
+                rightMargin = activity.dp(10)
+                topMargin = activity.dp(4)
+            })
+        }
+        radice.addView(intestazione, LinearLayout.LayoutParams(-1, -2))
         // ghiera: metà del vecchio orologio (174dp -> 87dp)
         radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
             topMargin = activity.dp(18)
