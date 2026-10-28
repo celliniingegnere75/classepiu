@@ -178,6 +178,22 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return r.codice to r.testo
     }
 
+    /** Materie assegnate al docente nella classe, anche se non hanno ancora voti. */
+    fun materieMie(tipo: String, classeId: String): List<String> {
+        if (token.isEmpty()) login()
+        val t = tipo.ifEmpty { "ordinary" }
+        val r = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
+        if (r.codice != 200) return emptyList()
+        val radice = runCatching { org.json.JSONTokener(r.testo).nextValue() }.getOrNull() ?: return emptyList()
+        val materie = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return emptyList()
+        val voci = (0 until materie.length()).mapNotNull { materie.optJSONObject(it) }
+        val ceMia = voci.any { it.optBoolean("isMine", false) }
+        return voci
+            .filter { !ceMia || it.optBoolean("isMine", false) }
+            .mapNotNull { it.optString("subjectDesc").trim().takeIf(String::isNotEmpty) }
+            .distinct()
+    }
+
     /**
      * Voti della classe, come l'app ufficiale Classeviva Docenti: elenco materie (subjects/list) e per ciascuna
      * evaluations/grades2/{tipo}/{classe}/{materia}. Le risposte delle materie leggibili vengono riunite in un solo array JSON.
