@@ -124,7 +124,7 @@ object FinestraRientro {
         // Materia dell'ora subito sotto aula e classe: una sola riga, puntini se troppo lunga.
         radice.addView(TextView(activity).apply {
             text = lezione.materia
-            textSize = 7.5f
+            textSize = 11.25f
             typeface = outfitRegular
             setTextColor(0xFF555555.toInt())
             gravity = Gravity.CENTER
@@ -149,7 +149,7 @@ object FinestraRientro {
         }
         // materia del registro sotto "ora firmata": 40% più piccola, una sola riga, puntini se troppo lunga
         val materiaFirma = TextView(activity).apply {
-            textSize = 8.4f // 40% meno dei 14 sp di prima, resta così anche con lo stato più grande
+            textSize = 12.6f // 8,4 sp + 50%, come chiesto da Cristian
             typeface = outfitRegular
             gravity = Gravity.CENTER
             setTextColor(0xFF16803C.toInt())
