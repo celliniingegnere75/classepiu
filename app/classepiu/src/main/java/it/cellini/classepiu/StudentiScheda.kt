@@ -147,6 +147,25 @@ class StudentiScheda : Scheda() {
             }
             val coppia = r.getOrNull()
             var stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
+            // Lo stato giornaliero (status2) sembra tenere una sola annotazione per studente per giorno:
+            // se ritardo breve e uscita anticipata capitano lo stesso giorno, la seconda registrata può
+            // sovrascrivere la prima lì. Le presenze per ora (lessons2/students) sono invece indipendenti
+            // ora per ora, quindi le usiamo come seconda fonte e uniamo i due segnali con un OR, senza
+            // mai togliere un'etichetta già vista nello stato giornaliero.
+            val eventiOra = coppia?.second?.let { (c, t) -> if (c == 200) leggiEventiOraIndipendenti(t) else emptyMap() } ?: emptyMap()
+            if (eventiOra.isNotEmpty()) {
+                stato = stato.toMutableMap().apply {
+                    for ((id, evento) in eventiOra) {
+                        val (haRitardo, haUscita) = evento
+                        if (!haRitardo && !haUscita) continue
+                        val precedente = this[id] ?: StatoGiornaliero(1)
+                        this[id] = precedente.copy(
+                            isRitardoBreve = precedente.isRitardoBreve || haRitardo,
+                            isUscita = precedente.isUscita || haUscita
+                        )
+                    }
+                }
+            }
             // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web in sola lettura.
             // Con ritardo breve e uscita insieme il popup dà un solo orario: lo teniamo per il ritardo breve.
             val ritardiBrevi = stato.filterValues { it.isRitardoBreve }.keys
@@ -362,6 +381,61 @@ class StudentiScheda : Scheda() {
         }
         cammina(radice, 0)
         return risultati
+    }
+
+    /**
+     * Ritardo breve e uscita anticipata letti ora per ora dalla stessa risposta di [leggiStatiOre]
+     * (lessons2/students), invece che dal codice unico dello stato giornaliero: ogni ora ha la sua
+     * firma, quindi un ritardo alla prima ora e un'uscita all'ultima restano due segnali distinti
+     * anche se lo stato del giorno ne mostrasse solo uno. Ritorna per studente (ha ritardo, ha uscita).
+     */
+    private fun leggiEventiOraIndipendenti(grezzo: String): Map<String, Pair<Boolean, Boolean>> {
+        val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return emptyMap()
+        val risultati = mutableMapOf<String, MutableList<Boolean>>() // [haRitardo, haUscita]
+
+        fun testo(o: JSONObject, vararg chiavi: String): String {
+            for (chiave in chiavi) {
+                val v = o.opt(chiave)
+                if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty() && s != "null") return s
+                }
+            }
+            return ""
+        }
+
+        fun cammina(v: Any?, livello: Int) {
+            if (livello > 7) return
+            when (v) {
+                is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), livello + 1)
+                is JSONObject -> {
+                    val ore = v.optJSONArray("studentStatus")
+                    if (ore != null) {
+                        for (i in 0 until ore.length()) {
+                            val record = ore.optJSONObject(i) ?: continue
+                            val studente = record.optJSONObject("student") ?: record
+                            val id = testo(record, "studentId", "student_id", "pupilId", "id")
+                                .ifEmpty { testo(studente, "studentId", "student_id", "pupilId", "id") }
+                            if (id.isEmpty()) continue
+                            val statoRaw = testo(record, "status", "statusDesc", "statusCode", "evtCode", "eventCode", "description", "desc")
+                                .ifEmpty { testo(studente, "status", "statusDesc", "statusCode", "evtCode", "eventCode", "description", "desc") }
+                                .uppercase()
+                            val haRitardo = statoRaw.contains("RITARD") || statoRaw.startsWith("ABR")
+                            val haUscita = statoRaw.contains("USCIT") || statoRaw.contains("LEAV") || statoRaw.startsWith("ABU")
+                            if (!haRitardo && !haUscita) continue
+                            val voci = risultati.getOrPut(id) { mutableListOf(false, false) }
+                            if (haRitardo) voci[0] = true
+                            if (haUscita) voci[1] = true
+                        }
+                    }
+                    for (k in v.keys()) {
+                        if (k != "studentStatus") cammina(v.opt(k), livello + 1)
+                    }
+                }
+            }
+        }
+        cammina(radice, 0)
+        return risultati.mapValues { (_, voci) -> voci[0] to voci[1] }
     }
 
     /** Numero di ore effettive: usa evtHPos + evtDuration, anche se studentStatus è null. */
