@@ -250,8 +250,9 @@ object FinestraRientro {
     }
 
     /**
-     * Firma rapida dell'ora in corso: copia classe e materia da una mia firma degli ultimi 60 giorni (lessons/mine),
-     * oppure, se non ce ne sono, le prende da "le mie classi" e subjects/list; la manda come nuova firma "Lezione" senza argomento (PUT lessons/sigs) e poi rilegge le firme di oggi per conferma.
+     * Firma rapida dell'ora in corso, costruita da zero come una firma nuova: classe da "le mie classi", materia da
+     * subjects/list, data e ora dall'orario, tipologia "Lezione" e argomento vuoto (PUT lessons/sigs).
+     * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
     private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: TextView) {
@@ -260,32 +261,24 @@ object FinestraRientro {
         pulsante.alpha = .5f
         etichetta.text = "firmo…"
         etichetta.setTextColor(0xFF777777.toInt())
-        val formato = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
-        val oggi = java.util.Date()
-        val data = formato.format(oggi)
-        val da = formato.format(java.util.Date(oggi.time - 60L * 24 * 3600 * 1000))
+        val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
         Thread {
             val esito = runCatching {
                 val client = Impostazioni(activity).client().also { it.login() }
                 val mioId = client.idDocente()
                 val (codiceClassi, classiGrezze) = client.classiGrezze(false)
-                val classi = if (codiceClassi == 200) leggiClassi(classiGrezze) else emptyList()
+                check(codiceClassi == 200) { "classi non disponibili (HTTP $codiceClassi)" }
+                val classi = leggiClassi(classiGrezze)
                 val nomi = OrarioDalleFirme.nomiClassi(classi)
-                val (codiceStorico, storico) = client.lezioniGrezze(da, data)
-                check(codiceStorico == 200) { "firme precedenti non disponibili (HTTP $codiceStorico)" }
-                // controllo di nuovo: se nel frattempo l'ora è stata firmata non si firma due volte
-                firmaCorrispondente(storico, mioId, data, lezione, nomi)?.let { return@runCatching it }
-                // senza firme precedenti (docente nuovo) classe e materia si prendono da "le mie classi"
-                val modello = modelloFirma(storico, mioId, lezione, nomi) ?: run {
-                    val classe = checkNotNull(classi.firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) }) {
-                        "${lezione.classe} non è tra le tue classi"
-                    }
-                    val parti = classe.chiave.split("|", limit = 3)
-                    checkNotNull(client.modelloFirmaNuova(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia)) {
-                        "materia non trovata per ${lezione.classe}"
-                    }
+                // se nel frattempo l'ora è stata firmata non si firma due volte
+                val (codicePrima, grezzoPrima) = client.lezioniGrezze(data, data)
+                check(codicePrima == 200) { "firme di oggi non disponibili (HTTP $codicePrima)" }
+                firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi)?.let { return@runCatching it }
+                val classe = checkNotNull(classi.firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) }) {
+                    "${lezione.classe} non è tra le tue classi"
                 }
-                val (codice, risposta) = client.firmaRapida(modello, data, lezione.ora)
+                val parti = classe.chiave.split("|", limit = 3)
+                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
                 check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
@@ -307,51 +300,6 @@ object FinestraRientro {
                 )
             }
         }.start()
-    }
-
-    /**
-     * La mia firma più recente della stessa classe e materia, da usare come modello per la firma rapida:
-     * meglio una di tipologia "Lezione"; materia confrontata col nome registrato nell'orario.
-     */
-    private fun modelloFirma(grezzo: String, mioId: String, lezione: Lezione, nomiClassi: Map<String, String>): org.json.JSONObject? {
-        fun normalizza(s: String) = s.trim().replace(Regex("\\s+"), " ").uppercase(java.util.Locale.ROOT)
-        fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
-            for (k in chiavi) {
-                val v = o.opt(k)
-                if (v != null && v != org.json.JSONObject.NULL && v !is org.json.JSONObject && v !is org.json.JSONArray) {
-                    val s = v.toString().trim()
-                    if (s.isNotEmpty()) return s
-                }
-            }
-            return ""
-        }
-        val candidate = ArrayList<org.json.JSONObject>()
-        fun raccogli(v: Any?, livello: Int = 0) {
-            if (livello > 7) return
-            when (v) {
-                is org.json.JSONArray -> for (i in 0 until v.length()) raccogli(v.opt(i), livello + 1)
-                is org.json.JSONObject -> {
-                    if (v.has("evtHPos") && v.has("classId")) candidate.add(v)
-                    else for (k in v.keys()) raccogli(v.opt(k), livello + 1)
-                }
-            }
-        }
-        raccogli(org.json.JSONTokener(grezzo).nextValue())
-        val adatte = candidate.filter { v ->
-            val autore = testo(v, "authorId", "teacherId", "teacher_id")
-            val tipo = testo(v, "classType")
-            val idClasse = testo(v, "classId", "classroomId")
-            val classe = testo(v, "classDesc", "className", "classroomName", "classCode")
-                .ifEmpty { nomiClassi["$tipo|$idClasse"] ?: nomiClassi[idClasse].orEmpty() }
-            val materia = testo(v, "subjectDesc", "subjectName", "subjectDescription")
-            (mioId.isBlank() || autore == mioId) &&
-                normalizza(classe) == normalizza(lezione.classe) &&
-                (lezione.materia.isBlank() || normalizza(materia) == normalizza(lezione.materia))
-        }
-        return adatte.sortedWith(
-            compareByDescending<org.json.JSONObject> { testo(it, "lessonType").equals("Lezione", ignoreCase = true) }
-                .thenByDescending { testo(it, "evtDate") }
-        ).firstOrNull()
     }
 
     private data class EsitoFirma(val materia: String)

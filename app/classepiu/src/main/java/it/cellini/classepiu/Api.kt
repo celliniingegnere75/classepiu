@@ -410,55 +410,44 @@ class ClasseViva(private val utente: String, private val password: String, priva
     }
 
     /**
-     * Firma rapida: una nuova firma di un'ora, tipologia "Lezione" e argomento vuoto. Classe, materia e gli altri campi
-     * si copiano da una mia firma precedente della stessa classe e materia ([modello], oggetto di lessons/mine), senza i
-     * suoi identificativi, così classeviva la tratta come nuova. [data] è yyyyMMdd. Da verificare sui dati veri.
+     * Firma rapida: una nuova firma di un'ora con tipologia "Lezione" e argomento vuoto, costruita da zero.
+     * Classe: [tipo] (C classe, G gruppo) e [classeId] da classes/mine. Materia: il subjectId di subjects/list il cui
+     * nome è [materia], tra le mie. [data] è yyyyMMdd, [ora] la posizione dell'ora nel giorno.
+     * I campi sono quelli delle firme vere lette da lessons/mine, più evtNumH che classeviva chiede (412 "missing evtNumH").
      */
-    fun firmaRapida(modello: JSONObject, data: String, ora: Int): Pair<Int, String> {
+    fun firmaRapida(tipo: String, classeId: String, materia: String, data: String, ora: Int): Pair<Int, String> {
         if (token.isEmpty()) login()
-        val o = JSONObject(modello.toString())
-        for (k in listOf("evtId", "lessonId", "lessonID", "id", "studentStatus")) o.remove(k)
-        // la data nel formato della firma copiata (lessons/mine usa 2026-10-21)
-        o.put("evtDate", if (o.optString("evtDate").let { it.isEmpty() || it.contains("-") }) "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}" else data)
-        o.put("evtHPos", ora)
-        o.put("evtDuration", 1)
-        o.put("evtNumH", 1)
-        o.put("lessonArg", "")
-        val lezione = runCatching { tipiLezione().first }.getOrDefault(emptyList())
-            .firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
-        o.put("lessonType", lezione.nome)
-        for (k in listOf("lessonTypeCode", "lessonTypeId", "lessonTypeDesc")) if (o.has(k)) o.put(k, if (k == "lessonTypeDesc") lezione.nome else lezione.codice)
-        val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
-        return r.codice to r.testo
-    }
-
-    /**
-     * Modello per la firma rapida di chi non ha ancora firme precedenti (per esempio un docente nuovo a settembre):
-     * classe da classes/mine ([tipo] C o G e [classeId]) e materia da subjects/list, cercata per nome tra le mie.
-     * Contiene solo i campi che si leggono nelle firme vere di lessons/mine; null se la materia non si trova.
-     */
-    fun modelloFirmaNuova(tipo: String, classeId: String, materia: String): JSONObject? {
-        if (token.isEmpty()) login()
-        val r = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
-        if (r.codice != 200) return null
-        val radice = runCatching { org.json.JSONTokener(r.testo).nextValue() }.getOrNull() ?: return null
-        val elenco = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return null
+        val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
+        if (m.codice != 200) return m.codice to "materie non disponibili: ${m.testo.take(200)}"
+        val radice = runCatching { org.json.JSONTokener(m.testo).nextValue() }.getOrNull() ?: return 500 to "materie non leggibili"
+        val elenco = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return 404 to "nessuna materia nella classe"
         val voci = (0 until elenco.length()).mapNotNull { elenco.optJSONObject(it) }
         val ceMia = voci.any { it.optBoolean("isMine", false) }
         val mie = voci.filter { !ceMia || it.optBoolean("isMine", false) }
         fun normalizza(s: String) = s.trim().replace(Regex("\\s+"), " ").uppercase(java.util.Locale.ROOT)
         val voce = mie.firstOrNull { normalizza(it.optString("subjectDesc")) == normalizza(materia) }
-            ?: mie.singleOrNull()?.takeIf { materia.isBlank() } ?: return null
-        val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> voce.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray } } ?: return null
-        // come in lessons/mine: classId e subjectId numerici quando lo sono
+            ?: mie.singleOrNull() ?: return 404 to "materia \"$materia\" non trovata tra le tue"
+        val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> voce.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray } }
+            ?: return 404 to "materia senza codice"
+        val lezione = runCatching { tipiLezione().first }.getOrDefault(emptyList())
+            .firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
+        // come in lessons/mine: id numerici quando lo sono, data 2026-10-21
         fun numero(v: Any) = v.toString().toLongOrNull() ?: v
-        return JSONObject()
+        val o = JSONObject()
+            .put("evtDate", "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}")
+            .put("evtHPos", ora)
+            .put("evtDuration", 1)
+            .put("evtNumH", 1)
             .put("authorId", numero(id))
             .put("classType", tipo)
             .put("classId", numero(classeId))
             .put("subjectId", numero(sid))
             .put("subjectDesc", voce.optString("subjectDesc"))
-            .put("lessonType", "Lezione")
+            .put("lessonType", lezione.nome)
+            .put("lessonTypeId", numero(lezione.codice))
+            .put("lessonArg", "")
+        val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
+        return r.codice to r.testo
     }
 
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
