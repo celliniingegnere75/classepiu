@@ -178,18 +178,11 @@ object FinestraRientro {
             minimumHeight = activity.dp(44)
             addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
                 LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(18); bottomMargin = activity.dp(2) })
-            addView(LinearLayout(activity).apply {
-                orientation = LinearLayout.VERTICAL
-                gravity = Gravity.START // "firma" e "rapida" allineate a sinistra, una sopra l'altra
-                listOf("firma", "rapida").forEachIndexed { i, parola ->
-                    addView(TextView(activity).apply {
-                        text = parola; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
-                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.START
-                    }, LinearLayout.LayoutParams(-2, -2).apply {
-                        // "rapida" più vicina a "firma": il carattere Outfit lascia molto spazio tra le righe
-                        if (i == 1) topMargin = -activity.dp(4)
-                    })
-                }
+            // "firma" e "rapida" allineate a sinistra, una sopra l'altra e più vicine tra loro
+            addView(TextView(activity).apply {
+                text = "firma\nrapida"; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
+                includeFontPadding = false; gravity = Gravity.START
+                setLineSpacing(0f, 0.9f)
             })
             isClickable = true
             isFocusable = true
