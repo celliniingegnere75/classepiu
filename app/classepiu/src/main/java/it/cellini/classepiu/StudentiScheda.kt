@@ -279,7 +279,7 @@ class StudentiScheda : Scheda() {
                     setPadding(dp(8), 0, dp(4), 0)
                     translationY = -dp(4).toFloat()
                     contentDescription = "Ritardo breve" + (statoStudente.ritardoBreve?.let { " alle $it" } ?: "")
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             if (statoStudente.isUscita) {
                 cellaOre.addView(TextView(ctx).apply {
@@ -291,7 +291,7 @@ class StudentiScheda : Scheda() {
                     setPadding(dp(8), 0, dp(4), 0)
                     translationY = -dp(4).toFloat()
                     contentDescription = "Uscita anticipata" + (statoStudente.uscita?.let { " alle $it" } ?: "")
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             cellaOre.addView(View(ctx), LinearLayout.LayoutParams(0, dp(1), 1f))
             scheda.addView(cellaOre, LinearLayout.LayoutParams(
