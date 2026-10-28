@@ -476,14 +476,11 @@ class ImpostazioniFragment : Fragment() {
             setPadding(ctx.dp(12), 0, ctx.dp(16), 0)
             addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
                 LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { rightMargin = ctx.dp(5) })
-            addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.START
-                listOf("compilazione", "magica").forEach { parola ->
-                    addView(TextView(ctx).apply {
-                        text = parola; textSize = 13f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
-                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.START
-                    })
-                }
+            // "compilazione" e "magica" su due righe con la stessa interlinea di "firma rapida"
+            addView(TextView(ctx).apply {
+                text = "compilazione\nmagica"; textSize = 13f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
+                includeFontPadding = false; gravity = Gravity.START
+                setLineSpacing(0f, 0.9f)
             })
             setOnClickListener { wizard(ctx, orario) }
         }.also { wiz -> wiz.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED) },
