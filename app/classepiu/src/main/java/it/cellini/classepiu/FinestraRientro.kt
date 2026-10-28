@@ -340,8 +340,9 @@ object FinestraRientro {
                         mostraFirmata(etichetta, materia, risultato)
                         pulsante.visibility = View.GONE
                     },
-                    onFailure = { e ->
-                        etichetta.text = "firma non riuscita\n${(e.message ?: "errore").lowercase()}"
+                    onFailure = {
+                        // solo l'esito: il motivo (risposta di classeviva) sta nel log, da copiare con "copia log"
+                        etichetta.text = "firma non riuscita"
                         etichetta.setTextColor(0xFFD32F2F.toInt())
                         pulsante.isEnabled = true
                         pulsante.alpha = 1f
