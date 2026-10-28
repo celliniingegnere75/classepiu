@@ -483,14 +483,12 @@ class ImpostazioniFragment : Fragment() {
                 setLineSpacing(0f, 0.9f)
             })
             setOnClickListener { wizard(ctx, orario) }
-        }.also { wiz -> wiz.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED) },
-            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, altezzaTasto))
-        val larghezzaTasto = tasti.getChildAt(0).measuredWidth
+        }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, altezzaTasto))
         tasti.addView(pillola(ctx, "pulisci", 13f, Color.WHITE, azzurro, altezzaTasto).apply {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto).apply { leftMargin = ctx.dp(20) })
+        }, LinearLayout.LayoutParams(ctx.dp(96), altezzaTasto).apply { leftMargin = ctx.dp(20) }) // più stretto del wizard
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
