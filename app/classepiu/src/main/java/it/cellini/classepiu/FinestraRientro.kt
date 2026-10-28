@@ -193,7 +193,7 @@ object FinestraRientro {
             visibility = View.GONE
         }
         // più vicino a "ora non firmata": lo stacco sotto lo stato (21 dp) serve solo quando il pulsante non c'è
-        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(17); bottomMargin = activity.dp(12) })
+        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(25); bottomMargin = activity.dp(12) })
         // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
         val copiaLog = TextView(activity).apply {
             text = "copia log"
