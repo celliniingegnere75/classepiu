@@ -183,7 +183,7 @@ object FinestraRientro {
                 gravity = Gravity.CENTER_HORIZONTAL
                 listOf("firma", "rapida").forEach { parola ->
                     addView(TextView(activity).apply {
-                        text = parola; textSize = 13f; typeface = outfitBold; setTextColor(Color.WHITE)
+                        text = parola; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
                         includeFontPadding = false; setSingleLine(true); gravity = Gravity.CENTER
                     })
                 }
