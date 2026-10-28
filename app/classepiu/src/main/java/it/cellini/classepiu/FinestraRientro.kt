@@ -150,7 +150,24 @@ object FinestraRientro {
             setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(12))
         }
         radice.addView(statoFirma, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
-        verificaFirma(activity, lezione, statoFirma, outfitBold)
+        // compare solo se l'ora non è firmata: firma tipologia "lezione" con argomento vuoto
+        val firmaRapida = TextView(activity).apply {
+            text = "firma rapida"
+            textSize = 15f
+            typeface = outfitBold
+            gravity = Gravity.CENTER
+            setTextColor(Color.WHITE)
+            background = GradientDrawable().apply {
+                setColor(azzurro)
+                cornerRadius = activity.dp(22).toFloat()
+            }
+            setPadding(activity.dp(28), activity.dp(10), activity.dp(28), activity.dp(10))
+            isClickable = true
+            isFocusable = true
+            visibility = View.GONE
+        }
+        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(24) })
+        verificaFirma(activity, lezione, statoFirma, firmaRapida)
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -189,7 +206,7 @@ object FinestraRientro {
         activity: Activity,
         lezione: Lezione,
         etichetta: TextView,
-        carattere: Typeface
+        pulsante: TextView
     ) {
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
         Thread {
@@ -209,12 +226,12 @@ object FinestraRientro {
                 esito.fold(
                     onSuccess = { risultato ->
                         if (risultato == null) {
-                            etichetta.text = "ora da firmare"
+                            etichetta.text = "ora non firmata"
                             etichetta.setTextColor(0xFFD32F2F.toInt())
+                            pulsante.visibility = View.VISIBLE
+                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, pulsante) }
                         } else {
-                            val materiaRegistro = risultato.materia
-                            etichetta.text = if (materiaRegistro.isNotBlank()) "ora firmata\\n$materiaRegistro" else "ora firmata"
-                            etichetta.setTextColor(0xFF16803C.toInt())
+                            mostraFirmata(etichetta, risultato)
                         }
                     },
                     onFailure = {
@@ -224,6 +241,107 @@ object FinestraRientro {
                 )
             }
         }.start()
+    }
+
+    private fun mostraFirmata(etichetta: TextView, risultato: EsitoFirma) {
+        val materiaRegistro = risultato.materia
+        etichetta.text = if (materiaRegistro.isNotBlank()) "ora firmata\n$materiaRegistro" else "ora firmata"
+        etichetta.setTextColor(0xFF16803C.toInt())
+    }
+
+    /**
+     * Firma rapida dell'ora in corso: copia classe e materia da una mia firma degli ultimi 60 giorni (lessons/mine),
+     * la manda come nuova firma "Lezione" senza argomento (PUT lessons/sigs) e poi rilegge le firme di oggi per conferma.
+     * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
+     */
+    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: TextView) {
+        handler.removeCallbacksAndMessages(null)
+        pulsante.isEnabled = false
+        pulsante.alpha = .5f
+        etichetta.text = "firmo…"
+        etichetta.setTextColor(0xFF777777.toInt())
+        val formato = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
+        val oggi = java.util.Date()
+        val data = formato.format(oggi)
+        val da = formato.format(java.util.Date(oggi.time - 60L * 24 * 3600 * 1000))
+        Thread {
+            val esito = runCatching {
+                val client = Impostazioni(activity).client().also { it.login() }
+                val mioId = client.idDocente()
+                val (codiceClassi, classiGrezze) = client.classiGrezze(false)
+                val nomi = if (codiceClassi == 200) OrarioDalleFirme.nomiClassi(leggiClassi(classiGrezze)) else emptyMap()
+                val (codiceStorico, storico) = client.lezioniGrezze(da, data)
+                check(codiceStorico == 200) { "firme precedenti non disponibili (HTTP $codiceStorico)" }
+                // controllo di nuovo: se nel frattempo l'ora è stata firmata non si firma due volte
+                firmaCorrispondente(storico, mioId, data, lezione, nomi)?.let { return@runCatching it }
+                val modello = checkNotNull(modelloFirma(storico, mioId, lezione, nomi)) { "nessuna tua firma precedente per ${lezione.classe}" }
+                val (codice, risposta) = client.firmaRapida(modello, data, lezione.ora)
+                check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
+                val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
+                check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
+                checkNotNull(firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)) { "firma inviata ma non trovata nel registro" }
+            }
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed || !etichetta.isAttachedToWindow) return@runOnUiThread
+                esito.fold(
+                    onSuccess = { risultato ->
+                        mostraFirmata(etichetta, risultato)
+                        pulsante.visibility = View.GONE
+                    },
+                    onFailure = { e ->
+                        etichetta.text = "firma non riuscita\n${(e.message ?: "errore").lowercase()}"
+                        etichetta.setTextColor(0xFFD32F2F.toInt())
+                        pulsante.isEnabled = true
+                        pulsante.alpha = 1f
+                    }
+                )
+            }
+        }.start()
+    }
+
+    /**
+     * La mia firma più recente della stessa classe e materia, da usare come modello per la firma rapida:
+     * meglio una di tipologia "Lezione"; materia confrontata col nome registrato nell'orario.
+     */
+    private fun modelloFirma(grezzo: String, mioId: String, lezione: Lezione, nomiClassi: Map<String, String>): org.json.JSONObject? {
+        fun normalizza(s: String) = s.trim().replace(Regex("\\s+"), " ").uppercase(java.util.Locale.ROOT)
+        fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
+            for (k in chiavi) {
+                val v = o.opt(k)
+                if (v != null && v != org.json.JSONObject.NULL && v !is org.json.JSONObject && v !is org.json.JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty()) return s
+                }
+            }
+            return ""
+        }
+        val candidate = ArrayList<org.json.JSONObject>()
+        fun raccogli(v: Any?, livello: Int = 0) {
+            if (livello > 7) return
+            when (v) {
+                is org.json.JSONArray -> for (i in 0 until v.length()) raccogli(v.opt(i), livello + 1)
+                is org.json.JSONObject -> {
+                    if (v.has("evtHPos") && v.has("classId")) candidate.add(v)
+                    else for (k in v.keys()) raccogli(v.opt(k), livello + 1)
+                }
+            }
+        }
+        raccogli(org.json.JSONTokener(grezzo).nextValue())
+        val adatte = candidate.filter { v ->
+            val autore = testo(v, "authorId", "teacherId", "teacher_id")
+            val tipo = testo(v, "classType")
+            val idClasse = testo(v, "classId", "classroomId")
+            val classe = testo(v, "classDesc", "className", "classroomName", "classCode")
+                .ifEmpty { nomiClassi["$tipo|$idClasse"] ?: nomiClassi[idClasse].orEmpty() }
+            val materia = testo(v, "subjectDesc", "subjectName", "subjectDescription")
+            (mioId.isBlank() || autore == mioId) &&
+                normalizza(classe) == normalizza(lezione.classe) &&
+                (lezione.materia.isBlank() || normalizza(materia) == normalizza(lezione.materia))
+        }
+        return adatte.sortedWith(
+            compareByDescending<org.json.JSONObject> { testo(it, "lessonType").equals("Lezione", ignoreCase = true) }
+                .thenByDescending { testo(it, "evtDate") }
+        ).firstOrNull()
     }
 
     private data class EsitoFirma(val materia: String)

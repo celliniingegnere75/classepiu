@@ -409,6 +409,29 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return r.codice to r.testo
     }
 
+    /**
+     * Firma rapida: una nuova firma di un'ora, tipologia "Lezione" e argomento vuoto. Classe, materia e gli altri campi
+     * si copiano da una mia firma precedente della stessa classe e materia ([modello], oggetto di lessons/mine), senza i
+     * suoi identificativi, così classeviva la tratta come nuova. [data] è yyyyMMdd. Da verificare sui dati veri.
+     */
+    fun firmaRapida(modello: JSONObject, data: String, ora: Int): Pair<Int, String> {
+        if (token.isEmpty()) login()
+        val o = JSONObject(modello.toString())
+        for (k in listOf("evtId", "lessonId", "lessonID", "id", "studentStatus")) o.remove(k)
+        // la data nel formato della firma copiata (lessons/mine usa 2026-10-21)
+        o.put("evtDate", if (o.optString("evtDate").contains("-")) "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}" else data)
+        o.put("evtHPos", ora)
+        o.put("evtDuration", 1)
+        o.put("evtNumH", 1)
+        o.put("lessonArg", "")
+        val lezione = runCatching { tipiLezione().first }.getOrDefault(emptyList())
+            .firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
+        o.put("lessonType", lezione.nome)
+        for (k in listOf("lessonTypeCode", "lessonTypeId", "lessonTypeDesc")) if (o.has(k)) o.put(k, if (k == "lessonTypeDesc") lezione.nome else lezione.codice)
+        val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
+        return r.codice to r.testo
+    }
+
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
     /**
      * evtCode da mandare come l'app ufficiale: non quello letto dal voto (un voto "nessun voto" ne ha un altro e
