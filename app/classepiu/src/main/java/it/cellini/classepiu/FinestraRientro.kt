@@ -165,7 +165,7 @@ object FinestraRientro {
         }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
         // compare solo se l'ora non è firmata: firma tipologia "lezione" con argomento vuoto
         // come il tasto "compilazione magica": cappello a sinistra, "firma" sopra e "rapida" sotto; almeno 128×44 dp ma
-        // l'altezza cresce col testo (a 44 fissi "rapida" veniva tagliata), stessi 16 dp a destra e sinistra, 8 sopra e sotto
+        // l'altezza cresce col testo (a 44 fissi "rapida" veniva tagliata), cappello a 18 dp dal bordo e 18 dalla scritta, scritta a 20 dal bordo destro (disegno di Cristian)
         val firmaRapida = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -173,11 +173,11 @@ object FinestraRientro {
                 setColor(azzurro)
                 cornerRadius = activity.dp(22).toFloat()
             }
-            setPadding(activity.dp(16), activity.dp(8), activity.dp(16), activity.dp(8))
+            setPadding(activity.dp(18), activity.dp(8), activity.dp(20), activity.dp(8))
             minimumWidth = activity.dp(128)
             minimumHeight = activity.dp(44)
             addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(8) })
+                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(18); topMargin = activity.dp(2) })
             addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
