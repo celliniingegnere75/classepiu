@@ -451,6 +451,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
         // come in lessons/mine: id numerici quando lo sono, data 2026-10-21
         fun numero(v: Any) = v.toString().toLongOrNull() ?: v
         val o = JSONObject()
+            // evtCode LSF0 = firma di lezione, come in tutte le firme lette (412 "missing evtCode" se manca)
+            .put("evtCode", "LSF0")
             .put("evtDate", "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}")
             .put("evtHPos", ora)
             .put("evtDuration", 1)
@@ -459,10 +461,12 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("classType", tipo)
             .put("classId", numero(classeId))
             .put("subjectId", numero(sid))
+            .put("subjectCode", voce.optString("subjectCode"))
             .put("subjectDesc", voce.optString("subjectDesc"))
             .put("lessonType", lezione.nome)
             .put("lessonTypeId", numero(lezione.codice))
             .put("lessonArg", "")
+            .put("lessonPrivNote", "")
         log.append("PUT lessons/sigs\n${o.toString(2)}\n\n")
         val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
         log.append("risposta HTTP ${r.codice}\n${r.testo.take(3000)}\n\n")
