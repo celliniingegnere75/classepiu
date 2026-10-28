@@ -181,10 +181,13 @@ object FinestraRientro {
             addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.START // "firma" e "rapida" allineate a sinistra, una sopra l'altra
-                listOf("firma", "rapida").forEach { parola ->
+                listOf("firma", "rapida").forEachIndexed { i, parola ->
                     addView(TextView(activity).apply {
                         text = parola; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
                         includeFontPadding = false; setSingleLine(true); gravity = Gravity.START
+                    }, LinearLayout.LayoutParams(-2, -2).apply {
+                        // "rapida" più vicina a "firma": il carattere Outfit lascia molto spazio tra le righe
+                        if (i == 1) topMargin = -activity.dp(4)
                     })
                 }
             })
