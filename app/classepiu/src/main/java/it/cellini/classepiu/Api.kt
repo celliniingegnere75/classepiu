@@ -253,11 +253,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
     }
 
     /**
-     * Legge l'ora del ritardo breve dal popup di sola consultazione del registro web.
+     * Legge l'ora del ritardo breve o dell'uscita anticipata dal popup di sola consultazione del registro web.
      * Tutte le richieste sono GET: non viene mai inviato il modulo di cambio stato.
-     * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1.
+     * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1 o ABU0.
      */
-    // Lettura aggiuntiva in sola consultazione per visualizzare l'orario Rb.
+    // Lettura aggiuntiva in sola consultazione per visualizzare l'orario Rb e U.
     fun orariRitardoBreveWeb(classeId: String, giorno: String, studentiRitardo: Set<String>): Map<String, String> {
         if (studentiRitardo.isEmpty()) return emptyMap()
         val web = sessioneWeb()
@@ -663,7 +663,36 @@ fun leggiStudenti(grezzo: String): List<Studente> {
  * Stato di presenza per id studente: -1 nessuna lezione/nessun dato, 0 presente, 1 ritardo/uscita, 2 assente.
  * L'app ufficiale usa gli stati present, absent, late, shortLate, leaving, noLesson, presentInternship, presentEducationalTrip.
  */
-data class StatoGiornaliero(val valore: Int, val ritardoBreve: String? = null, val isRitardoBreve: Boolean = false)
+data class StatoGiornaliero(
+    val valore: Int,
+    val ritardoBreve: String? = null,
+    val isRitardoBreve: Boolean = false,
+    val uscita: String? = null,
+    val isUscita: Boolean = false
+)
+
+/**
+ * Ora (hh:mm) dell'evento con codice che inizia per [prefisso], cercata solo nei campi
+ * dello stesso oggetto JSON che contiene il codice (così ritardo e uscita non si confondono).
+ */
+private fun oraEvento(v: Any?, prefisso: String, livello: Int = 0): String? {
+    if (livello > 8) return null
+    val orario = Regex("""(?:[01]\d|2[0-3]):[0-5]\d""")
+    when (v) {
+        is JSONObject -> {
+            val primitivi = v.keys().asSequence().mapNotNull { k ->
+                val x = v.opt(k)
+                if (x is String || x is Number) k.lowercase() to x.toString() else null
+            }.toList()
+            if (primitivi.any { it.second.uppercase().let { c -> c.length == 4 && c.startsWith(prefisso) } }) {
+                primitivi.firstNotNullOfOrNull { (_, testo) -> orario.find(testo)?.value }?.let { return it }
+            }
+            for (k in v.keys()) oraEvento(v.opt(k), prefisso, livello + 1)?.let { return it }
+        }
+        is JSONArray -> for (i in 0 until v.length()) oraEvento(v.opt(i), prefisso, livello + 1)?.let { return it }
+    }
+    return null
+}
 
 /**
  * Stato di presenza per id studente. Per ABR1 conserva anche l'ora inserita dal docente,
@@ -701,22 +730,38 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
             codici.any { it.startsWith("AT") || it.startsWith("HAT") || it.startsWith("HPR") } -> 0
             else -> -1
         }
-        val ritardoBreve = if (codici.any { it.startsWith("ABR") }) {
-            val orario = Regex("""(?:[01]\d|2[0-3]):[0-5]\d""")
-            val campiOrario = campi.filter { (chiave, testo) ->
-                chiave.contains("time") || chiave.contains("ora") || chiave.contains("hour") ||
-                    chiave.contains("late") || chiave.contains("ritard") || orario.matches(testo.trim())
+        val isUscita = codici.any { it.startsWith("ABU") }
+        val ritardoBreve = when {
+            codici.none { it.startsWith("ABR") } -> null
+            oraEvento(o, "ABR") != null -> oraEvento(o, "ABR")
+            isUscita -> null // con anche l'uscita, un orario qualsiasi potrebbe essere quello dell'uscita
+            else -> {
+                val orario = Regex("""(?:[01]\d|2[0-3]):[0-5]\d""")
+                val campiOrario = campi.filter { (chiave, testo) ->
+                    chiave.contains("time") || chiave.contains("ora") || chiave.contains("hour") ||
+                        chiave.contains("late") || chiave.contains("ritard") || orario.matches(testo.trim())
+                }
+                campiOrario.firstNotNullOfOrNull { (_, testo) -> orario.find(testo)?.value }
             }
-            campiOrario.firstNotNullOfOrNull { (_, testo) -> orario.find(testo)?.value }
-        } else null
-        val nuovo = StatoGiornaliero(valore, ritardoBreve, codici.any { it.startsWith("ABR") })
+        }
+        // Uscita anticipata (ABU0): l'ora si cerca accanto al codice; se manca la legge il registro web.
+        val uscita = if (isUscita) oraEvento(o, "ABU") else null
+        val nuovo = StatoGiornaliero(valore, ritardoBreve, codici.any { it.startsWith("ABR") }, uscita, isUscita)
         val precedente = m[id]
         m[id] = when {
             precedente == null -> nuovo
             nuovo.valore == 2 -> nuovo
             precedente.valore == 2 -> precedente
-            nuovo.ritardoBreve != null -> nuovo
-            else -> precedente
+            nuovo.ritardoBreve != null || nuovo.uscita != null -> nuovo.copy(
+                ritardoBreve = nuovo.ritardoBreve ?: precedente.ritardoBreve,
+                isRitardoBreve = nuovo.isRitardoBreve || precedente.isRitardoBreve,
+                uscita = nuovo.uscita ?: precedente.uscita,
+                isUscita = nuovo.isUscita || precedente.isUscita
+            )
+            else -> precedente.copy(
+                isRitardoBreve = precedente.isRitardoBreve || nuovo.isRitardoBreve,
+                isUscita = precedente.isUscita || nuovo.isUscita
+            )
         }
     }
     val giornoDiLezione = m.isNotEmpty()

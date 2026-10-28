@@ -147,19 +147,27 @@ class StudentiScheda : Scheda() {
             }
             val coppia = r.getOrNull()
             var stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
-            // Per ABR1 l'API REST non restituisce l'ora: la leggiamo dal popup web in sola lettura.
+            // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web in sola lettura.
+            // Con ritardo breve e uscita insieme il popup dà un solo orario: lo teniamo per il ritardo breve.
             val ritardiBrevi = stato.filterValues { it.isRitardoBreve }.keys
-            if (ritardiBrevi.isNotEmpty()) {
+            val usciteSenzaOra = stato.filterValues { it.isUscita && it.uscita == null && !it.isRitardoBreve }.keys
+            if (ritardiBrevi.isNotEmpty() || usciteSenzaOra.isNotEmpty()) {
                 val orari = withContext(Dispatchers.IO) {
                     runCatching {
                         Impostazioni(requireContext()).client().orariRitardoBreveWeb(
-                            classeId, giorno, ritardiBrevi
+                            classeId, giorno, ritardiBrevi + usciteSenzaOra
                         )
                     }.getOrDefault(emptyMap())
                 }
                 if (orari.isNotEmpty()) {
                     stato = stato.mapValues { (id, valore) ->
-                        if (valore.isRitardoBreve && orari[id] != null) valore.copy(ritardoBreve = orari[id]) else valore
+                        val ora = orari[id]
+                        when {
+                            ora == null -> valore
+                            valore.isRitardoBreve -> valore.copy(ritardoBreve = ora)
+                            id in usciteSenzaOra -> valore.copy(uscita = ora)
+                            else -> valore
+                        }
                     }
                 }
             }
@@ -249,6 +257,18 @@ class StudentiScheda : Scheda() {
                     setPadding(dp(8), 0, dp(4), 0)
                     translationY = -dp(4).toFloat()
                     contentDescription = "Ritardo breve" + (statoStudente.ritardoBreve?.let { " alle $it" } ?: "")
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
+            }
+            if (statoStudente.isUscita) {
+                cellaOre.addView(TextView(ctx).apply {
+                    text = "U" + (statoStudente.uscita?.let { " $it" } ?: "")
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                    translationY = -dp(4).toFloat()
+                    contentDescription = "Uscita anticipata" + (statoStudente.uscita?.let { " alle $it" } ?: "")
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
             }
             cellaOre.addView(View(ctx), LinearLayout.LayoutParams(0, dp(1), 1f))
