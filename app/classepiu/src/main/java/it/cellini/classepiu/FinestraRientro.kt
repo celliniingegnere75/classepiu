@@ -251,7 +251,7 @@ object FinestraRientro {
 
     /**
      * Firma rapida dell'ora in corso: copia classe e materia da una mia firma degli ultimi 60 giorni (lessons/mine),
-     * la manda come nuova firma "Lezione" senza argomento (PUT lessons/sigs) e poi rilegge le firme di oggi per conferma.
+     * oppure, se non ce ne sono, le prende da "le mie classi" e subjects/list; la manda come nuova firma "Lezione" senza argomento (PUT lessons/sigs) e poi rilegge le firme di oggi per conferma.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
     private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: TextView) {
@@ -269,12 +269,22 @@ object FinestraRientro {
                 val client = Impostazioni(activity).client().also { it.login() }
                 val mioId = client.idDocente()
                 val (codiceClassi, classiGrezze) = client.classiGrezze(false)
-                val nomi = if (codiceClassi == 200) OrarioDalleFirme.nomiClassi(leggiClassi(classiGrezze)) else emptyMap()
+                val classi = if (codiceClassi == 200) leggiClassi(classiGrezze) else emptyList()
+                val nomi = OrarioDalleFirme.nomiClassi(classi)
                 val (codiceStorico, storico) = client.lezioniGrezze(da, data)
                 check(codiceStorico == 200) { "firme precedenti non disponibili (HTTP $codiceStorico)" }
                 // controllo di nuovo: se nel frattempo l'ora è stata firmata non si firma due volte
                 firmaCorrispondente(storico, mioId, data, lezione, nomi)?.let { return@runCatching it }
-                val modello = checkNotNull(modelloFirma(storico, mioId, lezione, nomi)) { "nessuna tua firma precedente per ${lezione.classe}" }
+                // senza firme precedenti (docente nuovo) classe e materia si prendono da "le mie classi"
+                val modello = modelloFirma(storico, mioId, lezione, nomi) ?: run {
+                    val classe = checkNotNull(classi.firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) }) {
+                        "${lezione.classe} non è tra le tue classi"
+                    }
+                    val parti = classe.chiave.split("|", limit = 3)
+                    checkNotNull(client.modelloFirmaNuova(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia)) {
+                        "materia non trovata per ${lezione.classe}"
+                    }
+                }
                 val (codice, risposta) = client.firmaRapida(modello, data, lezione.ora)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
