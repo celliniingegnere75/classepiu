@@ -100,6 +100,7 @@ object FinestraRientro {
                         typeface = outfitRegular
                         setTextColor(azzurro)
                         gravity = Gravity.CENTER
+                        includeFontPadding = false
                         setSingleLine(true)
                     })
                     addView(TextView(activity).apply {
@@ -108,8 +109,9 @@ object FinestraRientro {
                         typeface = outfitBold
                         setTextColor(azzurro)
                         gravity = Gravity.CENTER
+                        includeFontPadding = false
                         setSingleLine(true)
-                    }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(2) })
+                    }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = 0 })
                 })
             }
             addView(TextView(activity).apply {
