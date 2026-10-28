@@ -177,14 +177,14 @@ object FinestraRientro {
             minimumWidth = activity.dp(128)
             minimumHeight = activity.dp(44)
             addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(18); topMargin = activity.dp(2) })
+                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(18); bottomMargin = activity.dp(2) })
             addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_HORIZONTAL
+                gravity = Gravity.START // "firma" e "rapida" allineate a sinistra, una sopra l'altra
                 listOf("firma", "rapida").forEach { parola ->
                     addView(TextView(activity).apply {
                         text = parola; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
-                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.CENTER
+                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.START
                     })
                 }
             })
