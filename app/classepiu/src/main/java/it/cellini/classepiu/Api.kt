@@ -252,8 +252,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return r.codice to r.testo
     }
 
-    /** Orario di ritardo (breve o normale) e di uscita anticipata letti per uno studente dal popup web. */
-    data class OrariEvento(val ritardo: String? = null, val uscita: String? = null)
+    /**
+     * Orario di ritardo breve, ora di lezione di entrata del ritardo ("Ritardo entra", es. "2")
+     * e orario di uscita anticipata letti per uno studente dal popup web.
+     */
+    data class OrariEvento(val ritardo: String? = null, val uscita: String? = null, val oraEntrata: String? = null)
 
     /**
      * Legge l'ora del ritardo (breve o normale) e/o dell'uscita anticipata dal popup di sola consultazione
@@ -262,6 +265,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
      *
      * Il popup "Cambia Evento" ha un campo orario per il ritardo breve (`id="popup_evento_ora"`) e uno
      * per l'uscita (`id="popup_evento_ora_u"`), verificato sull'HTML grezzo del popup.
+     * Per il ritardo normale ("Ritardo entra", radio `popup_ritardol` spuntato, codice ABR0) l'ora di
+     * lezione di entrata è l'opzione selezionata di `popup_ora_ritardo`; in quel caso `popup_evento_ora`
+     * contiene solo l'ora attuale e va ignorato.
      */
     fun orariEventoWeb(
         classeId: String, giorno: String, studentiRitardo: Set<String>, studentiUscita: Set<String>,
@@ -283,6 +289,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 ?: "1"
             val campoOra = Regex("""<input\b[^>]*\bid=["']popup_evento_ora(_u)?["'][^>]*>""", RegexOption.IGNORE_CASE)
             val valoreOra = Regex("""\bvalue\s*=\s*["']((?:[01]\d|2[0-3]):[0-5]\d)["']""", RegexOption.IGNORE_CASE)
+            val ritardoLungoSpuntato = Regex("""<input\b(?=[^>]*\bid=["']popup_ritardol["'])(?=[^>]*\bchecked\b)[^>]*>""", RegexOption.IGNORE_CASE)
+            val sceltaOraRitardo = Regex("""<select\b[^>]*\bid=["']popup_ora_ritardo["'][^>]*>(.*?)</select>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            val opzioneSelezionata = Regex("""<option\b[^>]*\bvalue=["'](\d+)["'][^>]*\bselected\b""", RegexOption.IGNORE_CASE)
             val risultato = linkedMapOf<String, OrariEvento>()
             for (studenteId in studenti) {
                 val url = base + "&action=cambiastato&studente_id=${enc(studenteId)}&data=${enc(data)}&ultimaorafirmata=${enc(ultimaOra)}"
@@ -291,11 +300,16 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 if (codice !in 200..299) continue
                 var oraRitardo: String? = null
                 var oraUscita: String? = null
+                val ritardoLungo = ritardoLungoSpuntato.containsMatchIn(html)
                 for (m in campoOra.findAll(html)) {
                     val ora = valoreOra.find(m.value)?.groupValues?.get(1) ?: continue
-                    if (m.groupValues[1].isNotEmpty()) oraUscita = ora else oraRitardo = ora
+                    if (m.groupValues[1].isNotEmpty()) oraUscita = ora else if (!ritardoLungo) oraRitardo = ora
                 }
-                if (oraRitardo != null || oraUscita != null) risultato[studenteId] = OrariEvento(oraRitardo, oraUscita)
+                val oraEntrata = if (!ritardoLungo) null else sceltaOraRitardo.find(html)?.groupValues?.get(1)
+                    ?.let { opzioneSelezionata.find(it)?.groupValues?.get(1) }
+                if (oraRitardo != null || oraUscita != null || oraEntrata != null) {
+                    risultato[studenteId] = OrariEvento(oraRitardo, oraUscita, oraEntrata)
+                }
             }
             return risultato
         } finally {
@@ -732,7 +746,11 @@ data class StatoGiornaliero(
     val ritardoBreve: String? = null,
     val isRitardoBreve: Boolean = false,
     val uscita: String? = null,
-    val isUscita: Boolean = false
+    val isUscita: Boolean = false,
+    /** Ritardo normale ("Ritardo entra", ABR0) invece del ritardo breve (ABR1). */
+    val isRitardoLungo: Boolean = false,
+    /** Ora di lezione di entrata del ritardo normale, es. "2". */
+    val oraEntrata: String? = null
 )
 
 /**
@@ -795,8 +813,11 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
             else -> -1
         }
         val isUscita = codici.any { it.startsWith("ABU") }
+        // ABR0 = ritardo normale ("Ritardo entra" alla tale ora), ABR1 = ritardo breve con orario.
+        val isRitardoLungo = "ABR0" in codici && "ABR1" !in codici
         val ritardoBreve = when {
             codici.none { it.startsWith("ABR") } -> null
+            isRitardoLungo -> null
             oraEvento(o, "ABR") != null -> oraEvento(o, "ABR")
             isUscita -> null // con anche l'uscita, un orario qualsiasi potrebbe essere quello dell'uscita
             else -> {
@@ -810,7 +831,7 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
         }
         // Uscita anticipata (ABU0): l'ora si cerca accanto al codice; se manca la legge il registro web.
         val uscita = if (isUscita) oraEvento(o, "ABU") else null
-        val nuovo = StatoGiornaliero(valore, ritardoBreve, codici.any { it.startsWith("ABR") }, uscita, isUscita)
+        val nuovo = StatoGiornaliero(valore, ritardoBreve, codici.any { it.startsWith("ABR") }, uscita, isUscita, isRitardoLungo)
         val precedente = m[id]
         m[id] = when {
             precedente == null -> nuovo
@@ -820,11 +841,13 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
                 ritardoBreve = nuovo.ritardoBreve ?: precedente.ritardoBreve,
                 isRitardoBreve = nuovo.isRitardoBreve || precedente.isRitardoBreve,
                 uscita = nuovo.uscita ?: precedente.uscita,
-                isUscita = nuovo.isUscita || precedente.isUscita
+                isUscita = nuovo.isUscita || precedente.isUscita,
+                isRitardoLungo = nuovo.isRitardoLungo || precedente.isRitardoLungo
             )
             else -> precedente.copy(
                 isRitardoBreve = precedente.isRitardoBreve || nuovo.isRitardoBreve,
-                isUscita = precedente.isUscita || nuovo.isUscita
+                isUscita = precedente.isUscita || nuovo.isUscita,
+                isRitardoLungo = precedente.isRitardoLungo || nuovo.isRitardoLungo
             )
         }
     }
