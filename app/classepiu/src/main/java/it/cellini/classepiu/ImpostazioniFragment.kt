@@ -462,18 +462,18 @@ class ImpostazioniFragment : Fragment() {
             Triple(classe, materia, aulaView)
         }
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
-        // Come nello schizzo di Cristian: la riga è larga quanto le schede delle ore, il wizard parte dal bordo sinistro
-        // (48% della riga), "pulisci" arriva al bordo destro (36%), in mezzo resta uno stacco; stessa altezza per tutti e due.
+        // Il wizard è largo quanto il suo contenuto (cappello e scritta), "pulisci" prende la stessa larghezza;
+        // i due tasti stanno al centro con 20 dp di stacco e hanno la stessa altezza.
         val altezzaTasto = ctx.dp(44)
         val tasti = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; isBaselineAligned = false
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; isBaselineAligned = false
         }
         // cappello a sinistra, "compilazione" e sotto "magica" allineate a sinistra, come in firma rapida
         tasti.addView(LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.START
             background = GradientDrawable().apply { setColor(azzurro); cornerRadius = altezzaTasto / 2f }
             isClickable = true; isFocusable = true
-            setPadding(ctx.dp(9), 0, ctx.dp(8), 0)
+            setPadding(ctx.dp(12), 0, ctx.dp(16), 0)
             addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
                 LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { rightMargin = ctx.dp(5) })
             addView(LinearLayout(ctx).apply {
@@ -486,13 +486,14 @@ class ImpostazioniFragment : Fragment() {
                 }
             })
             setOnClickListener { wizard(ctx, orario) }
-        }, LinearLayout.LayoutParams(0, altezzaTasto, 48f))
-        tasti.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 16f))
+        }.also { wiz -> wiz.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED) },
+            LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, altezzaTasto))
+        val larghezzaTasto = tasti.getChildAt(0).measuredWidth
         tasti.addView(pillola(ctx, "pulisci", 13f, Color.WHITE, azzurro, altezzaTasto).apply {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(0, altezzaTasto, 36f))
+        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto).apply { leftMargin = ctx.dp(20) })
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
