@@ -85,50 +85,43 @@ object FinestraRientro {
             })
         }
         radice.addView(intestazione, LinearLayout.LayoutParams(-1, -2))
-        // Riga superiore: aula ben distinta dal codice classe, con spaziatura più ampia.
-        radice.addView(LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            if (lezione.aula.isNotBlank()) {
-                // Etichetta "aula" sopra al numero, disposto su una seconda riga.
-                addView(LinearLayout(activity).apply {
-                    orientation = LinearLayout.VERTICAL
-                    gravity = Gravity.CENTER
-                    addView(TextView(activity).apply {
-                        text = "aula"
-                        textSize = 16f
-                        typeface = outfitRegular
-                        setTextColor(azzurro)
-                        gravity = Gravity.CENTER
-                        includeFontPadding = false
-                        setSingleLine(true)
-                    })
-                    addView(TextView(activity).apply {
-                        text = lezione.aula
-                        textSize = 22f
-                        typeface = outfitBold
-                        setTextColor(azzurro)
-                        gravity = Gravity.CENTER
-                        includeFontPadding = false
-                        setSingleLine(true)
-                    }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = 0 })
-                })
-            }
+        // Riga superiore come il disegno di Cristian: "aula" e il suo codice a sinistra, "classe" e il suo codice a destra;
+        // etichette in azzurro chiaro e codici in grassetto più scuri, così si distinguono.
+        fun blocco(etichetta: String, valore: String, allineamento: Int) = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = allineamento
             addView(TextView(activity).apply {
-                text = lezione.classe
+                text = etichetta
+                textSize = 16f
+                typeface = outfitRegular
+                setTextColor(azzurro)
+                includeFontPadding = false
+                setSingleLine(true)
+            })
+            addView(TextView(activity).apply {
+                text = valore
                 textSize = 22f
                 typeface = outfitBold
                 setTextColor(celesteClasse)
+                includeFontPadding = false
                 setSingleLine(true)
-            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(52) })
+            }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(2) })
+        }
+        radice.addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(activity.dp(20), 0, activity.dp(20), 0)
+            if (lezione.aula.isNotBlank()) {
+                addView(blocco("aula", lezione.aula, Gravity.START))
+                addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
+                addView(blocco("classe", lezione.classe, Gravity.END))
+            } else {
+                gravity = Gravity.CENTER
+                addView(blocco("classe", lezione.classe, Gravity.CENTER_HORIZONTAL))
+            }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(28) })
 
-        // Ghiera sotto la riga aula/classe, con margine uniforme.
-        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
-            topMargin = activity.dp(28)
-        })
-
-        // Materia in una sola riga, con ellissi e carattere dimezzato rispetto a prima.
+        // Materia dell'ora subito sotto aula e classe: una sola riga, puntini se troppo lunga.
         radice.addView(TextView(activity).apply {
             text = lezione.materia
             textSize = 7.5f
@@ -137,8 +130,13 @@ object FinestraRientro {
             gravity = Gravity.CENTER
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
-            setPadding(activity.dp(12), 0, activity.dp(12), 0)
+            setPadding(activity.dp(16), 0, activity.dp(16), 0)
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(8) })
+
+        // Ghiera sotto la materia, ben staccata.
+        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
+            topMargin = activity.dp(36)
+        })
 
         // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
         val statoFirma = TextView(activity).apply {
