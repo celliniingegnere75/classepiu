@@ -3,7 +3,8 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// Il numero di versione cresce a ogni compilazione su GitHub, così ogni APK si installa sopra il precedente. Versione installata dall'utente: 1.0.141 (1000092); la prossima build deve superarla.
+// La versione installata dall'utente è 1.0.141 (versionCode 1000092).
+// Manteniamo ogni nuova build strettamente superiore a quel codice.
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
 android {
@@ -14,9 +15,9 @@ android {
         applicationId = "it.cellini.classepiu"
         minSdk = 26
         targetSdk = 34
-        // 1000000 + N: sempre sopra le vecchie build di prova (100000 + N), così si installa senza disinstallare.
-        versionCode = 1000000 + buildNumber
-        versionName = "1.0.${49 + buildNumber}"
+        // Base fissata sopra 1000092: anche la prossima build si installa come aggiornamento.
+        versionCode = 1000100 + buildNumber
+        versionName = "1.0.${141 + buildNumber}"
     }
 
     signingConfigs {
