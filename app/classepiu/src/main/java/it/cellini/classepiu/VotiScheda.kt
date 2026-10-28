@@ -176,13 +176,13 @@ class VotiScheda : Scheda() {
         titolo.text = t
     }
 
-    /** Materie del docente nella classe, in ordine di risposta; ed. civica ha la sua riga, quindi non ha linguetta (salvo sia l'unica). */
+    /** Materie ordinarie del docente nella classe: educazione civica non compare nella scheda voti. */
     private fun materieMie(risposta: String): List<String> {
         val tutte = runCatching {
             val a = org.json.JSONArray(risposta)
             (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("subjectDesc")?.takeIf { s -> s.isNotEmpty() } }.distinct()
         }.getOrDefault(emptyList())
-        return tutte.filterNot { it.contains("civic", ignoreCase = true) }.ifEmpty { tutte }
+        return tutte.filterNot { it.contains("civic", ignoreCase = true) }
     }
 
     private fun creaLinguette(materie: List<String>) {
@@ -227,10 +227,10 @@ class VotiScheda : Scheda() {
         val ordine = listOf("orale", "scritto", "pratico", "test")
         studenti.forEach { s ->
             val dello = voti[s.id] ?: emptyList()
-            // ed. civica: riga a parte con i voti di tutti i docenti
-            val civica = dello.filter { it.materia.contains("civic", ignoreCase = true) }
-            // solo i voti della materia della linguetta aperta (se è ed. civica, la riga civica basta)
-            val suoi = (dello - civica.toSet()).filter { materiaScelta.isEmpty() || it.materia.equals(materiaScelta, ignoreCase = true) }.groupBy { gruppo(it.tipo) }
+            // Mostra soltanto i voti delle materie ordinarie, escludendo educazione civica.
+            val suoi = dello.filterNot { it.materia.contains("civic", ignoreCase = true) }
+                .filter { materiaScelta.isEmpty() || it.materia.equals(materiaScelta, ignoreCase = true) }
+                .groupBy { gruppo(it.tipo) }
             val scatola = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 setPadding(dp(16), dp(12), dp(16), dp(12))
@@ -238,7 +238,7 @@ class VotiScheda : Scheda() {
                 addView(TextView(ctx).apply { text = s.nome; textSize = 19f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()); setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END })
             }
             val righe = ordine.filter { suoi.containsKey(it) } + suoi.keys.filter { it !in ordine }
-            if (righe.isEmpty() && civica.isEmpty()) scatola.addView(TextView(ctx).apply { text = "nessun voto"; textSize = 13f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(4), 0, 0) })
+            if (righe.isEmpty()) scatola.addView(TextView(ctx).apply { text = "nessun voto"; textSize = 13f; setTextColor(0xFF9A9A9A.toInt()); setPadding(0, dp(4), 0, 0) })
             fun riga(etichetta: String, colore: Int, elenco: List<Voto>) {
                 // intestazione fissa a sinistra, voti che scorrono a destra sulla stessa riga
                 val chip = LinearLayout(ctx)
@@ -254,7 +254,6 @@ class VotiScheda : Scheda() {
                 }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = dp(8) })
             }
             righe.forEach { g -> riga(g, colorePerRiga(g), suoi[g].orEmpty()) }
-            if (civica.isNotEmpty()) riga("civica", 0xFFE57399.toInt(), civica)
             lista.addView(scatola, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(10) })
         }
     }
