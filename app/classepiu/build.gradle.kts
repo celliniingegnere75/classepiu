@@ -14,7 +14,8 @@ android {
         applicationId = "it.cellini.classepiu"
         minSdk = 26
         targetSdk = 34
-        versionCode = buildNumber
+        // 1000000 + N: sempre sopra le vecchie build di prova (100000 + N), così si installa senza disinstallare.
+        versionCode = 1000000 + buildNumber
         versionName = "1.0.${49 + buildNumber}"
     }
 
