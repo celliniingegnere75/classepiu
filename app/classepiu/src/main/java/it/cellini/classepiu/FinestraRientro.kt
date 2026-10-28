@@ -141,7 +141,7 @@ object FinestraRientro {
         // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
         val statoFirma = TextView(activity).apply {
             text = "verifico la firma…"
-            textSize = 14f
+            textSize = 21f // 14 + 50%, come chiesto da Cristian
             typeface = outfitBold
             gravity = Gravity.CENTER
             setTextColor(0xFF777777.toInt())
@@ -149,7 +149,7 @@ object FinestraRientro {
         }
         // materia del registro sotto "ora firmata": 40% più piccola, una sola riga, puntini se troppo lunga
         val materiaFirma = TextView(activity).apply {
-            textSize = 14f * .6f
+            textSize = 8.4f // 40% meno dei 14 sp di prima, resta così anche con lo stato più grande
             typeface = outfitRegular
             gravity = Gravity.CENTER
             setTextColor(0xFF16803C.toInt())
