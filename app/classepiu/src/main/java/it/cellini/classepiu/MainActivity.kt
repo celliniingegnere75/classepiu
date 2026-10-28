@@ -37,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private val schedeId = View.generateViewId()
     private var schedaAttiva = TAB_REGISTRO
     private var barra: BarraPagine? = null
+    private var sospesa = false
 
     private val permessoNotifiche = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -178,8 +179,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStart() {
+        val rientroDaSospensione = sospesa
+        sospesa = false
         super.onStart()
         if (Impostazioni(this).pronta) Controllo.recupera(this)
+        // La finestra compare solo quando l'Activity torna dal background, non nei cambi pagina.
+        if (rientroDaSospensione && !isFinishing) FinestraRientro.mostra(this)
+    }
+
+    override fun onStop() {
+        sospesa = true
+        super.onStop()
     }
 
     override fun onResume() {
