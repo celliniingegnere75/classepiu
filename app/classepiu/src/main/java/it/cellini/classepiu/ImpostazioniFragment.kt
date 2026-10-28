@@ -496,10 +496,15 @@ class ImpostazioniFragment : Fragment() {
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
-        riga(ctx, ore, "settimana fino a sabato", Impostazioni(ctx).sabato, ctx.dp(16), piccola = true) { on ->
+        val rigaSabato = riga(ctx, ore, "settimana fino a sabato", Impostazioni(ctx).sabato, ctx.dp(16), storeRow = true, piccola = true) { on ->
             Impostazioni(ctx).sabato = on
             if (!on && giornoScelto > 4) giornoScelto = 4
             aggiornaOrario()
+        } as LinearLayout
+        // "settimana fino a sabato" in Outfit, colore 80% nero e 20% azzurro (#69BCE8)
+        (rigaSabato.getChildAt(0) as TextView).apply {
+            carattereNormale(ctx)?.let { typeface = it }
+            setTextColor(0xFF15262E.toInt())
         }
 
         aggiornaOrario = {
