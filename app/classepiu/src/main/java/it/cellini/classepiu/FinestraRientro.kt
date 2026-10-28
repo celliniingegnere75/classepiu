@@ -117,7 +117,7 @@ object FinestraRientro {
         private val testo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 43, 55); textAlign = Paint.Align.CENTER }
         private val lancetta = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = blu; strokeWidth = ctx.dp(3).toFloat(); strokeCap = Paint.Cap.ROUND }
         private val quadrante = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(3).toFloat(); color = blu }
-        private val tacche = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 185, 200); strokeWidth = ctx.dp(1.5f).toFloat() }
+        private val tacche = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 185, 200); strokeWidth = ctx.dp(2).toFloat() }
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
