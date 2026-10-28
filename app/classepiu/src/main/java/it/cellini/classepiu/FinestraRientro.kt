@@ -90,15 +90,16 @@ object FinestraRientro {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
             if (lezione.aula.isNotBlank()) {
-                // Indicazione "aula" distinta dal codice, che risalta in grassetto.
+                // Etichetta "aula" sopra al numero, disposto su una seconda riga.
                 addView(LinearLayout(activity).apply {
-                    orientation = LinearLayout.HORIZONTAL
+                    orientation = LinearLayout.VERTICAL
                     gravity = Gravity.CENTER
                     addView(TextView(activity).apply {
                         text = "aula"
-                        textSize = 22f
+                        textSize = 16f
                         typeface = outfitRegular
                         setTextColor(azzurro)
+                        gravity = Gravity.CENTER
                         setSingleLine(true)
                     })
                     addView(TextView(activity).apply {
@@ -106,8 +107,9 @@ object FinestraRientro {
                         textSize = 22f
                         typeface = outfitBold
                         setTextColor(azzurro)
+                        gravity = Gravity.CENTER
                         setSingleLine(true)
-                    }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(5) })
+                    }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(2) })
                 })
             }
             addView(TextView(activity).apply {
@@ -116,7 +118,7 @@ object FinestraRientro {
                 typeface = outfitBold
                 setTextColor(celesteClasse)
                 setSingleLine(true)
-            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(34) })
+            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(52) })
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(28) })
 
         // Ghiera sotto la riga aula/classe, con margine uniforme.
