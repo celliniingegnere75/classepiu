@@ -162,6 +162,11 @@ object FinestraRientro {
                 cornerRadius = activity.dp(22).toFloat()
             }
             setPadding(activity.dp(28), activity.dp(10), activity.dp(28), activity.dp(10))
+            // stesso cappello da mago del tasto "compilazione magica", a sinistra della scritta
+            val cappello = androidx.core.content.ContextCompat.getDrawable(activity, R.drawable.ic_cappello_mago)!!
+                .apply { setBounds(0, 0, activity.dp(20), activity.dp(20)) }
+            setCompoundDrawablesRelative(cappello, null, null, null)
+            compoundDrawablePadding = activity.dp(6)
             isClickable = true
             isFocusable = true
             visibility = View.GONE

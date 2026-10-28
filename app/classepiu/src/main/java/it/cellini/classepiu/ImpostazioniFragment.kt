@@ -475,7 +475,7 @@ class ImpostazioniFragment : Fragment() {
             isClickable = true; isFocusable = true
             setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { rightMargin = ctx.dp(5) })
+                LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { rightMargin = ctx.dp(5) })
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
                 listOf("compilazione", "magica").forEach { parola ->
