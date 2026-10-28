@@ -166,27 +166,26 @@ class StudentiScheda : Scheda() {
                     }
                 }
             }
-            // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web in sola lettura.
-            // Con ritardo breve e uscita insieme il popup dà un solo orario: lo teniamo per il ritardo breve.
-            val ritardiBrevi = stato.filterValues { it.isRitardoBreve }.keys
-            val usciteSenzaOra = stato.filterValues { it.isUscita && it.uscita == null && !it.isRitardoBreve }.keys
-            if (ritardiBrevi.isNotEmpty() || usciteSenzaOra.isNotEmpty()) {
+            // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web
+            // in sola lettura. Il popup ha un campo orario per il ritardo e uno per l'uscita (distinti
+            // dall'aria-label), quindi li recuperiamo entrambi anche quando capitano lo stesso giorno.
+            val ritardiSenzaOra = stato.filterValues { it.isRitardoBreve && it.ritardoBreve == null }.keys
+            val usciteSenzaOra = stato.filterValues { it.isUscita && it.uscita == null }.keys
+            if (ritardiSenzaOra.isNotEmpty() || usciteSenzaOra.isNotEmpty()) {
                 val orari = withContext(Dispatchers.IO) {
                     runCatching {
-                        Impostazioni(requireContext()).client().orariRitardoBreveWeb(
-                            classeId, giorno, ritardiBrevi + usciteSenzaOra
+                        Impostazioni(requireContext()).client().orariEventoWeb(
+                            classeId, giorno, ritardiSenzaOra, usciteSenzaOra
                         )
                     }.getOrDefault(emptyMap())
                 }
                 if (orari.isNotEmpty()) {
                     stato = stato.mapValues { (id, valore) ->
-                        val ora = orari[id]
-                        when {
-                            ora == null -> valore
-                            valore.isRitardoBreve -> valore.copy(ritardoBreve = ora)
-                            id in usciteSenzaOra -> valore.copy(uscita = ora)
-                            else -> valore
-                        }
+                        val trovato = orari[id] ?: return@mapValues valore
+                        valore.copy(
+                            ritardoBreve = valore.ritardoBreve ?: trovato.ritardo,
+                            uscita = valore.uscita ?: trovato.uscita
+                        )
                     }
                 }
             }
