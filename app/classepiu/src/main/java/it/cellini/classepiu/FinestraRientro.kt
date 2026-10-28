@@ -151,22 +151,32 @@ object FinestraRientro {
         }
         radice.addView(statoFirma, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
         // compare solo se l'ora non è firmata: firma tipologia "lezione" con argomento vuoto
-        val firmaRapida = TextView(activity).apply {
-            text = "firma rapida"
-            textSize = 15f
-            typeface = outfitBold
+        // identico al tasto "compilazione magica": 128×44 dp, cappello a sinistra, "firma" sopra e "rapida" sotto
+        val firmaRapida = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            setTextColor(Color.WHITE)
             background = GradientDrawable().apply {
                 setColor(azzurro)
                 cornerRadius = activity.dp(22).toFloat()
             }
-            setPadding(activity.dp(28), activity.dp(10), activity.dp(28), activity.dp(10))
+            setPadding(activity.dp(8), 0, activity.dp(8), 0)
+            addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
+                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(5) })
+            addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.CENTER_HORIZONTAL
+                listOf("firma", "rapida").forEach { parola ->
+                    addView(TextView(activity).apply {
+                        text = parola; textSize = 13f; typeface = outfitBold; setTextColor(Color.WHITE)
+                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.CENTER
+                    })
+                }
+            })
             isClickable = true
             isFocusable = true
             visibility = View.GONE
         }
-        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(12) })
+        radice.addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(128), activity.dp(44)).apply { bottomMargin = activity.dp(12) })
         // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
         val copiaLog = TextView(activity).apply {
             text = "copia log"
@@ -217,7 +227,7 @@ object FinestraRientro {
         activity: Activity,
         lezione: Lezione,
         etichetta: TextView,
-        pulsante: TextView,
+        pulsante: View,
         copiaLog: TextView
     ) {
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
@@ -267,7 +277,7 @@ object FinestraRientro {
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: TextView, copiaLog: TextView) {
+    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: View, copiaLog: TextView) {
         handler.removeCallbacksAndMessages(null)
         pulsante.isEnabled = false
         pulsante.alpha = .5f

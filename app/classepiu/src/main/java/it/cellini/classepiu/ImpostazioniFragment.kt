@@ -463,7 +463,7 @@ class ImpostazioniFragment : Fragment() {
         }
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
         // I due tasti hanno la stessa grandezza: la scritta del wizard va su due righe più piccole, con il cappello da mago
-        val larghezzaTasto = ctx.dp(150)
+        val larghezzaTasto = ctx.dp(128)
         val altezzaTasto = ctx.dp(44)
         val tasti = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL; isBaselineAligned = false
@@ -475,12 +475,12 @@ class ImpostazioniFragment : Fragment() {
             isClickable = true; isFocusable = true
             setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(ctx.dp(18), ctx.dp(18)).apply { rightMargin = ctx.dp(5) })
+                LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { rightMargin = ctx.dp(5) })
             addView(LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
                 listOf("compilazione", "magica").forEach { parola ->
                     addView(TextView(ctx).apply {
-                        text = parola; textSize = 11f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
+                        text = parola; textSize = 13f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
                         includeFontPadding = false; setSingleLine(true); gravity = Gravity.CENTER
                     })
                 }
