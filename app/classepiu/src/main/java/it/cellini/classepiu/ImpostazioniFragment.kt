@@ -388,7 +388,9 @@ class ImpostazioniFragment : Fragment() {
     }
 
     /** Orario come su classeviva: giorni da lunedì a venerdì (o sabato) in alto, sotto le 8 ore; toccando un'ora si sceglie classe e materia. */
-    private fun vistaOrario(ctx: android.content.Context): View {
+    private fun vistaOrario(baseCtx: android.content.Context): View {
+        // Questa scheda mantiene intenzionalmente il carattere originale, diverso dal resto dell'app.
+        val ctx = android.view.ContextThemeWrapper(baseCtx, R.style.ThemeOverlay_ClassePiu_Lezioni)
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
         val orario = Orario(ctx)
         val oggi = java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)
