@@ -149,9 +149,25 @@ object FinestraRientro {
             setTextColor(0xFF777777.toInt())
             setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(12))
         }
-        radice.addView(statoFirma, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
+        // materia del registro sotto "ora firmata": 40% più piccola, una sola riga, puntini se troppo lunga
+        val materiaFirma = TextView(activity).apply {
+            textSize = 14f * .6f
+            typeface = outfitRegular
+            gravity = Gravity.CENTER
+            setTextColor(0xFF16803C.toInt())
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(activity.dp(12), 0, activity.dp(12), 0)
+            visibility = View.GONE
+        }
+        radice.addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(statoFirma, LinearLayout.LayoutParams(-1, -2))
+            addView(materiaFirma, LinearLayout.LayoutParams(-1, -2).apply { topMargin = -activity.dp(8) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
         // compare solo se l'ora non è firmata: firma tipologia "lezione" con argomento vuoto
-        // identico al tasto "compilazione magica": 128×44 dp, cappello a sinistra, "firma" sopra e "rapida" sotto
+        // come il tasto "compilazione magica": cappello a sinistra, "firma" sopra e "rapida" sotto; almeno 128×44 dp ma
+        // l'altezza cresce col testo (a 44 fissi "rapida" veniva tagliata), stessi 16 dp a destra e sinistra, 8 sopra e sotto
         val firmaRapida = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
@@ -159,9 +175,11 @@ object FinestraRientro {
                 setColor(azzurro)
                 cornerRadius = activity.dp(22).toFloat()
             }
-            setPadding(activity.dp(8), 0, activity.dp(8), 0)
+            setPadding(activity.dp(16), activity.dp(8), activity.dp(16), activity.dp(8))
+            minimumWidth = activity.dp(128)
+            minimumHeight = activity.dp(44)
             addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(5) })
+                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(8) })
             addView(LinearLayout(activity).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
@@ -176,7 +194,7 @@ object FinestraRientro {
             isFocusable = true
             visibility = View.GONE
         }
-        radice.addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(128), activity.dp(44)).apply { bottomMargin = activity.dp(12) })
+        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(12) })
         // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
         val copiaLog = TextView(activity).apply {
             text = "copia log"
@@ -188,7 +206,7 @@ object FinestraRientro {
             visibility = View.GONE
         }
         radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
-        verificaFirma(activity, lezione, statoFirma, firmaRapida, copiaLog)
+        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, copiaLog)
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -227,6 +245,7 @@ object FinestraRientro {
         activity: Activity,
         lezione: Lezione,
         etichetta: TextView,
+        materia: TextView,
         pulsante: View,
         copiaLog: TextView
     ) {
@@ -251,9 +270,9 @@ object FinestraRientro {
                             etichetta.text = "ora non firmata"
                             etichetta.setTextColor(0xFFD32F2F.toInt())
                             pulsante.visibility = View.VISIBLE
-                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, pulsante, copiaLog) }
+                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante, copiaLog) }
                         } else {
-                            mostraFirmata(etichetta, risultato)
+                            mostraFirmata(etichetta, materia, risultato)
                         }
                     },
                     onFailure = {
@@ -265,10 +284,11 @@ object FinestraRientro {
         }.start()
     }
 
-    private fun mostraFirmata(etichetta: TextView, risultato: EsitoFirma) {
-        val materiaRegistro = risultato.materia
-        etichetta.text = if (materiaRegistro.isNotBlank()) "ora firmata\n$materiaRegistro" else "ora firmata"
+    private fun mostraFirmata(etichetta: TextView, materia: TextView, risultato: EsitoFirma) {
+        etichetta.text = "ora firmata"
         etichetta.setTextColor(0xFF16803C.toInt())
+        materia.text = risultato.materia
+        materia.visibility = if (risultato.materia.isNotBlank()) View.VISIBLE else View.GONE
     }
 
     /**
@@ -277,7 +297,7 @@ object FinestraRientro {
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: View, copiaLog: TextView) {
+    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View, copiaLog: TextView) {
         handler.removeCallbacksAndMessages(null)
         pulsante.isEnabled = false
         pulsante.alpha = .5f
@@ -322,7 +342,7 @@ object FinestraRientro {
                 }
                 esito.fold(
                     onSuccess = { risultato ->
-                        mostraFirmata(etichetta, risultato)
+                        mostraFirmata(etichetta, materia, risultato)
                         pulsante.visibility = View.GONE
                     },
                     onFailure = { e ->
