@@ -3,7 +3,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// Il numero di versione cresce a ogni compilazione su GitHub, così ogni APK si installa sopra il precedente.
+// Il numero di versione cresce a ogni compilazione su GitHub, così ogni APK si installa sopra il precedente. Versione installata dall'utente: 1.0.141 (1000092); la prossima build deve superarla.
 val buildNumber = (System.getenv("GITHUB_RUN_NUMBER") ?: "1").toInt()
 
 android {
