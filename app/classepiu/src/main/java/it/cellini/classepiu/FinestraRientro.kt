@@ -14,12 +14,13 @@ import android.view.Window
 import android.view.WindowManager
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.widget.FrameLayout
+import android.widget.ImageView
 import java.util.Calendar
-import kotlin.math.cos
-import kotlin.math.sin
 
-/** Finestra temporanea ClassePiù mostrata solo al rientro in primo piano. */
+/** Finestra temporanea classePiù mostrata solo al rientro in primo piano. */
 object FinestraRientro {
     private val handler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
@@ -35,53 +36,58 @@ object FinestraRientro {
         if (residui <= 0) return
 
         dialog?.dismiss()
-        val azzurro = Color.rgb(32, 157, 218)
+        val azzurro = 0xFF69BCE8.toInt()
+        val scuro = 0xFF333333.toInt()
+        val outfitRegular = runCatching { Typeface.createFromAsset(activity.assets, "outfit_regular.ttf") }.getOrDefault(Typeface.DEFAULT)
+        val outfitBold = runCatching { Typeface.createFromAsset(activity.assets, "outfit_bold.ttf") }.getOrDefault(Typeface.DEFAULT_BOLD)
+        // scheda bianca arrotondata; la fascia azzurra in alto col logo bianco è quella della schermata principale
         val radice = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
-            gravity = Gravity.CENTER
-            setPadding(activity.dp(24), activity.dp(22), activity.dp(24), activity.dp(22))
+            gravity = Gravity.CENTER_HORIZONTAL
             background = GradientDrawable().apply {
                 setColor(Color.WHITE)
-                cornerRadius = activity.dp(28).toFloat()
-                setStroke(activity.dp(2), azzurro)
+                cornerRadius = activity.dp(24).toFloat()
             }
+            clipToOutline = true
         }
-        radice.addView(TextView(activity).apply {
-            text = "CLASSEPIÙ"
-            textSize = 13f
-            setTextColor(azzurro)
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-            gravity = Gravity.CENTER
-            letterSpacing = .12f
+        radice.addView(FrameLayout(activity).apply {
+            setBackgroundColor(azzurro)
+            setPadding(0, activity.dp(12), 0, activity.dp(12))
+            addView(ImageView(activity).apply {
+                setImageResource(R.drawable.logo_bianco)
+                adjustViewBounds = true
+            }, FrameLayout.LayoutParams(activity.dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+        }, LinearLayout.LayoutParams(-1, -2))
+        // ghiera: metà del vecchio orologio (174dp -> 87dp)
+        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
+            topMargin = activity.dp(18)
         })
-        radice.addView(OrologioLezione(activity, fascia.fine, residui), LinearLayout.LayoutParams(activity.dp(174), activity.dp(174)).apply {
-            topMargin = activity.dp(8)
-        })
-        radice.addView(TextView(activity).apply {
-            text = lezione.classe
-            textSize = 25f
-            setTextColor(Color.rgb(30, 43, 55))
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        // stessa riga: classe e aula
+        radice.addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(6) })
+            addView(TextView(activity).apply {
+                text = lezione.classe
+                textSize = 22f
+                typeface = outfitBold
+                setTextColor(scuro)
+            })
+            if (lezione.aula.isNotBlank()) addView(TextView(activity).apply {
+                text = "aula ${lezione.aula}"
+                textSize = 18f
+                typeface = outfitRegular
+                setTextColor(azzurro)
+            }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(12) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(12) })
+        // riga sotto: materia
         radice.addView(TextView(activity).apply {
             text = lezione.materia
-            textSize = 17f
-            setTextColor(Color.rgb(65, 77, 88))
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(4) })
-        if (lezione.aula.isNotBlank()) radice.addView(TextView(activity).apply {
-            text = "Aula ${lezione.aula}"
             textSize = 15f
-            setTextColor(azzurro)
+            typeface = outfitRegular
+            setTextColor(0xFF555555.toInt())
             gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(6) })
-        radice.addView(TextView(activity).apply {
-            text = "Fine lezione: ${Fascia.hhmm(fascia.fine)}"
-            textSize = 13f
-            setTextColor(Color.GRAY)
-            gravity = Gravity.CENTER
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(8) })
+            setPadding(activity.dp(20), 0, activity.dp(20), 0)
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(2); bottomMargin = activity.dp(20) })
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -109,47 +115,31 @@ object FinestraRientro {
                     if (dialog === d) dialog = null
                 }.start()
             }
-        }, 4780)
+        }, 7780) // 8 secondi in tutto, compresa la dissolvenza
     }
 
-    private class OrologioLezione(ctx: android.content.Context, private val fine: Int, private val residui: Int) : View(ctx) {
-        private val blu = Color.rgb(32, 157, 218)
-        private val testo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(30, 43, 55); textAlign = Paint.Align.CENTER }
-        private val lancetta = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = blu; strokeWidth = ctx.dp(3).toFloat(); strokeCap = Paint.Cap.ROUND }
-        private val quadrante = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = ctx.dp(3).toFloat(); color = blu }
-        private val tacche = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.rgb(160, 185, 200); strokeWidth = ctx.dp(2).toFloat() }
+    /** Ghiera che si riempie dall'inizio alla fine dell'ora (fascia dalla tabella "lezioni"); al centro i minuti che mancano. */
+    private class GhieraLezione(ctx: android.content.Context, private val fascia: Fascia, carattere: Typeface) : View(ctx) {
+        private val spessore = ctx.dp(7).toFloat()
+        private val fondo = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = spessore; color = 0xFFE3EEF5.toInt() }
+        private val pieno = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeWidth = spessore; strokeCap = Paint.Cap.ROUND; color = 0xFF69BCE8.toInt() }
+        private val testo = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = 0xFF333333.toInt(); textAlign = Paint.Align.CENTER; typeface = carattere; textSize = ctx.dp(16).toFloat() }
+        private val arco = RectF()
 
         override fun onDraw(canvas: Canvas) {
             super.onDraw(canvas)
-            val cx = width / 2f
-            val cy = height / 2f
-            val r = minOf(cx, cy) - context.dp(8)
-            canvas.drawCircle(cx, cy, r, quadrante)
-            for (i in 0 until 60) {
-                val a = Math.PI * i / 30.0
-                val esterno = r - context.dp(5)
-                val interno = r - context.dp(if (i % 5 == 0) 13 else 8)
-                canvas.drawLine(cx + cos(a).toFloat() * interno, cy + sin(a).toFloat() * interno,
-                    cx + cos(a).toFloat() * esterno, cy + sin(a).toFloat() * esterno, tacche)
-            }
             val adesso = Calendar.getInstance()
-            val secondi = adesso.get(Calendar.SECOND)
-            val minuti = adesso.get(Calendar.MINUTE)
-            val ore = adesso.get(Calendar.HOUR)
-            disegnaLancetta(canvas, cx, cy, r * .48f, (ore % 12 + minuti / 60f) / 12f * 360f - 90f, lancetta)
-            disegnaLancetta(canvas, cx, cy, r * .72f, (minuti + secondi / 60f) / 60f * 360f - 90f, lancetta)
-            val tot = ((fine - (adesso.get(Calendar.HOUR_OF_DAY) * 60 + minuti)) * 60 - secondi).coerceAtLeast(0)
-            val mm = tot / 60
-            val ss = tot % 60
-            testo.textSize = context.dp(17).toFloat()
-            testo.typeface = android.graphics.Typeface.DEFAULT_BOLD
-            canvas.drawText(String.format(java.util.Locale.ITALY, "%02d:%02d", mm, ss), cx, cy + r * .36f, testo)
+            val secondiAdesso = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
+            val durata = ((fascia.fine - fascia.inizio) * 60).coerceAtLeast(1)
+            val passati = (secondiAdesso - fascia.inizio * 60).coerceIn(0, durata)
+            val residui = durata - passati
+            val m = spessore / 2
+            arco.set(m, m, width - m, height - m)
+            canvas.drawArc(arco, 0f, 360f, false, fondo)
+            canvas.drawArc(arco, -90f, 360f * passati / durata, false, pieno)
+            val y = height / 2f - (testo.descent() + testo.ascent()) / 2
+            canvas.drawText(String.format(java.util.Locale.ITALY, "%d:%02d", residui / 60, residui % 60), width / 2f, y, testo)
             postInvalidateDelayed(1000)
-        }
-
-        private fun disegnaLancetta(c: Canvas, x: Float, y: Float, lunghezza: Float, gradi: Float, p: Paint) {
-            val a = Math.toRadians(gradi.toDouble())
-            c.drawLine(x, y, x + cos(a).toFloat() * lunghezza, y + sin(a).toFloat() * lunghezza, p)
         }
     }
 }
