@@ -229,17 +229,16 @@ object FinestraRientro {
                     val ora = testo(v, "evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
                     val durata = (testo(v, "evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
                     val autore = testo(v, "authorId", "teacherId", "teacher_id")
-                    val materia = testo(v, "subjectDesc", "subjectName", "subject").ifEmpty {
-                        v.optJSONObject("subject")?.let { testo(it, "subjectDesc", "description", "name") }.orEmpty()
-                    }
                     val tipo = testo(v, "classType")
                     val idClasse = testo(v, "classId", "classroomId")
                     val classeFirmata = testo(v, "classDesc", "className", "classroomName", "classCode")
                         .ifEmpty { nomiClassi["$tipo|$idClasse"] ?: nomiClassi[idClasse].orEmpty() }
-                    val stessaClasse = classeFirmata.isNotBlank() && normalizza(classeFirmata) == normalizza(lezione.classe)
-                    val stessaMateria = materia.isNotBlank() && normalizza(materia) == normalizza(lezione.materia)
+                    // La firma vale anche se inserita in ritardo. Non vincolare la verifica alla materia:
+                    // la descrizione può differire da quella salvata nell'orario. Se il nome della classe
+                    // è disponibile, però, deve corrispondere alla lezione visualizzata.
+                    val stessaClasse = classeFirmata.isBlank() || normalizza(classeFirmata) == normalizza(lezione.classe)
                     val firmaQuestaOra = dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
-                        (mioId.isBlank() || autore == mioId) && stessaClasse && stessaMateria
+                        (mioId.isBlank() || autore == mioId) && stessaClasse
                     firmaQuestaOra || v.keys().asSequence().any { cerca(v.opt(it), livello + 1) }
                 }
                 else -> false
