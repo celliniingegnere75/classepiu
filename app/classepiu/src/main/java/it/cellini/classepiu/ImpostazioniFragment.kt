@@ -462,36 +462,37 @@ class ImpostazioniFragment : Fragment() {
             Triple(classe, materia, aulaView)
         }
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
-        // I due tasti hanno la stessa grandezza: la scritta del wizard va su due righe più piccole, con il cappello da mago
-        val larghezzaTasto = ctx.dp(128)
+        // Come nello schizzo di Cristian: la riga è larga quanto le schede delle ore, il wizard parte dal bordo sinistro
+        // (48% della riga), "pulisci" arriva al bordo destro (36%), in mezzo resta uno stacco; stessa altezza per tutti e due.
         val altezzaTasto = ctx.dp(44)
         val tasti = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_HORIZONTAL; isBaselineAligned = false
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; isBaselineAligned = false
         }
-        // cappello a sinistra, "compilazione" su una riga e "magica" sotto: due scritte separate su riga singola, così non va mai a capo
+        // cappello a sinistra, "compilazione" e sotto "magica" allineate a sinistra, come in firma rapida
         tasti.addView(LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL or Gravity.START
             background = GradientDrawable().apply { setColor(azzurro); cornerRadius = altezzaTasto / 2f }
             isClickable = true; isFocusable = true
-            setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
+            setPadding(ctx.dp(9), 0, ctx.dp(8), 0)
             addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
                 LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { rightMargin = ctx.dp(5) })
             addView(LinearLayout(ctx).apply {
-                orientation = LinearLayout.VERTICAL; gravity = Gravity.CENTER_HORIZONTAL
+                orientation = LinearLayout.VERTICAL; gravity = Gravity.START
                 listOf("compilazione", "magica").forEach { parola ->
                     addView(TextView(ctx).apply {
                         text = parola; textSize = 13f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
-                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.CENTER
+                        includeFontPadding = false; setSingleLine(true); gravity = Gravity.START
                     })
                 }
             })
             setOnClickListener { wizard(ctx, orario) }
-        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto))
+        }, LinearLayout.LayoutParams(0, altezzaTasto, 48f))
+        tasti.addView(View(ctx), LinearLayout.LayoutParams(0, 1, 16f))
         tasti.addView(pillola(ctx, "pulisci", 13f, Color.WHITE, azzurro, altezzaTasto).apply {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(larghezzaTasto, altezzaTasto).apply { leftMargin = ctx.dp(20) })
+        }, LinearLayout.LayoutParams(0, altezzaTasto, 36f))
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
