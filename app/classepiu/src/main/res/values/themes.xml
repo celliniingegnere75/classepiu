@@ -9,6 +9,8 @@
 
     <!-- Tema sempre chiaro, come la bozza -->
     <style name="Theme.ClassePiu" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">@font/outfit_regular</item>
+        <item name="fontFamily">@font/outfit_regular</item>
         <item name="colorPrimary">@color/primario</item>
         <item name="colorSecondary">@color/primario</item>
         <item name="colorSurface">#F5F5F5</item>
@@ -16,5 +18,11 @@
         <item name="android:windowBackground">#F5F5F5</item>
         <item name="android:statusBarColor">@color/logo_sfondo</item>
         <item name="android:windowLightStatusBar">false</item>
+    </style>
+
+    <!-- La sola scheda Lezioni usa il carattere di sistema originale. -->
+    <style name="ThemeOverlay_ClassePiu_Lezioni" parent="Theme.Material3.Light.NoActionBar">
+        <item name="android:fontFamily">sans-serif</item>
+        <item name="fontFamily">sans-serif</item>
     </style>
 </resources>

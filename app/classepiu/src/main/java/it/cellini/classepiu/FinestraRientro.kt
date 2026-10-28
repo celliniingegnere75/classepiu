@@ -84,36 +84,54 @@ object FinestraRientro {
             })
         }
         radice.addView(intestazione, LinearLayout.LayoutParams(-1, -2))
-        // ghiera: metà del vecchio orologio (174dp -> 87dp)
-        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
-            topMargin = activity.dp(18)
-        })
-        // stessa riga: classe e aula
+        // Riga superiore: prima l'aula, poi il codice della classe.
         radice.addView(LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            addView(TextView(activity).apply {
-                text = lezione.classe
-                textSize = 22f
-                typeface = outfitBold
-                setTextColor(scuro)
-            })
             if (lezione.aula.isNotBlank()) addView(TextView(activity).apply {
                 text = "aula ${lezione.aula}"
                 textSize = 18f
                 typeface = outfitRegular
                 setTextColor(azzurro)
-            }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(12) })
+                setSingleLine(true)
+            })
+            addView(TextView(activity).apply {
+                text = lezione.classe
+                textSize = 22f
+                typeface = outfitBold
+                setTextColor(scuro)
+                setSingleLine(true)
+            }, LinearLayout.LayoutParams(-2, -2).apply { if (lezione.aula.isNotBlank()) leftMargin = activity.dp(12) })
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(12) })
-        // riga sotto: materia
+
+        // Ghiera subito sotto la riga aula/classe.
+        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
+            topMargin = activity.dp(12)
+        })
+
+        // Materia in una sola riga, con ellissi e carattere dimezzato rispetto a prima.
         radice.addView(TextView(activity).apply {
             text = lezione.materia
-            textSize = 15f
+            textSize = 7.5f
             typeface = outfitRegular
             setTextColor(0xFF555555.toInt())
             gravity = Gravity.CENTER
-            setPadding(activity.dp(20), 0, activity.dp(20), 0)
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(2); bottomMargin = activity.dp(20) })
+            setSingleLine(true)
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            setPadding(activity.dp(12), 0, activity.dp(12), 0)
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(4) })
+
+        // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
+        val statoFirma = TextView(activity).apply {
+            text = "verifico la firma…"
+            textSize = 14f
+            typeface = outfitBold
+            gravity = Gravity.CENTER
+            setTextColor(0xFF777777.toInt())
+            setPadding(activity.dp(8), activity.dp(4), activity.dp(8), activity.dp(8))
+        }
+        radice.addView(statoFirma, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(12) })
+        verificaFirma(activity, lezione, statoFirma, outfitBold)
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -142,6 +160,92 @@ object FinestraRientro {
                 }.start()
             }
         }, 7780) // 8 secondi in tutto, compresa la dissolvenza
+    }
+
+    /**
+     * Controlla la firma del docente nell'endpoint lessons/mine per la data odierna.
+     * L'ora è considerata firmata solo se coincidono docente, classe, materia e fascia oraria.
+     */
+    private fun verificaFirma(
+        activity: Activity,
+        lezione: Lezione,
+        etichetta: TextView,
+        carattere: Typeface
+    ) {
+        val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
+        Thread {
+            val esito = runCatching {
+                val imp = Impostazioni(activity)
+                check(imp.pronta) { "Credenziali non configurate" }
+                val client = imp.client().also { it.login() }
+                val (codiceClassi, classiGrezze) = client.classiGrezze(false)
+                check(codiceClassi == 200) { "Classi non disponibili (HTTP $codiceClassi)" }
+                val nomi = OrarioDalleFirme.nomiClassi(leggiClassi(classiGrezze))
+                val (codice, grezzo) = client.lezioniGrezze(data, data)
+                check(codice == 200) { "Firme non disponibili (HTTP $codice)" }
+                firmaCorrispondente(grezzo, client.idDocente(), data, lezione, nomi)
+            }
+            activity.runOnUiThread {
+                if (activity.isFinishing || activity.isDestroyed || !etichetta.isAttachedToWindow) return@runOnUiThread
+                esito.fold(
+                    onSuccess = { firmata ->
+                        etichetta.text = if (firmata) "ora firmata" else "ora da firmare"
+                        etichetta.setTextColor(if (firmata) 0xFF16803C.toInt() else 0xFFD32F2F.toInt())
+                    },
+                    onFailure = {
+                        etichetta.text = "firma non verificata"
+                        etichetta.setTextColor(0xFF8A6D00.toInt())
+                    }
+                )
+            }
+        }.start()
+    }
+
+    private fun firmaCorrispondente(
+        grezzo: String,
+        mioId: String,
+        data: String,
+        lezione: Lezione,
+        nomiClassi: Map<String, String>
+    ): Boolean {
+        val radice = org.json.JSONTokener(grezzo).nextValue()
+        fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
+            for (k in chiavi) {
+                val v = o.opt(k)
+                if (v != null && v != org.json.JSONObject.NULL && v !is org.json.JSONObject && v !is org.json.JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty()) return s
+                }
+            }
+            return ""
+        }
+        fun normalizza(s: String) = s.trim().replace(Regex("\\s+"), " ").uppercase(java.util.Locale.ROOT)
+        fun cerca(v: Any?, livello: Int = 0): Boolean {
+            if (livello > 7) return false
+            return when (v) {
+                is org.json.JSONArray -> (0 until v.length()).any { cerca(v.opt(it), livello + 1) }
+                is org.json.JSONObject -> {
+                    val dataFirma = testo(v, "evtDate", "lessonDate", "date").take(10).replace("-", "")
+                    val ora = testo(v, "evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
+                    val durata = (testo(v, "evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
+                    val autore = testo(v, "authorId", "teacherId", "teacher_id")
+                    val materia = testo(v, "subjectDesc", "subjectName", "subject").ifEmpty {
+                        v.optJSONObject("subject")?.let { testo(it, "subjectDesc", "description", "name") }.orEmpty()
+                    }
+                    val tipo = testo(v, "classType")
+                    val idClasse = testo(v, "classId", "classroomId")
+                    val classeFirmata = testo(v, "classDesc", "className", "classroomName", "classCode")
+                        .ifEmpty { nomiClassi["$tipo|$idClasse"] ?: nomiClassi[idClasse].orEmpty() }
+                    val stessaClasse = classeFirmata.isNotBlank() && normalizza(classeFirmata) == normalizza(lezione.classe)
+                    val stessaMateria = materia.isNotBlank() && normalizza(materia) == normalizza(lezione.materia)
+                    val firmaQuestaOra = dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
+                        (mioId.isBlank() || autore == mioId) && stessaClasse && stessaMateria
+                    firmaQuestaOra || v.keys().asSequence().any { cerca(v.opt(it), livello + 1) }
+                }
+                else -> false
+            }
+        }
+        return cerca(radice)
     }
 
     /** Ghiera che si riempie dall'inizio alla fine dell'ora (fascia dalla tabella "lezioni"); al centro i minuti che mancano. */
