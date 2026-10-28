@@ -414,10 +414,12 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * Classe: [tipo] (C classe, G gruppo) e [classeId] da classes/mine. Materia: il subjectId di subjects/list il cui
      * nome è [materia], tra le mie. [data] è yyyyMMdd, [ora] la posizione dell'ora nel giorno.
      * I campi sono quelli delle firme vere lette da lessons/mine, più evtNumH che classeviva chiede (412 "missing evtNumH").
+     * In [log] finiscono le risposte e la richiesta mandata (mai password o token), da copiare se qualcosa va storto.
      */
-    fun firmaRapida(tipo: String, classeId: String, materia: String, data: String, ora: Int): Pair<Int, String> {
+    fun firmaRapida(tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder()): Pair<Int, String> {
         if (token.isEmpty()) login()
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
+        log.append("GET subjects/list/$tipo/$classeId -> HTTP ${m.codice}\n${m.testo.take(2000)}\n\n")
         if (m.codice != 200) return m.codice to "materie non disponibili: ${m.testo.take(200)}"
         val radice = runCatching { org.json.JSONTokener(m.testo).nextValue() }.getOrNull() ?: return 500 to "materie non leggibili"
         val elenco = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return 404 to "nessuna materia nella classe"
@@ -429,8 +431,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: mie.singleOrNull() ?: return 404 to "materia \"$materia\" non trovata tra le tue"
         val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> voce.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray } }
             ?: return 404 to "materia senza codice"
-        val lezione = runCatching { tipiLezione().first }.getOrDefault(emptyList())
-            .firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
+        val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
+        log.append("tipi di lezione: ${tipi.joinToString { "${it.codice}=${it.nome}" }.ifEmpty { "non letti" }}\n\n")
+        val lezione = tipi.firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
         // come in lessons/mine: id numerici quando lo sono, data 2026-10-21
         fun numero(v: Any) = v.toString().toLongOrNull() ?: v
         val o = JSONObject()
@@ -446,7 +449,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("lessonType", lezione.nome)
             .put("lessonTypeId", numero(lezione.codice))
             .put("lessonArg", "")
+        log.append("PUT lessons/sigs\n${o.toString(2)}\n\n")
         val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
+        log.append("risposta HTTP ${r.codice}\n${r.testo.take(3000)}\n\n")
         return r.codice to r.testo
     }
 

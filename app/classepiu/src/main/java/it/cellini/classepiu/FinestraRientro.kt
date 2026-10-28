@@ -166,8 +166,19 @@ object FinestraRientro {
             isFocusable = true
             visibility = View.GONE
         }
-        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(24) })
-        verificaFirma(activity, lezione, statoFirma, firmaRapida)
+        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(12) })
+        // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
+        val copiaLog = TextView(activity).apply {
+            text = "copia log"
+            textSize = 13f
+            typeface = outfitRegular
+            setTextColor(azzurro)
+            setPadding(activity.dp(12), activity.dp(6), activity.dp(12), activity.dp(6))
+            isClickable = true
+            visibility = View.GONE
+        }
+        radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
+        verificaFirma(activity, lezione, statoFirma, firmaRapida, copiaLog)
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -206,7 +217,8 @@ object FinestraRientro {
         activity: Activity,
         lezione: Lezione,
         etichetta: TextView,
-        pulsante: TextView
+        pulsante: TextView,
+        copiaLog: TextView
     ) {
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
         Thread {
@@ -229,7 +241,7 @@ object FinestraRientro {
                             etichetta.text = "ora non firmata"
                             etichetta.setTextColor(0xFFD32F2F.toInt())
                             pulsante.visibility = View.VISIBLE
-                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, pulsante) }
+                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, pulsante, copiaLog) }
                         } else {
                             mostraFirmata(etichetta, risultato)
                         }
@@ -255,37 +267,49 @@ object FinestraRientro {
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: TextView) {
+    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, pulsante: TextView, copiaLog: TextView) {
         handler.removeCallbacksAndMessages(null)
         pulsante.isEnabled = false
         pulsante.alpha = .5f
         etichetta.text = "firmo…"
         etichetta.setTextColor(0xFF777777.toInt())
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
+        val log = StringBuilder("firma rapida classePiù ${BuildConfig.VERSION_NAME}\n")
+            .append("data $data, ora ${lezione.ora}, classe ${lezione.classe}, materia ${lezione.materia}\n\n")
         Thread {
             val esito = runCatching {
                 val client = Impostazioni(activity).client().also { it.login() }
                 val mioId = client.idDocente()
+                log.append("docente $mioId\n")
                 val (codiceClassi, classiGrezze) = client.classiGrezze(false)
                 check(codiceClassi == 200) { "classi non disponibili (HTTP $codiceClassi)" }
                 val classi = leggiClassi(classiGrezze)
+                log.append("le mie classi: ${classi.joinToString { it.chiave }}\n")
                 val nomi = OrarioDalleFirme.nomiClassi(classi)
                 // se nel frattempo l'ora è stata firmata non si firma due volte
                 val (codicePrima, grezzoPrima) = client.lezioniGrezze(data, data)
                 check(codicePrima == 200) { "firme di oggi non disponibili (HTTP $codicePrima)" }
-                firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi)?.let { return@runCatching it }
+                firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi)?.let { log.append("ora già firmata, non firmo\n"); return@runCatching it }
                 val classe = checkNotNull(classi.firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) }) {
                     "${lezione.classe} non è tra le tue classi"
                 }
                 val parti = classe.chiave.split("|", limit = 3)
-                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora)
+                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
+                log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
                 check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
                 checkNotNull(firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)) { "firma inviata ma non trovata nel registro" }
             }
+            log.append(esito.fold({ "esito: firmata (${it.materia})" }, { "esito: errore ${it.message}" }))
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed || !etichetta.isAttachedToWindow) return@runOnUiThread
+                copiaLog.visibility = View.VISIBLE
+                copiaLog.setOnClickListener {
+                    activity.getSystemService(android.content.ClipboardManager::class.java)
+                        .setPrimaryClip(android.content.ClipData.newPlainText("log firma rapida", log.toString()))
+                    copiaLog.text = "log copiato"
+                }
                 esito.fold(
                     onSuccess = { risultato ->
                         mostraFirmata(etichetta, risultato)
