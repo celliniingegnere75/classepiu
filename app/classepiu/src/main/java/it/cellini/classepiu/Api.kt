@@ -260,9 +260,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * del registro web. Tutte le richieste sono GET: non viene mai inviato il modulo di cambio stato.
      * [giorno] è yyyyMMdd e gli ID sono quelli degli studenti con stato ABR1/AT.. o ABU0.
      *
-     * Il popup "Cambia Evento" ha un campo orario per il ritardo e uno per l'uscita, con lo stesso id
-     * (`popup_evento_ora`, riusato per i due tipi di evento): a distinguerli è l'aria-label del campo
-     * stesso, che per l'uscita contiene "uscita" (verificato sull'HTML reale del popup).
+     * Il popup "Cambia Evento" ha un campo orario per il ritardo breve (`id="popup_evento_ora"`) e uno
+     * per l'uscita (`id="popup_evento_ora_u"`), verificato sull'HTML grezzo del popup.
      */
     fun orariEventoWeb(
         classeId: String, giorno: String, studentiRitardo: Set<String>, studentiUscita: Set<String>,
@@ -282,7 +281,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 ?: Regex("""value\s*=\s*["']([^"']+)["'][^>]*id\s*=\s*["']ora_posizione["']""", RegexOption.IGNORE_CASE)
                     .find(pagina)?.groupValues?.get(1)
                 ?: "1"
-            val campoOra = Regex("""<input\b[^>]*\bid=["']popup_evento_ora["'][^>]*>""", RegexOption.IGNORE_CASE)
+            val campoOra = Regex("""<input\b[^>]*\bid=["']popup_evento_ora(_u)?["'][^>]*>""", RegexOption.IGNORE_CASE)
             val valoreOra = Regex("""\bvalue\s*=\s*["']((?:[01]\d|2[0-3]):[0-5]\d)["']""", RegexOption.IGNORE_CASE)
             val risultato = linkedMapOf<String, OrariEvento>()
             for (studenteId in studenti) {
@@ -294,7 +293,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 var oraUscita: String? = null
                 for (m in campoOra.findAll(html)) {
                     val ora = valoreOra.find(m.value)?.groupValues?.get(1) ?: continue
-                    if (m.value.contains("uscita", ignoreCase = true)) oraUscita = ora else oraRitardo = ora
+                    if (m.groupValues[1].isNotEmpty()) oraUscita = ora else oraRitardo = ora
                 }
                 if (oraRitardo != null || oraUscita != null) risultato[studenteId] = OrariEvento(oraRitardo, oraUscita)
             }
