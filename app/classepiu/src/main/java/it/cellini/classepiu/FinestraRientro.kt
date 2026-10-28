@@ -182,7 +182,7 @@ object FinestraRientro {
             addView(TextView(activity).apply {
                 text = "firma\nrapida"; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
                 includeFontPadding = false; gravity = Gravity.START
-                setLineSpacing(0f, 0.8f)
+                setLineSpacing(0f, 0.9f)
             })
             isClickable = true
             isFocusable = true
