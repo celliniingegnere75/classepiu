@@ -321,13 +321,13 @@ object FinestraRientro {
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val testo = s?.toString().orEmpty().lowercase(java.util.Locale.ROOT)
                 when {
-                    testo.contains("firmata") -> {
-                        statoCompatto.text = "firmato"
-                        statoCompatto.setTextColor(0xFF16803C.toInt())
-                    }
                     testo.contains("non firmata") || testo.contains("non riuscita") -> {
                         statoCompatto.text = "senza firma"
                         statoCompatto.setTextColor(0xFFD32F2F.toInt())
+                    }
+                    testo.contains("firmata") -> {
+                        statoCompatto.text = "firmato"
+                        statoCompatto.setTextColor(0xFF16803C.toInt())
                     }
                     else -> {
                         statoCompatto.text = "verifica…"
