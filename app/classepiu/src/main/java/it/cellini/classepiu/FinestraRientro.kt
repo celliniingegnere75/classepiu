@@ -51,8 +51,15 @@ object FinestraRientro {
             }
             clipToOutline = true
         }
-        val frecciaSu = TextView(activity)
-        val chiudi = TextView(activity)
+        fun pulsanteIcona(icona: Int, descrizione: String) = android.widget.ImageView(activity).apply {
+            setImageResource(icona)
+            contentDescription = descrizione
+            scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+            isClickable = true
+            isFocusable = true
+        }
+        val frecciaSu = pulsanteIcona(R.drawable.ic_notifica_su, "Riduci notifica")
+        val chiudi = pulsanteIcona(R.drawable.ic_notifica_chiudi, "Chiudi finestra")
         val intestazione = FrameLayout(activity).apply {
             setBackgroundColor(azzurro)
             setPadding(0, activity.dp(10), 0, activity.dp(10))
@@ -60,41 +67,13 @@ object FinestraRientro {
                 setImageResource(R.drawable.logo_bianco)
                 adjustViewBounds = true
             }, FrameLayout.LayoutParams(activity.dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
-            // Freccia stilizzata per ridurre la notifica a una striscia.
-            frecciaSu.apply {
-                text = "⌃"
-                textSize = 29f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                contentDescription = "Riduci notifica"
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(0x35FFFFFF)
-                    setStroke(activity.dp(1), 0x70FFFFFF)
-                }
-                isClickable = true
-                isFocusable = true
-            }
+            // Freccia per ridurre la notifica a una striscia (stile fissato da ControlloNotificaRiducibile).
             addView(frecciaSu, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.START).apply {
                 leftMargin = activity.dp(10)
                 topMargin = activity.dp(4)
             })
             // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
             addView(chiudi.apply {
-                text = "×"
-                textSize = 30f
-                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-                gravity = Gravity.CENTER
-                setTextColor(Color.WHITE)
-                contentDescription = "Chiudi finestra"
-                background = GradientDrawable().apply {
-                    shape = GradientDrawable.OVAL
-                    setColor(0x35FFFFFF)
-                    setStroke(activity.dp(1), 0x70FFFFFF)
-                }
-                isClickable = true
-                isFocusable = true
                 setOnClickListener {
                     handler.removeCallbacksAndMessages(null)
                     val daChiudere = dialog
@@ -267,44 +246,34 @@ object FinestraRientro {
             gravity = Gravity.CENTER_VERTICAL
             setSingleLine(true)
             setTextColor(0xFF777777.toInt())
-        }
-        val frecciaGiu = TextView(activity).apply {
-            text = "⌄"
-            textSize = 27f
-            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
-            gravity = Gravity.CENTER
-            setTextColor(0xFF333333.toInt())
-            contentDescription = "Espandi notifica"
+            setPadding(activity.dp(10), activity.dp(4), activity.dp(10), activity.dp(4))
             background = GradientDrawable().apply {
-                shape = GradientDrawable.OVAL
-                setColor(0xFFEAF5FB.toInt())
-                setStroke(activity.dp(1), 0xFFB7DCEE.toInt())
+                setColor(Color.WHITE)
+                cornerRadius = activity.dp(14).toFloat()
             }
-            isClickable = true
-            isFocusable = true
         }
+        val frecciaGiu = pulsanteIcona(R.drawable.ic_notifica_giu, "Espandi notifica")
         val sintesi = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(activity.dp(9), activity.dp(8), activity.dp(14), activity.dp(8))
+            setPadding(activity.dp(9), activity.dp(8), activity.dp(10), activity.dp(8))
             background = GradientDrawable().apply {
-                setColor(Color.WHITE)
-                cornerRadius = activity.dp(18).toFloat()
-                setStroke(activity.dp(1), 0xFFB7DCEE.toInt())
+                setColor(azzurro)
+                cornerRadius = activity.dp(24).toFloat()
             }
             addView(frecciaGiu, LinearLayout.LayoutParams(activity.dp(34), activity.dp(34)))
             addView(TextView(activity).apply {
                 text = oraBreve
                 textSize = 12.5f
                 typeface = outfitBold
-                setTextColor(0xFF333333.toInt())
+                setTextColor(Color.WHITE)
                 setSingleLine(true)
             }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(7) })
             addView(TextView(activity).apply {
                 text = lezione.classe
-                textSize = 13f
+                textSize = 14f
                 typeface = outfitBold
-                setTextColor(celesteClasse)
+                setTextColor(Color.WHITE)
                 setSingleLine(true)
                 ellipsize = android.text.TextUtils.TruncateAt.END
                 gravity = Gravity.CENTER_VERTICAL

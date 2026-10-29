@@ -27,9 +27,9 @@ class ControlloNotificaRiducibile(
     private var animatore: ValueAnimator? = null
 
     init {
-        stilePulsante(frecciaRiduci, true)
-        stilePulsante(frecciaEspandi, false)
-        stilePulsante(chiudi, true, chiusura = true)
+        stilePulsante(frecciaRiduci)
+        stilePulsante(frecciaEspandi)
+        stilePulsante(chiudi)
 
         frecciaRiduci.setOnClickListener { mostraCompatta() }
         frecciaEspandi.setOnClickListener { mostraCompleta() }
@@ -66,29 +66,15 @@ class ControlloNotificaRiducibile(
         if (prefs.getBoolean("ridotta", false)) impostaCompatta() else impostaCompleta()
     }
 
-    private fun stilePulsante(view: View, suAzzurro: Boolean, chiusura: Boolean = false) {
+    /** Tondo bianco pieno con l'icona azzurra (le icone sono vettori in res/drawable), tutto opaco. */
+    private fun stilePulsante(view: View) {
         val ctx = dialog.context
-        view.background = GradientDrawable(
-            GradientDrawable.Orientation.TL_BR,
-            if (suAzzurro) intArrayOf(0xFF8BD0F2.toInt(), 0xFF3298D0.toInt())
-            else intArrayOf(0xFFEAF7FD.toInt(), 0xFFB9E2F5.toInt())
-        ).apply {
+        view.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
-            setStroke(ctx.dp(2).coerceAtLeast(1), if (suAzzurro) 0xBFFFFFFF.toInt() else 0xFF69BCE8.toInt())
+            setColor(Color.WHITE)
         }
-        view.elevation = ctx.dp(3).toFloat()
-        view.minimumWidth = ctx.dp(38)
-        view.minimumHeight = ctx.dp(38)
-        view.contentDescription = when {
-            chiusura -> "Chiudi finestra"
-            suAzzurro -> "Riduci notifica"
-            else -> "Espandi notifica"
-        }
-        if (view is android.widget.TextView) {
-            view.setTextColor(if (suAzzurro) Color.WHITE else 0xFF17658A.toInt())
-            view.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.BOLD)
-            view.textSize = if (chiusura) 28f else 27f
-        }
+        view.elevation = ctx.dp(2).toFloat()
+        (view as? android.widget.ImageView)?.setPadding(ctx.dp(8), ctx.dp(8), ctx.dp(8), ctx.dp(8))
     }
 
     private fun mostraCompatta() {
@@ -116,9 +102,9 @@ class ControlloNotificaRiducibile(
     }
 
     /**
-     * Passaggio animato tra le due viste: l'altezza del contenitore scende (o sale) un fotogramma alla volta mentre
-     * una vista sfuma e l'altra compare. La finestra del Dialog è WRAP_CONTENT e segue l'altezza a ogni fotogramma;
-     * una Transition sulle viste non bastava, perché la finestra cambiava misura di colpo e tagliava l'animazione.
+     * Passaggio animato senza trasparenze: la vista che entra scende dall'alto, ben opaca, sopra quella che esce, mentre
+     * il contenitore, tagliato ad angoli arrotondati, cambia altezza un fotogramma alla volta (la finestra è WRAP_CONTENT
+     * e lo segue). Le due viste hanno altezza fissa durante il movimento, così il contenuto non viene schiacciato.
      */
     private fun animaCambioStato(compatta: Boolean) {
         val contenitore = contenutoCompleto.parent as? ViewGroup
@@ -129,40 +115,57 @@ class ControlloNotificaRiducibile(
             if (compatta) impostaCompatta() else impostaCompleta()
             return
         }
+        val larghezza = contenitore.width
         val altezzaIniziale = contenitore.height
-        entrante.visibility = View.VISIBLE
-        entrante.measure(
-            View.MeasureSpec.makeMeasureSpec(contenitore.width, View.MeasureSpec.EXACTLY),
-            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
-        )
-        val altezzaFinale = entrante.measuredHeight
+        fun misura(v: View): Int {
+            val vecchia = v.visibility
+            v.visibility = View.VISIBLE
+            v.measure(
+                View.MeasureSpec.makeMeasureSpec(larghezza, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+            )
+            v.visibility = vecchia
+            return v.measuredHeight
+        }
+        val altezzaFinale = misura(entrante)
+        val altezzaUscente = altezzaIniziale
+        // altezze fisse per tutta l'animazione
+        uscente.layoutParams = uscente.layoutParams.apply { height = altezzaUscente }
+        entrante.layoutParams = entrante.layoutParams.apply { height = altezzaFinale }
+        contenitore.clipToOutline = true
+        contenitore.outlineProvider = object : android.view.ViewOutlineProvider() {
+            override fun getOutline(v: View, outline: android.graphics.Outline) {
+                outline.setRoundRect(0, 0, v.width, v.height, dialog.context.dp(24).toFloat())
+            }
+        }
         val parametri = contenitore.layoutParams
         parametri.height = altezzaIniziale
         contenitore.layoutParams = parametri
-        val alphaUscente = uscente.alpha
-        entrante.alpha = 0f
+        entrante.visibility = View.VISIBLE
+        entrante.translationY = -altezzaFinale.toFloat()
+        contenitore.bringChildToFront(entrante)
         animatore = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 380L
-            interpolator = DecelerateInterpolator()
+            duration = 420L
+            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
             addUpdateListener {
                 val f = it.animatedValue as Float
                 parametri.height = (altezzaIniziale + (altezzaFinale - altezzaIniziale) * f).toInt()
                 contenitore.layoutParams = parametri
-                // la vista che esce sparisce nella prima metà, quella che entra compare nella seconda
-                uscente.alpha = alphaUscente * (1f - f * 2f).coerceIn(0f, 1f)
-                entrante.alpha = ((f - .35f) / .65f).coerceIn(0f, 1f)
+                entrante.translationY = -altezzaFinale * (1f - f)
             }
             addListener(object : android.animation.AnimatorListenerAdapter() {
                 private var annullata = false
-                override fun onAnimationCancel(animation: android.animation.Animator) { annullata = true }
-                override fun onAnimationEnd(animation: android.animation.Animator) {
-                    if (annullata) return
+                private fun ripristina() {
                     uscente.visibility = View.GONE
-                    uscente.alpha = 1f
-                    entrante.alpha = 1f
+                    uscente.translationY = 0f
+                    entrante.translationY = 0f
+                    uscente.layoutParams = uscente.layoutParams.apply { height = ViewGroup.LayoutParams.WRAP_CONTENT }
+                    entrante.layoutParams = entrante.layoutParams.apply { height = ViewGroup.LayoutParams.WRAP_CONTENT }
                     parametri.height = ViewGroup.LayoutParams.WRAP_CONTENT
                     contenitore.layoutParams = parametri
                 }
+                override fun onAnimationCancel(animation: android.animation.Animator) { annullata = true; ripristina() }
+                override fun onAnimationEnd(animation: android.animation.Animator) { if (!annullata) ripristina() }
             })
             start()
         }
