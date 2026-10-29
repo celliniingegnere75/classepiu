@@ -198,6 +198,7 @@ class GeolocalizzazioneFragment : Fragment() {
             setOnCheckedChangeListener { _, acceso -> gestisciCambioPosizione(acceso) }
         }
         rigaPermesso.addView(interruttore)
+        rigaPermesso.setOnClickListener { interruttore?.toggle() }
         schedaDocente.addView(rigaPermesso, piena().apply { topMargin = ctx.dp(12) })
         radice.addView(schedaDocente, piena())
         aggiornaPermesso()
@@ -236,14 +237,11 @@ class GeolocalizzazioneFragment : Fragment() {
             pref.edit().putBoolean("posizione_docente_attiva", true).apply()
             aggiornaPermesso()
         } else {
-            // Non lasciare lo switch acceso mentre Android mostra la richiesta di permesso.
-            interruttore?.let { sw ->
-                sw.setOnCheckedChangeListener(null)
-                sw.isChecked = false
-                sw.setOnCheckedChangeListener { _, checked -> gestisciCambioPosizione(checked) }
-            }
+            // L'interruttore resta acceso mentre Android mostra la richiesta: se il permesso viene negato lo riporta
+            // spento aggiornaPermesso(), chiamato dal risultato della richiesta.
             pref.edit().putBoolean("posizione_docente_attiva", false).apply()
-            aggiornaPermesso()
+            statoPermesso?.text = "in attesa del permesso Android…"
+            statoPermesso?.setTextColor(0xFF777777.toInt())
             richiestaPosizione.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
         }
     }
