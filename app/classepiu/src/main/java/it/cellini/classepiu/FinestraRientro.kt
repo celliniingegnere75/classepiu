@@ -173,11 +173,11 @@ object FinestraRientro {
                 setColor(azzurro)
                 cornerRadius = activity.dp(22).toFloat()
             }
-            setPadding(activity.dp(18), activity.dp(8), activity.dp(20), activity.dp(8))
+            setPadding(activity.dp(8), activity.dp(4), activity.dp(8), activity.dp(4))
             minimumWidth = activity.dp(128)
             minimumHeight = activity.dp(44)
             addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(activity.dp(30), activity.dp(27)).apply { rightMargin = activity.dp(18); bottomMargin = activity.dp(2) })
+                LinearLayout.LayoutParams(activity.dp(30), activity.dp(27)).apply { rightMargin = activity.dp(10); bottomMargin = activity.dp(2) })
             // "firma" e "rapida" allineate a sinistra, una sopra l'altra e più vicine tra loro
             addView(TextView(activity).apply {
                 text = "firma\nrapida"; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
@@ -207,8 +207,8 @@ object FinestraRientro {
         val rigaPulsanti = LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER
-            addView(firmaRapida, LinearLayout.LayoutParams(-2, -2))
-            addView(nonFirmo, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(10) })
+            addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(126), activity.dp(52)))
+            addView(nonFirmo, LinearLayout.LayoutParams(activity.dp(126), activity.dp(52)).apply { leftMargin = activity.dp(18) })
             visibility = View.GONE
         }
         val chiaveNonFirmo = "non_firmo_${java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
