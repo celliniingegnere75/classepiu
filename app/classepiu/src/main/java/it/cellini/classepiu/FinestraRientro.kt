@@ -224,7 +224,7 @@ object FinestraRientro {
             setPadding(activity.dp(8), activity.dp(6), activity.dp(8), activity.dp(6))
             // Pulsante secondario rosa, con le due righe centrate.
             background = GradientDrawable().apply {
-                setColor(0xFFFCE4EC.toInt())
+                setColor(0xFFFFF7FA.toInt())
                 cornerRadius = activity.dp(22).toFloat()
                 setStroke(activity.dp(1), 0xFFF48FB1.toInt())
             }
