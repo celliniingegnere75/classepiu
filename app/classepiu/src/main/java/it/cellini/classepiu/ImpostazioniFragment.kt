@@ -562,7 +562,7 @@ class ImpostazioniFragment : Fragment() {
             override fun afterTextChanged(s: android.text.Editable?) { imp.firmaArgomento = s?.toString().orEmpty() }
         })
         colonna.addView(TextView(ctx).apply {
-            text = "L'argomento viene salvato automaticamente sul dispositivo. Le preferenze saranno applicate alla firma rapida in un passaggio successivo."
+            text = "La firma rapida usa questi valori: educazione civica firma con la materia educazione civica della classe, l'argomento finisce nel registro. Con copresenza o sostegno attivi la firma rapida non firma: per ora quelle ore si firmano dal registro web."
             textSize = 12f
             setTextColor(grigio)
         }, piena().apply { topMargin = ctx.dp(12) })

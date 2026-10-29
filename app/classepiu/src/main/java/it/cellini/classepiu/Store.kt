@@ -105,9 +105,6 @@ class Impostazioni(ctx: Context) {
     var firmaSostegno: Boolean
         get() = p.getBoolean("firma_sostegno", false)
         set(v) = p.edit().putBoolean("firma_sostegno", v).apply()
-    var firmaMateria: String
-        get() = p.getString("firma_materia", "") ?: ""
-        set(v) = p.edit().putString("firma_materia", v).apply()
     var firmaArgomento: String
         get() = p.getString("firma_argomento", "") ?: ""
         set(v) = p.edit().putString("firma_argomento", v).apply()

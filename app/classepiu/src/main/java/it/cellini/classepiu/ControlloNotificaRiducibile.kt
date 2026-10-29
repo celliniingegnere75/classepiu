@@ -7,7 +7,6 @@ import android.graphics.drawable.GradientDrawable
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
-import android.view.WindowManager
 import android.view.animation.DecelerateInterpolator
 
 /**
@@ -19,18 +18,18 @@ class ControlloNotificaRiducibile(
     private val contenutoCompleto: View,
     private val contenutoCompatto: View,
     private val frecciaRiduci: View,
-    private val frecciaEspandi: View
+    private val frecciaEspandi: View,
+    private val chiudi: View
 ) {
     private val prefs = dialog.context.getSharedPreferences("classepiu_notifica", 0)
     private var inizioX = 0f
     private var inizioY = 0f
+    private var animatore: ValueAnimator? = null
 
     init {
         stilePulsante(frecciaRiduci, true)
         stilePulsante(frecciaEspandi, false)
-        (frecciaRiduci.parent as? ViewGroup)?.let { intestazione ->
-            if (intestazione.childCount > 2) stilePulsante(intestazione.getChildAt(2), true, chiusura = true)
-        }
+        stilePulsante(chiudi, true, chiusura = true)
 
         frecciaRiduci.setOnClickListener { mostraCompatta() }
         frecciaEspandi.setOnClickListener { mostraCompleta() }
@@ -46,7 +45,6 @@ class ControlloNotificaRiducibile(
                     val dx = event.rawX - inizioX
                     val dy = event.rawY - inizioY
                     if (dx > dialog.context.dp(72) && dx > kotlin.math.abs(dy) * 1.25f) {
-                        prefs.edit().putBoolean("chiusa", true).apply()
                         v.animate()
                             .translationX(v.width.toFloat().coerceAtLeast(dialog.context.dp(120).toFloat()))
                             .alpha(0f)
@@ -94,78 +92,79 @@ class ControlloNotificaRiducibile(
     }
 
     private fun mostraCompatta() {
-        prefs.edit().putBoolean("ridotta", true).putBoolean("chiusa", false).apply()
+        prefs.edit().putBoolean("ridotta", true).apply()
         animaCambioStato(compatta = true)
         dialog.window?.setDimAmount(.08f)
     }
 
     private fun mostraCompleta() {
-        prefs.edit().putBoolean("ridotta", false).putBoolean("chiusa", false).apply()
+        prefs.edit().putBoolean("ridotta", false).apply()
         animaCambioStato(compatta = false)
         dialog.window?.setDimAmount(.28f)
     }
 
     private fun impostaCompatta() {
         contenutoCompleto.visibility = View.GONE
-        contenutoCompleto.alpha = 1f
-        contenutoCompleto.translationY = 0f
         contenutoCompatto.visibility = View.VISIBLE
         contenutoCompatto.alpha = 1f
-        contenutoCompatto.translationY = 0f
-        dialog.window?.setLayout(
-            dialog.context.resources.displayMetrics.widthPixels * 92 / 100,
-            WindowManager.LayoutParams.WRAP_CONTENT
-        )
     }
 
     private fun impostaCompleta() {
         contenutoCompatto.visibility = View.GONE
-        contenutoCompatto.alpha = 1f
-        contenutoCompatto.translationY = 0f
         contenutoCompleto.visibility = View.VISIBLE
         contenutoCompleto.alpha = 1f
-        contenutoCompleto.translationY = 0f
-        dialog.window?.setLayout(
-            dialog.context.resources.displayMetrics.widthPixels * 88 / 100,
-            WindowManager.LayoutParams.WRAP_CONTENT
-        )
     }
 
     /**
-     * Anima esplicitamente la sostituzione dei due contenuti con una transizione Android.
-     * L'animazione riguarda la vista, non dipende dal fatto che il Dialog accetti di animare
-     * la propria altezza: così il passaggio resta visibile anche se la finestra si ridimensiona subito.
+     * Passaggio animato tra le due viste: l'altezza del contenitore scende (o sale) un fotogramma alla volta mentre
+     * una vista sfuma e l'altra compare. La finestra del Dialog è WRAP_CONTENT e segue l'altezza a ogni fotogramma;
+     * una Transition sulle viste non bastava, perché la finestra cambiava misura di colpo e tagliava l'animazione.
      */
     private fun animaCambioStato(compatta: Boolean) {
-        val window = dialog.window ?: return
-        val contenitore = (contenutoCompleto.parent as? ViewGroup)
-        val larghezza = dialog.context.resources.displayMetrics.widthPixels * (if (compatta) 92 else 88) / 100
+        val contenitore = contenutoCompleto.parent as? ViewGroup
         val uscente = if (compatta) contenutoCompleto else contenutoCompatto
         val entrante = if (compatta) contenutoCompatto else contenutoCompleto
-
-        if (!dialog.isShowing || contenitore == null) {
+        animatore?.cancel()
+        if (!dialog.isShowing || contenitore == null || contenitore.width == 0) {
             if (compatta) impostaCompatta() else impostaCompleta()
             return
         }
-
-        // AutoTransition anima fade e cambiamento dei limiti durante la variazione di visibilità.
-        val transizione = android.transition.AutoTransition().apply {
-            duration = 320L
-            interpolator = DecelerateInterpolator()
-        }
-        android.transition.TransitionManager.beginDelayedTransition(contenitore, transizione)
-        uscente.visibility = View.GONE
+        val altezzaIniziale = contenitore.height
         entrante.visibility = View.VISIBLE
-        entrante.alpha = 1f
-        entrante.translationY = 0f
-
-        // Lascia WRAP_CONTENT al Dialog: l'altezza finale viene ricalcolata dal layout Android.
-        window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
-        contenitore.requestLayout()
-        contenitore.post {
-            if (dialog.isShowing) {
-                window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
+        entrante.measure(
+            View.MeasureSpec.makeMeasureSpec(contenitore.width, View.MeasureSpec.EXACTLY),
+            View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED)
+        )
+        val altezzaFinale = entrante.measuredHeight
+        val parametri = contenitore.layoutParams
+        parametri.height = altezzaIniziale
+        contenitore.layoutParams = parametri
+        val alphaUscente = uscente.alpha
+        entrante.alpha = 0f
+        animatore = ValueAnimator.ofFloat(0f, 1f).apply {
+            duration = 380L
+            interpolator = DecelerateInterpolator()
+            addUpdateListener {
+                val f = it.animatedValue as Float
+                parametri.height = (altezzaIniziale + (altezzaFinale - altezzaIniziale) * f).toInt()
+                contenitore.layoutParams = parametri
+                // la vista che esce sparisce nella prima metà, quella che entra compare nella seconda
+                uscente.alpha = alphaUscente * (1f - f * 2f).coerceIn(0f, 1f)
+                entrante.alpha = ((f - .35f) / .65f).coerceIn(0f, 1f)
             }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                private var annullata = false
+                override fun onAnimationCancel(animation: android.animation.Animator) { annullata = true }
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (annullata) return
+                    uscente.visibility = View.GONE
+                    uscente.alpha = 1f
+                    entrante.alpha = 1f
+                    parametri.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                    contenitore.layoutParams = parametri
+                }
+            })
+            start()
         }
     }
 }

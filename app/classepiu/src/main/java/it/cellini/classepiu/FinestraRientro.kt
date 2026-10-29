@@ -51,6 +51,8 @@ object FinestraRientro {
             }
             clipToOutline = true
         }
+        val frecciaSu = TextView(activity)
+        val chiudi = TextView(activity)
         val intestazione = FrameLayout(activity).apply {
             setBackgroundColor(azzurro)
             setPadding(0, activity.dp(10), 0, activity.dp(10))
@@ -59,7 +61,7 @@ object FinestraRientro {
                 adjustViewBounds = true
             }, FrameLayout.LayoutParams(activity.dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             // Freccia stilizzata per ridurre la notifica a una striscia.
-            val frecciaSu = TextView(activity).apply {
+            frecciaSu.apply {
                 text = "⌃"
                 textSize = 29f
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -79,7 +81,7 @@ object FinestraRientro {
                 topMargin = activity.dp(4)
             })
             // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
-            addView(TextView(activity).apply {
+            addView(chiudi.apply {
                 text = "×"
                 textSize = 30f
                 typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
@@ -250,7 +252,7 @@ object FinestraRientro {
             rigaPulsanti.visibility = View.INVISIBLE
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
-        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(32); bottomMargin = activity.dp(2) })
+        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
         verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
@@ -355,7 +357,7 @@ object FinestraRientro {
         contenitore.scaleX = .92f
         contenitore.scaleY = .92f
         contenitore.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).start()
-        ControlloNotificaRiducibile(d, radice, sintesi, intestazione.getChildAt(1), frecciaGiu)
+        ControlloNotificaRiducibile(d, radice, sintesi, frecciaSu, frecciaGiu, chiudi)
         handler.postDelayed({
             if (dialog === d) {
                 contenitore.animate().alpha(0f).scaleX(.96f).scaleY(.96f).setDuration(220).withEndAction {
@@ -430,7 +432,8 @@ object FinestraRientro {
 
     /**
      * Firma rapida dell'ora in corso, costruita da zero come una firma nuova: classe da "le mie classi", materia da
-     * subjects/list, data e ora dall'orario, tipologia "Lezione" e argomento vuoto (PUT lessons/sigs).
+     * subjects/list (o educazione civica), data e ora dall'orario, tipologia "Lezione" e argomento dalla scheda "firma"
+     * delle opzioni (registro web, FIRMA_INSERT).
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
@@ -445,7 +448,13 @@ object FinestraRientro {
             .append("data $data, ora ${lezione.ora}, classe ${lezione.classe}, materia ${lezione.materia}\n\n")
         Thread {
             val esito = runCatching {
-                val client = Impostazioni(activity).client().also { it.login() }
+                val imp = Impostazioni(activity)
+                // copresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
+                // credenziali del secondo docente): finché non c'è una firma vera da copiare non si manda niente
+                check(!imp.firmaCopresenza && !imp.firmaSostegno) { "non firmata: copresenza/sostegno dal registro web" }
+                val civica = imp.firmaTipo.equals("Educazione civica", ignoreCase = true)
+                log.append("tipologia ${imp.firmaTipo}, argomento \"${imp.firmaArgomento.trim()}\"\n")
+                val client = imp.client().also { it.login() }
                 val mioId = client.idDocente()
                 log.append("docente $mioId\n")
                 val (codiceClassi, classiGrezze) = client.classiGrezze(false)
@@ -461,7 +470,9 @@ object FinestraRientro {
                     "${lezione.classe} non è tra le tue classi"
                 }
                 val parti = classe.chiave.split("|", limit = 3)
-                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log, nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome)
+                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log,
+                    nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome,
+                    educazioneCivica = civica, argomento = imp.firmaArgomento)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
@@ -478,8 +489,8 @@ object FinestraRientro {
                         (pulsante.parent as? View)?.visibility = View.INVISIBLE
                     },
                     onFailure = {
-                        // mostra soltanto l’esito della firma
-                        etichetta.text = "firma non riuscita"
+                        // mostra soltanto l’esito della firma; per copresenza/sostegno anche il perché
+                        etichetta.text = if (it.message.orEmpty().contains("copresenza")) it.message else "firma non riuscita"
                         etichetta.setTextColor(0xFFD32F2F.toInt())
                         pulsante.isEnabled = true
                         pulsante.alpha = 1f

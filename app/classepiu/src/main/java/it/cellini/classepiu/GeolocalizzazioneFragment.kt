@@ -44,6 +44,28 @@ class GeolocalizzazioneFragment : Fragment() {
         ctx.getSharedPreferences("classepiu_geolocalizzazione", android.content.Context.MODE_PRIVATE)
             .edit().putBoolean("posizione_docente_attiva", concessa).apply()
         aggiornaPermesso()
+        // negato due volte: Android non mostra più la richiesta, il permesso si dà dalle impostazioni dell'app
+        if (!concessa && !shouldShowRequestPermissionRationale(Manifest.permission.ACCESS_FINE_LOCATION)) {
+            Toast.makeText(ctx, "Permesso posizione negato: attivalo da Autorizzazioni > Posizione.", Toast.LENGTH_LONG).show()
+            runCatching {
+                startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", ctx.packageName, null)))
+            }
+        }
+    }
+
+    companion object {
+        /**
+         * Da usare in ogni funzione futura che legge la posizione: vera solo se l'interruttore "posizione del docente"
+         * è acceso e Android ha dato il permesso. Interruttore spento = nessuna funzione di posizione attiva.
+         */
+        fun posizioneAttiva(ctx: android.content.Context): Boolean {
+            val acceso = ctx.getSharedPreferences("classepiu_geolocalizzazione", android.content.Context.MODE_PRIVATE)
+                .getBoolean("posizione_docente_attiva", false)
+            return acceso && (
+                ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+                    ContextCompat.checkSelfPermission(ctx, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+                )
+        }
     }
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
@@ -61,7 +83,7 @@ class GeolocalizzazioneFragment : Fragment() {
             setTextColor(nero)
         }, piena())
         radice.addView(TextView(ctx).apply {
-            text = "Configura la posizione dell'istituto e scegli se consentire a ClassePiù di accedere alla posizione del docente."
+            text = "Configura la posizione dell'istituto e scegli se consentire a classePiù di accedere alla posizione del docente."
             textSize = 14f
             setTextColor(0xFF777777.toInt())
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = ctx.dp(8); bottomMargin = ctx.dp(18) })
@@ -122,6 +144,7 @@ class GeolocalizzazioneFragment : Fragment() {
                             pref.edit().putString("nome", query).putString("indirizzo", luogo.getAddressLine(0) ?: query)
                                 .putString("latitudine", luogo.latitude.toString())
                                 .putString("longitudine", luogo.longitude.toString()).apply()
+                            statoIstituto?.setTextColor(bluTesto)
                             statoIstituto?.text = "istituto salvato\n${luogo.getAddressLine(0) ?: query}\n${"%.5f".format(Locale.ITALY, luogo.latitude)}, ${"%.5f".format(Locale.ITALY, luogo.longitude)}"
                             Toast.makeText(ctx, "Posizione dell'istituto salvata.", Toast.LENGTH_SHORT).show()
                         },
@@ -138,7 +161,7 @@ class GeolocalizzazioneFragment : Fragment() {
         val schedaDocente = card(ctx)
         schedaDocente.addView(titolo(ctx, "posizione del docente"))
         schedaDocente.addView(TextView(ctx).apply {
-            text = "Consenti a ClassePiù di usare la posizione del dispositivo mentre l'app è in uso. Il permesso viene richiesto solo dopo aver attivato l'interruttore."
+            text = "Consenti a classePiù di usare la posizione del dispositivo mentre l'app è in uso. Il permesso viene richiesto solo dopo aver attivato l'interruttore."
             textSize = 13f
             setTextColor(0xFF777777.toInt())
         }, piena().apply { topMargin = ctx.dp(6) })
