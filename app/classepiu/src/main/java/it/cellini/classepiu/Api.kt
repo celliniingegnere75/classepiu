@@ -485,6 +485,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: mie.singleOrNull() ?: return 404 to "materia \"$materia\" non trovata tra le tue"
         val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> voce.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray } }
             ?: return 404 to "materia senza codice"
+        // Classi (C): la firma passa dal registro web come fa il sito ClasseViva, richiesta presa da una firma vera
+        // del 29/10/2026 (4ETA, 3ª ora). Per i gruppi (G) il formato web non è ancora noto: resta la via REST.
+        if (tipo == "C") return firmaWeb(classeId, sid.toString(), data, ora, log)
         val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
         log.append("tipi di lezione: ${tipi.joinToString { "${it.codice}=${it.nome}" }.ifEmpty { "non letti" }}\n\n")
         val lezione = tipi.firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
@@ -558,6 +561,37 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ultima = r
         }
         return (ultima?.codice ?: 0) to (ultima?.testo ?: "")
+    }
+
+    /**
+     * Firma di un'ora di una classe dal registro web, con gli stessi campi che manda il sito quando si firma
+     * "Lezione" senza supplenza e senza argomento (POST regclasse_io.php, action FIRMA_INSERT).
+     * Il sito risponde {"status":"OK","evento_id":...} se la firma è inserita.
+     */
+    private fun firmaWeb(classeId: String, materiaId: String, data: String, ora: Int, log: StringBuilder): Pair<Int, String> {
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
+        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=&data_start=$giorno&corsoextra=0"
+        val corpo = listOf(
+            "action" to "FIRMA_INSERT", "classe_id" to classeId, "data_start" to giorno,
+            "conteggioassenze" to "conteggiaora", "materia" to materiaId, "tipo_attivita" to "Lezione",
+            "ora_posizione" to ora.toString(), "numero_ore" to "1", "uda_firma" to "", "fase_firma" to "",
+            "id_progetto_set" to "", "peso_ora" to "1", "text_nota" to "", "output" to "", "gruppo" to "0"
+        ).joinToString("&") { (k, v) -> "$k=${enc(v)}" }
+        val web = sessioneWeb()
+        try {
+            val (codicePagina, _) = web.chiama(pagina)
+            log.append("GET regclasse.php (web) -> HTTP $codicePagina\n")
+            val (codice, testo) = web.chiama("https://web.spaggiari.eu/cvv/app/default/regclasse_io.php", corpo, referer = pagina)
+            val json = runCatching { JSONObject(testo) }.getOrNull()
+            val stato = json?.optString("status").orEmpty()
+            log.append("POST regclasse_io.php (web)\n$corpo\nrisposta HTTP $codice, status \"$stato\"")
+            // la risposta intera contiene un link di stampa con chiavi: nel log solo l'esito, o il testo se è un errore
+            log.append(if (stato == "OK") ", evento_id ${json?.opt("evento_id")}\n\n" else "\n${testo.take(1500)}\n\n")
+            return (if (stato == "OK") 200 else if (codice in 200..299) 422 else codice) to testo.take(300)
+        } finally {
+            web.close()
+        }
     }
 
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
