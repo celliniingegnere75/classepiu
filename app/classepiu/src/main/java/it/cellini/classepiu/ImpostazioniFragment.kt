@@ -593,7 +593,7 @@ class ImpostazioniFragment : Fragment() {
             gravity = Gravity.CENTER
             translationY = -ctx.dp(20).toFloat()
             addView(TextView(ctx).apply {
-                text = simbolo
+                text = if (etichetta == "lezioni") "▤" else if (etichetta == "posizione") "◎" else simbolo
                 textSize = 25f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
