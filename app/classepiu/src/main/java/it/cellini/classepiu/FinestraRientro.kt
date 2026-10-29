@@ -250,7 +250,7 @@ object FinestraRientro {
             rigaPulsanti.visibility = View.INVISIBLE
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
-        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(24); bottomMargin = activity.dp(2) })
+        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(32); bottomMargin = activity.dp(2) })
         verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
