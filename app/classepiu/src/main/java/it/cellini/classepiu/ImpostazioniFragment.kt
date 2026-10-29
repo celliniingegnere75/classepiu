@@ -591,6 +591,7 @@ class ImpostazioniFragment : Fragment() {
         val riga = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
+            translationY = -ctx.dp(20).toFloat()
             addView(TextView(ctx).apply {
                 text = simbolo
                 textSize = 25f
