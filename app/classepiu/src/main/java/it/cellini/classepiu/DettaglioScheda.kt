@@ -132,12 +132,32 @@ class DettaglioScheda : Scheda() {
             }
             r.onSuccess { file ->
                 val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.files", file)
-                val tipo = if (file.name.lowercase().endsWith(".pdf")) "application/pdf" else "*/*"
-                val vedi = Intent(Intent.ACTION_VIEW).setDataAndType(uri, tipo).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                // Il MIME generico */* impedisce ad Android di proporre spesso Word/LibreOffice.
+                // Ricaviamo il tipo dall'estensione, come fanno i visualizzatori di allegati.
+                val estensione = file.extension.lowercase(java.util.Locale.ROOT)
+                val tipi = mapOf(
+                    "pdf" to "application/pdf",
+                    "doc" to "application/msword",
+                    "dot" to "application/msword",
+                    "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    "dotx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.template",
+                    "odt" to "application/vnd.oasis.opendocument.text",
+                    "rtf" to "application/rtf",
+                    "txt" to "text/plain",
+                    "xls" to "application/vnd.ms-excel",
+                    "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    "ppt" to "application/vnd.ms-powerpoint",
+                    "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                )
+                val tipo = tipi[estensione]
+                    ?: android.webkit.MimeTypeMap.getSingleton().getMimeTypeFromExtension(estensione)
+                    ?: "*/*"
+                val vedi = Intent(Intent.ACTION_VIEW).setDataAndType(uri, tipo)
+                    .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 try {
-                    startActivity(Intent.createChooser(vedi, file.name))
+                    startActivity(Intent.createChooser(vedi, "Apri ${file.name}"))
                 } catch (e: ActivityNotFoundException) {
-                    avviso("nessuna app per aprire il file.")
+                    avviso("nessuna app compatibile con il tipo $tipo. Il file è stato scaricato nella cache dell'app.")
                 }
             }.onFailure { avviso(it.message ?: "errore") }
         }
