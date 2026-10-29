@@ -226,7 +226,7 @@ object FinestraRientro {
             background = GradientDrawable().apply {
                 setColor(0xFFFFF7FA.toInt())
                 cornerRadius = activity.dp(22).toFloat()
-                setStroke(activity.dp(1), 0xFFF48FB1.toInt())
+                setStroke(activity.dp(1), 0xFFFFD6E2.toInt())
             }
             isClickable = true
             isFocusable = true
