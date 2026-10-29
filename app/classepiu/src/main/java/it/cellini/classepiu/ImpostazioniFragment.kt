@@ -648,7 +648,7 @@ class ImpostazioniFragment : Fragment() {
         }
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
         // Il wizard è largo quanto il suo contenuto (cappello e scritta), "pulisci" prende la stessa larghezza;
-        // i due tasti stanno al centro con 20 dp di stacco e hanno la stessa altezza.
+        // i due tasti stanno al centro con 28 dp di stacco e hanno la stessa altezza.
         val altezzaTasto = ctx.dp(52)
         val tasti = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; isBaselineAligned = false
@@ -673,7 +673,7 @@ class ImpostazioniFragment : Fragment() {
             setTypeface(typeface, Typeface.BOLD)
             setPadding(ctx.dp(8), ctx.dp(2), ctx.dp(8), ctx.dp(2))
             setOnClickListener { pulisci(ctx, orario) }
-        }, LinearLayout.LayoutParams(ctx.dp(96), altezzaTasto).apply { leftMargin = ctx.dp(20) }) // più stretto del wizard
+        }, LinearLayout.LayoutParams(ctx.dp(96), altezzaTasto).apply { leftMargin = ctx.dp(28) }) // più stretto del wizard
         ore.addView(tasti, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
             topMargin = ctx.dp(14); bottomMargin = ctx.dp(6)
         })
