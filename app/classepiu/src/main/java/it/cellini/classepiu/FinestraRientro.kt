@@ -176,13 +176,16 @@ object FinestraRientro {
             setPadding(activity.dp(4), activity.dp(2), activity.dp(4), activity.dp(2))
             minimumWidth = activity.dp(128)
             minimumHeight = activity.dp(44)
-            addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(activity.dp(28), activity.dp(26)).apply { rightMargin = activity.dp(6); bottomMargin = activity.dp(1) })
+            addView(android.widget.ImageView(activity).apply {
+                setImageResource(R.drawable.ic_cappello_mago)
+                translationX = -activity.dp(10).toFloat()
+            }, LinearLayout.LayoutParams(activity.dp(28), activity.dp(26)).apply { rightMargin = activity.dp(6); bottomMargin = activity.dp(1) })
             // "firma" e "rapida" allineate a sinistra, una sopra l'altra e più vicine tra loro
             addView(TextView(activity).apply {
                 text = "firma\nrapida"; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
                 includeFontPadding = false; gravity = Gravity.START
                 setLineSpacing(0f, 0.9f)
+                translationX = -activity.dp(10).toFloat()
             })
             isClickable = true
             isFocusable = true
