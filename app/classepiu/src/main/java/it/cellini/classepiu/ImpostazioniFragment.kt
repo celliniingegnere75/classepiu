@@ -591,7 +591,7 @@ class ImpostazioniFragment : Fragment() {
         val riga = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            translationY = -ctx.dp(5).toFloat()
+            translationY = -ctx.dp(2).toFloat()
             addView(android.widget.ImageView(ctx).apply {
                 val risorsa = when (etichetta) {
                     "lezioni" -> R.drawable.ic_scheda_libro
@@ -606,6 +606,7 @@ class ImpostazioniFragment : Fragment() {
             addView(TextView(ctx).apply {
                 text = etichetta
                 textSize = 12f
+                typeface = runCatching { Typeface.createFromAsset(ctx.assets, "outfit_regular.ttf") }.getOrDefault(Typeface.DEFAULT)
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 setSingleLine(true)
@@ -623,7 +624,7 @@ class ImpostazioniFragment : Fragment() {
         (riga.findViewWithTag<View>("icona") as android.widget.ImageView).imageTintList = ColorStateList.valueOf(colore)
         (riga.findViewWithTag<View>("etichetta") as TextView).apply {
             setTextColor(colore)
-            setTypeface(null, if (attiva) Typeface.BOLD else Typeface.NORMAL)
+            typeface = runCatching { Typeface.createFromAsset(ctx.assets, if (attiva) "outfit_bold.ttf" else "outfit_regular.ttf") }.getOrDefault(if (attiva) Typeface.DEFAULT_BOLD else Typeface.DEFAULT)
         }
         scheda.findViewWithTag<View>("indicatore")?.setBackgroundColor(if (attiva) azzurro else Color.TRANSPARENT)
     }
