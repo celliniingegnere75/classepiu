@@ -498,17 +498,16 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("sigStamp", "${System.currentTimeMillis() / 1000}$id")
         // Prova in ordine le varianti più probabili e si ferma alla prima accettata (2xx). Un rifiuto (4xx) non scrive
         // niente. Ogni tentativo finisce nel log, così si vede quale forma ClasseViva accetta.
-        val varianti = listOf(
-            "PUT con sigStamp" to { body: JSONObject -> http("PUT", "$BASE/teachers/$id/lessons/sigs", body) },
-            "POST con sigStamp" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body) },
-            "POST senza sigStamp" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body.apply { remove("sigStamp") }) },
-            "PUT con sigStamp vuoto" to { body: JSONObject -> http("PUT", "$BASE/teachers/$id/lessons/sigs", body.put("sigStamp", "")) },
-        )
+        // Dall'APK ufficiale: la POST di una firma nuova vuole anche supplyType (412 "missing supplyType"). Il valore per
+        // una lezione senza supplenza non è noto: si prova in ordine, ma solo valori "nessuna supplenza". Un 4xx non scrive.
+        val varianti = listOf("noSupply", "NOSUPPLY", "N", "0").map { tipo ->
+            "POST supplyType $tipo" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body.apply { remove("sigStamp"); put("supplyType", tipo) }) }
+        }
         var ultima: Risposta? = null
         for ((nome, invia) in varianti) {
             val corpo = JSONObject(o.toString())
-            log.append("tentativo $nome\n${corpo.toString(2)}\n")
             val r = invia(corpo)
+            log.append("tentativo $nome\n${corpo.toString(2)}\n")
             log.append("risposta HTTP ${r.codice}\n${r.testo.take(3000)}\n\n")
             if (r.codice in 200..299) return r.codice to r.testo
             ultima = r
