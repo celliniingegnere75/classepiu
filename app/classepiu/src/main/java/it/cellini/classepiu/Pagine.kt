@@ -34,7 +34,7 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
             setColor(ContextCompat.getColor(ctx, R.color.grigio_barra))
             cornerRadius = ctx.dp(33).toFloat()
         }
-        setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
+        setPadding(ctx.dp(8), 0, ctx.dp(8), ctx.dp(14))
         // la barra prende i tocchi: non passano alla lista che le scorre sotto
         isClickable = true
     }
