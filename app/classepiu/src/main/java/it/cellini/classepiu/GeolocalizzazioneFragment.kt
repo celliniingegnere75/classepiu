@@ -72,7 +72,7 @@ class GeolocalizzazioneFragment : Fragment() {
         campoIstituto = EditText(ctx).apply {
             hint = "Nome o indirizzo dell'istituto"
             textSize = 15f
-            singleLine = false
+            isSingleLine = false
             minLines = 1
             maxLines = 3
             setText(pref.getString("query", "") ?: "")
