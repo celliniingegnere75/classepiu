@@ -230,7 +230,7 @@ object FinestraRientro {
             visibility = View.GONE
         }
         radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
-        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, nonFirmo, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
+        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -272,7 +272,6 @@ object FinestraRientro {
         materia: TextView,
         pulsante: View,
         rigaPulsanti: View,
-        nonFirmo: View,
         chiaveNonFirmo: String,
         preferenzeNonFirmo: android.content.SharedPreferences,
         copiaLog: TextView
@@ -374,6 +373,7 @@ object FinestraRientro {
                     onSuccess = { risultato ->
                         mostraFirmata(etichetta, materia, risultato)
                         pulsante.visibility = View.GONE
+                        (pulsante.parent as? View)?.visibility = View.GONE
                     },
                     onFailure = {
                         // solo l'esito: il motivo (risposta di classeviva) sta nel log, da copiare con "copia log"
