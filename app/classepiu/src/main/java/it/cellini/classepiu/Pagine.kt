@@ -44,7 +44,6 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
             Triple(MainActivity.TAB_HOME, "home", R.drawable.ic_nav_home),
             Triple(MainActivity.TAB_REGISTRO, "registri", R.drawable.ic_nav_registro),
             Triple(MainActivity.TAB_BACHECA, "bacheca", R.drawable.ic_nav_bacheca),
-            Triple(MainActivity.TAB_GEOLOCALIZZAZIONE, "posizione", R.drawable.ic_nav_posizione),
         ).forEach { (tab, nome, icona) ->
             val img = ImageView(ctx).apply { setImageResource(icona); imageTintList = ColorStateList.valueOf(0xFF3F3F3F.toInt()) }
             val riquadro = FrameLayout(ctx).apply { addView(img, FrameLayout.LayoutParams(ctx.dp(30), ctx.dp(30), Gravity.CENTER)) }
