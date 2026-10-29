@@ -188,8 +188,37 @@ object FinestraRientro {
             isFocusable = true
             visibility = View.GONE
         }
-        // più vicino a "ora non firmata": lo stacco sotto lo stato (21 dp) serve solo quando il pulsante non c'è
-        radice.addView(firmaRapida, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(25); bottomMargin = activity.dp(12) })
+        // Pulsante alternativo: per questa lezione indica che non si vuole firmare e nasconde entrambi i pulsanti.
+        val nonFirmo = TextView(activity).apply {
+            text = "NON firmo"
+            textSize = 13f
+            typeface = outfitBold
+            setTextColor(0xFF555555.toInt())
+            gravity = Gravity.CENTER
+            setPadding(activity.dp(14), activity.dp(10), activity.dp(14), activity.dp(10))
+            background = GradientDrawable().apply {
+                setColor(0xFFF2F4F7.toInt())
+                cornerRadius = activity.dp(22).toFloat()
+                setStroke(activity.dp(1), 0xFFD0D5DD.toInt())
+            }
+            isClickable = true
+            isFocusable = true
+        }
+        val rigaPulsanti = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(firmaRapida, LinearLayout.LayoutParams(-2, -2))
+            addView(nonFirmo, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(10) })
+            visibility = View.GONE
+        }
+        val chiaveNonFirmo = "non_firmo_${java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
+        val preferenzeNonFirmo = activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
+        nonFirmo.setOnClickListener {
+            preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
+            rigaPulsanti.visibility = View.GONE
+        }
+        // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
+        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(25); bottomMargin = activity.dp(12) })
         // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
         val copiaLog = TextView(activity).apply {
             text = "copia log"
@@ -201,7 +230,7 @@ object FinestraRientro {
             visibility = View.GONE
         }
         radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
-        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, copiaLog)
+        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, nonFirmo, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
 
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
@@ -242,6 +271,10 @@ object FinestraRientro {
         etichetta: TextView,
         materia: TextView,
         pulsante: View,
+        rigaPulsanti: View,
+        nonFirmo: View,
+        chiaveNonFirmo: String,
+        preferenzeNonFirmo: android.content.SharedPreferences,
         copiaLog: TextView
     ) {
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
@@ -264,7 +297,9 @@ object FinestraRientro {
                         if (risultato == null) {
                             etichetta.text = "ora non firmata"
                             etichetta.setTextColor(0xFFD32F2F.toInt())
-                            pulsante.visibility = View.VISIBLE
+                            if (!preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
+                                rigaPulsanti.visibility = View.VISIBLE
+                            }
                             pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante, copiaLog) }
                         } else {
                             mostraFirmata(etichetta, materia, risultato)
