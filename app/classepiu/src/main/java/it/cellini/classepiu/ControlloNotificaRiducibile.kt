@@ -45,7 +45,12 @@ class ControlloNotificaRiducibile(
                     val dy = event.rawY - inizioY
                     if (dx > dialog.context.dp(72) && dx > kotlin.math.abs(dy) * 1.25f) {
                         prefs.edit().putBoolean("chiusa", true).apply()
-                        dialog.dismiss()
+                        v.animate()
+                            .translationX(v.width.toFloat().coerceAtLeast(dialog.context.dp(120).toFloat()))
+                            .alpha(0f)
+                            .setDuration(240)
+                            .withEndAction { dialog.dismiss() }
+                            .start()
                         true
                     } else {
                         v.performClick()
