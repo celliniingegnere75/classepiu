@@ -236,10 +236,18 @@ object FinestraRientro {
             gravity = Gravity.CENTER
             addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)))
             addView(nonFirmo, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)).apply { leftMargin = activity.dp(22) })
-            visibility = View.GONE
         }
         val chiaveNonFirmo = "non_firmo_${java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
         val preferenzeNonFirmo = activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
+        // Mostra subito entrambi i tasti; la firma rapida resta disabilitata finché ClasseViva non conferma che l'ora è libera.
+        if (preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
+            rigaPulsanti.visibility = View.GONE
+        } else {
+            rigaPulsanti.visibility = View.VISIBLE
+            firmaRapida.visibility = View.VISIBLE
+            firmaRapida.isEnabled = false
+            firmaRapida.alpha = .5f
+        }
         nonFirmo.setOnClickListener {
             preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
             rigaPulsanti.visibility = View.GONE
@@ -409,11 +417,14 @@ object FinestraRientro {
                             etichetta.setTextColor(0xFFD32F2F.toInt())
                             if (!preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
                                 pulsante.visibility = View.VISIBLE
+                                pulsante.isEnabled = true
+                                pulsante.alpha = 1f
                                 rigaPulsanti.visibility = View.VISIBLE
                             }
                             pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante, copiaLog) }
                         } else {
                             mostraFirmata(etichetta, materia, risultato)
+                            rigaPulsanti.visibility = View.GONE
                         }
                     },
                     onFailure = {
