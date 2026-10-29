@@ -194,6 +194,12 @@ class StudentiScheda : Scheda() {
                 }
             }
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
+            // Se lo stato giornaliero non ha alcun codice (nessuna annotazione registrata per la giornata, come
+            // succede quando il docente firma solo le lezioni), ma le presenze per ora ci sono, lo studente
+            // risulta presente: altrimenti il nome resta grigio anche se i pallini orari sono corretti.
+            stato = stato.mapValues { (id, valore) ->
+                if (valore.valore == -1 && statiOre.containsKey(id)) valore.copy(valore = 0) else valore
+            }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             fun diagnostica(popup: String) = coppia?.let { (g, l) ->
                 (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$popup")
@@ -205,7 +211,7 @@ class StudentiScheda : Scheda() {
             // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web
             // in sola lettura. Il popup ha un campo orario per il ritardo e uno per l'uscita (distinti
             // dall'aria-label), quindi li recuperiamo entrambi anche quando capitano lo stesso giorno.
-            val ritardiSenzaOra = stato.filterValues { it.isRitardoBreve && it.ritardoBreve == null }.keys
+            val ritardiSenzaOra = stato.filterValues { it.isRitardoBreve && it.ritardoBreve == null && it.oraEntrata == null }.keys
             val usciteSenzaOra = stato.filterValues { it.isUscita && it.uscita == null }.keys
             if (ritardiSenzaOra.isEmpty() && usciteSenzaOra.isEmpty()) return@launch
             // Tenuto qui (non dentro il blocco IO) così arriva comunque nella diagnostica anche se
@@ -221,7 +227,9 @@ class StudentiScheda : Scheda() {
                     val trovato = orari[id] ?: return@mapValues valore
                     valore.copy(
                         ritardoBreve = valore.ritardoBreve ?: trovato.ritardo,
-                        uscita = valore.uscita ?: trovato.uscita
+                        uscita = valore.uscita ?: trovato.uscita,
+                        isRitardoLungo = valore.isRitardoLungo || trovato.oraEntrata != null,
+                        oraEntrata = valore.oraEntrata ?: trovato.oraEntrata
                     )
                 }
             }
@@ -298,7 +306,22 @@ class StudentiScheda : Scheda() {
                 })
             }
             cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16)))
-            if (statoStudente.isRitardoBreve) {
+            if (statoStudente.isRitardoBreve && statoStudente.isRitardoLungo) {
+                // Ritardo normale: se il popup web non ha dato l'ora di entrata, la deduciamo dalla
+                // prima ora in cui lo studente risulta presente nelle presenze per ora.
+                val entrata = statoStudente.oraEntrata ?: statiOre[s.id]
+                    ?.indexOfFirst { it == 0 || it == 1 }?.takeIf { it > 0 }?.let { (it + 1).toString() }
+                cellaOre.addView(TextView(ctx).apply {
+                    text = "R" + (entrata?.let { " ${it}ª ora" } ?: "")
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                    translationY = -dp(4).toFloat()
+                    contentDescription = "Ritardo" + (entrata?.let { ", entrato alla ${it}ª ora" } ?: "")
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            } else if (statoStudente.isRitardoBreve) {
                 cellaOre.addView(TextView(ctx).apply {
                     text = "Rb" + (statoStudente.ritardoBreve?.let { " $it" } ?: "")
                     textSize = 12f
@@ -308,7 +331,7 @@ class StudentiScheda : Scheda() {
                     setPadding(dp(8), 0, dp(4), 0)
                     translationY = -dp(4).toFloat()
                     contentDescription = "Ritardo breve" + (statoStudente.ritardoBreve?.let { " alle $it" } ?: "")
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             if (statoStudente.isUscita) {
                 cellaOre.addView(TextView(ctx).apply {
@@ -320,7 +343,7 @@ class StudentiScheda : Scheda() {
                     setPadding(dp(8), 0, dp(4), 0)
                     translationY = -dp(4).toFloat()
                     contentDescription = "Uscita anticipata" + (statoStudente.uscita?.let { " alle $it" } ?: "")
-                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(18)))
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
             cellaOre.addView(View(ctx), LinearLayout.LayoutParams(0, dp(1), 1f))
             scheda.addView(cellaOre, LinearLayout.LayoutParams(
