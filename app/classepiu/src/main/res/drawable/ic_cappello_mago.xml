@@ -1,12 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Cappello e stelle ricavati dall'immagine fornita; silhouette bianca per il pulsante azzurro. -->
+<!-- Cappello dello stregone vettorializzato dall'immagine hat3.bmp; silhouette bianca sui pulsanti azzurri. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="24dp"
-    android:height="21dp"
-    android:viewportWidth="292"
-    android:viewportHeight="256">
+    android:width="30dp"
+    android:height="25.34dp"
+    android:viewportWidth="882"
+    android:viewportHeight="745">
     <path
         android:fillColor="#FFFFFFFF"
         android:fillType="evenOdd"
-        android:pathData="M268,88 L268,91 L264,103 L251,108 L248,108 L264,114 L268,126 L268,129 L273,114 L289,108 L286,108 L274,104Z M23,87 L23,90 L19,102 L6,107 L3,107 L19,113 L23,125 L23,128 L28,113 L44,107 L41,107 L29,103Z M289,201 L221,171 L156,187 L195,172 L210,155 L158,50 L143,61 L151,42 L139,39 L107,58 L127,67 L103,68 L89,127 L98,137 L134,145 L77,145 L76,179 L97,186 L68,184 L4,227 L77,225 L194,253 L244,238Z M141,61 L142,60 L143,61 L142,62Z M58,20 L58,23 L54,35 L41,40 L38,40 L54,46 L58,58 L58,61 L63,46 L79,40 L76,40 L64,36Z M201,1 L195,23 L173,31 L192,37 L195,40 L201,61 L207,39 L229,31 L210,25 L207,22Z M218,29 L219,28 L221,28 L222,29 L221,30 L219,30Z M215,28 L216,27 L218,27 L219,28 L218,29 L216,29Z M212,27 L213,26 L215,26 L216,27 L215,28 L213,28Z M206,19 L207,20 L207,22 L206,23 L205,22 L205,20Z M205,16 L206,17 L206,19 L205,20 L204,19 L204,17Z" />
+        android:pathData="" />
 </vector>
