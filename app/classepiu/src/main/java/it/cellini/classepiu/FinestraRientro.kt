@@ -53,7 +53,7 @@ object FinestraRientro {
         }
         val intestazione = FrameLayout(activity).apply {
             setBackgroundColor(azzurro)
-            setPadding(0, activity.dp(16), 0, activity.dp(16))
+            setPadding(0, activity.dp(10), 0, activity.dp(10))
             addView(ImageView(activity).apply {
                 setImageResource(R.drawable.logo_bianco)
                 adjustViewBounds = true
@@ -139,7 +139,7 @@ object FinestraRientro {
                 gravity = Gravity.CENTER
                 addView(blocco("classe", lezione.classe, Gravity.CENTER_HORIZONTAL))
             }
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(28) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(14) })
 
         // Materia dell'ora subito sotto aula e classe: una sola riga, puntini se troppo lunga.
         radice.addView(TextView(activity).apply {
@@ -151,11 +151,11 @@ object FinestraRientro {
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(activity.dp(16), 0, activity.dp(16), 0)
-        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(8) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(4) })
 
         // Ghiera sotto la materia, ben staccata.
-        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(87), activity.dp(87)).apply {
-            topMargin = activity.dp(36)
+        radice.addView(GhieraLezione(activity, fascia, outfitBold), LinearLayout.LayoutParams(activity.dp(78), activity.dp(78)).apply {
+            topMargin = activity.dp(16)
         })
 
         // Stato firma: viene verificato realmente su ClasseViva, senza bloccare l'apertura della finestra.
@@ -165,7 +165,7 @@ object FinestraRientro {
             typeface = outfitBold
             gravity = Gravity.CENTER
             setTextColor(0xFF777777.toInt())
-            setPadding(activity.dp(8), activity.dp(8), activity.dp(8), activity.dp(12))
+            setPadding(activity.dp(6), activity.dp(4), activity.dp(6), activity.dp(6))
         }
         // materia del registro sotto "ora firmata": 40% più piccola, una sola riga, puntini se troppo lunga
         val materiaFirma = TextView(activity).apply {
@@ -182,7 +182,7 @@ object FinestraRientro {
             orientation = LinearLayout.VERTICAL
             addView(statoFirma, LinearLayout.LayoutParams(-1, -2))
             addView(materiaFirma, LinearLayout.LayoutParams(-1, -2).apply { topMargin = -activity.dp(8) })
-        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(21) })
+        }, LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = activity.dp(8) })
         // compare solo se l'ora non è firmata: firma tipologia "lezione" con argomento vuoto
         // come il tasto "compilazione magica": cappello a sinistra, "firma" sopra e "rapida" sotto; almeno 128×44 dp ma
         // l'altezza cresce col testo (a 44 fissi "rapida" veniva tagliata), cappello a 18 dp dal bordo e 18 dalla scritta, scritta a 20 dal bordo destro (disegno di Cristian)
@@ -250,7 +250,7 @@ object FinestraRientro {
             rigaPulsanti.visibility = View.INVISIBLE
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
-        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(25); bottomMargin = activity.dp(12) })
+        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(14); bottomMargin = activity.dp(6) })
         // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
         val copiaLog = TextView(activity).apply {
             text = "copia log"
@@ -261,7 +261,7 @@ object FinestraRientro {
             isClickable = true
             visibility = View.INVISIBLE
         }
-        radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
+        radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(8) })
         verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
