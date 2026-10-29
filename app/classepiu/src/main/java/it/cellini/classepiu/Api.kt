@@ -501,6 +501,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val varianti = listOf(
             "PUT con sigStamp" to { body: JSONObject -> http("PUT", "$BASE/teachers/$id/lessons/sigs", body) },
             "POST con sigStamp" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body) },
+            "POST senza sigStamp" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body.remove("sigStamp")) },
             "PUT con sigStamp vuoto" to { body: JSONObject -> http("PUT", "$BASE/teachers/$id/lessons/sigs", body.put("sigStamp", "")) },
         )
         var ultima: Risposta? = null
