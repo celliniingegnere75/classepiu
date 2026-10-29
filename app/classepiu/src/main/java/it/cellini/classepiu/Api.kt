@@ -514,10 +514,39 @@ class ClasseViva(private val utente: String, private val password: String, priva
         // niente. Ogni tentativo finisce nel log, così si vede quale forma ClasseViva accetta.
         // Dall'APK ufficiale: la POST di una firma nuova vuole anche supplyType. Il valore per una lezione senza supplenza
         // non è noto: si prova in ordine, solo valori "nessuna supplenza". Un 4xx non scrive.
-        // Dal log del 29/10: "noSupply", "NOSUPPLY" e "N" danno 404 "invalid supplyType", "0" dà 412 "missing supplyType".
-        // Quindi si provano il vuoto e null, e altri codici di "nessuna supplenza".
-        val varianti = listOf<Any>("", JSONObject.NULL, "NONE", "NO").map { tipo ->
+        // Dal log del 29/10: "noSupply", "NOSUPPLY", "N", "NONE" e "NO" danno 404 "invalid supplyType";
+        // "", null e "0" danno 412 "missing supplyType" (letti come assenti).
+        // Il valore giusto si legge dalle mie firme vere degli ultimi 30 giorni: il più frequente è quasi certamente
+        // quello di una lezione normale (senza supplenza). Il log riporta i campi di una firma e i valori trovati.
+        val fmt = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
+        val inizio = java.util.Calendar.getInstance().apply { time = fmt.parse(data)!!; add(java.util.Calendar.DAY_OF_MONTH, -30) }
+        val mine = http("GET", "$BASE/teachers/$id/lessons/mine/${fmt.format(inizio.time)}/$data")
+        log.append("GET lessons/mine ultimi 30 giorni -> HTTP ${mine.codice}\n")
+        val conteggi = LinkedHashMap<String, Int>()
+        if (mine.codice == 200) {
+            val firme = runCatching { trovaArrayGenerico(org.json.JSONTokener(mine.testo).nextValue(), listOf("lessons", "items", "data")) }.getOrNull()
+            val voci = (0 until (firme?.length() ?: 0)).mapNotNull { firme?.optJSONObject(it) }
+            log.append("firme lette: ${voci.size}\n")
+            voci.firstOrNull()?.let { f ->
+                log.append("campi di una firma: ${f.keys().asSequence().joinToString()}\n")
+                log.append("una firma intera:\n${JSONObject(f.toString()).apply { remove("studentStatus") }.toString(2).take(2500)}\n")
+            }
+            for (f in voci) for (k in f.keys()) if (k.contains("suppl", ignoreCase = true)) {
+                val v = f.opt(k)
+                val chiave = "$k=${if (v == null || v == JSONObject.NULL) "null" else v.toString()}"
+                conteggi[chiave] = (conteggi[chiave] ?: 0) + 1
+            }
+            log.append("valori di supplenza trovati: ${conteggi.entries.joinToString { "${it.key} (${it.value} volte)" }.ifEmpty { "nessuno" }}\n\n")
+        } else log.append("${mine.testo.take(500)}\n\n")
+        val letto = conteggi.entries.filter { it.key.startsWith("supplyType=") }.maxByOrNull { it.value }
+            ?.key?.removePrefix("supplyType=")?.takeIf { it.isNotEmpty() && it != "null" && it != "0" }
+        val candidati = listOfNotNull<Any>(letto?.let { it.toLongOrNull() ?: it })
+        val varianti = candidati.map { tipo ->
             "POST supplyType ${if (tipo == JSONObject.NULL) "null" else "\"$tipo\""}" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body.apply { remove("sigStamp"); put("supplyType", tipo) }) }
+        }
+        if (varianti.isEmpty()) {
+            log.append("nessun supplyType letto dalle firme: firma non inviata\n")
+            return 0 to "supplyType sconosciuto"
         }
         var ultima: Risposta? = null
         for ((nome, invia) in varianti) {
