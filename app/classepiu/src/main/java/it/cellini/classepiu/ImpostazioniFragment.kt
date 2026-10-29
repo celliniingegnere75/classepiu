@@ -39,6 +39,7 @@ class ImpostazioniFragment : Fragment() {
     private var segnaLetteRow: View? = null
     private var controlloPeriodicoRow: View? = null
     private var gruppoIntervallo: View? = null
+    private var contenitorePosizioneId: Int = View.NO_ID
 
     override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View {
         val ctx = requireContext()
@@ -188,7 +189,10 @@ class ImpostazioniFragment : Fragment() {
         val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
         val orario = vistaOrario(ctx)
         val firma = vistaFirma(ctx)
-        val contenuti = listOf(orario, funzioni, firma)
+        val posizioneId = View.generateViewId()
+        contenitorePosizioneId = posizioneId
+        val posizione = FrameLayout(ctx).apply { id = posizioneId; setBackgroundColor(Color.WHITE) }
+        val contenuti = listOf(orario, funzioni, firma, posizione)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), 0)
@@ -197,7 +201,8 @@ class ImpostazioniFragment : Fragment() {
         val pulsanti = listOf(
             schedaNavigazione(ctx, "▤", "lezioni"),
             schedaNavigazione(ctx, "✉", "email"),
-            schedaNavigazione(ctx, "✎", "firma")
+            schedaNavigazione(ctx, "✎", "firma"),
+            schedaNavigazione(ctx, "⌖", "posizione")
         )
         fun mostraScheda(indice: Int, daClasseviva: Boolean = true) {
             pulsanti.forEachIndexed { i, v -> stileNavigazione(ctx, v, i == indice) }
@@ -222,6 +227,15 @@ class ImpostazioniFragment : Fragment() {
             addView(FrameLayout(ctx).apply {
                 contenuti.forEach { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        super.onViewCreated(view, savedInstanceState)
+        if (childFragmentManager.findFragmentByTag("scheda_posizione") == null) {
+            childFragmentManager.beginTransaction()
+                .replace(contenitorePosizioneId, GeolocalizzazioneFragment(), "scheda_posizione")
+                .commit()
         }
     }
 
