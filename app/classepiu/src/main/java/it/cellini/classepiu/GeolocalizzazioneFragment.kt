@@ -199,8 +199,13 @@ class GeolocalizzazioneFragment : Fragment() {
         val ctx = context ?: return
         val pref = ctx.getSharedPreferences("classepiu_geolocalizzazione", android.content.Context.MODE_PRIVATE)
         if (!acceso) {
-            // Spegnimento immediato: disabilita l'uso interno senza revocare il permesso Android.
-            pref.edit().putBoolean("posizione_docente_attiva", false).apply()
+            // Spegnimento esplicito e immediato: salva lo stato e riallinea visivamente lo switch.
+            pref.edit().putBoolean("posizione_docente_attiva", false).commit()
+            interruttore?.let { sw ->
+                sw.setOnCheckedChangeListener(null)
+                sw.isChecked = false
+                sw.setOnCheckedChangeListener { _, checked -> gestisciCambioPosizione(checked) }
+            }
             aggiornaPermesso()
             return
         }
