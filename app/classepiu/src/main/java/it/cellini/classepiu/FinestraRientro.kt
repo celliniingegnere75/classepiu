@@ -58,6 +58,26 @@ object FinestraRientro {
                 setImageResource(R.drawable.logo_bianco)
                 adjustViewBounds = true
             }, FrameLayout.LayoutParams(activity.dp(120), FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            // Freccia stilizzata per ridurre la notifica a una striscia.
+            val frecciaSu = TextView(activity).apply {
+                text = "⌃"
+                textSize = 29f
+                typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+                gravity = Gravity.CENTER
+                setTextColor(Color.WHITE)
+                contentDescription = "Riduci notifica"
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(0x35FFFFFF)
+                    setStroke(activity.dp(1), 0x70FFFFFF)
+                }
+                isClickable = true
+                isFocusable = true
+            }
+            addView(frecciaSu, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.START).apply {
+                leftMargin = activity.dp(10)
+                topMargin = activity.dp(4)
+            })
             // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
             addView(TextView(activity).apply {
                 text = "×"
@@ -239,9 +259,92 @@ object FinestraRientro {
         radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
         verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
 
+        // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
+        val oraBreve = when (lezione.ora) {
+            1 -> "I° ora"; 2 -> "II° ora"; 3 -> "III° ora"; 4 -> "IV° ora"; 5 -> "V° ora"
+            6 -> "VI° ora"; 7 -> "VII° ora"; 8 -> "VIII° ora"; else -> "${lezione.ora}° ora"
+        }
+        val statoCompatto = TextView(activity).apply {
+            text = "verifica…"
+            textSize = 12.5f
+            typeface = outfitBold
+            gravity = Gravity.CENTER_VERTICAL
+            setSingleLine(true)
+            setTextColor(0xFF777777.toInt())
+        }
+        val frecciaGiu = TextView(activity).apply {
+            text = "⌄"
+            textSize = 27f
+            typeface = Typeface.create("sans-serif-medium", Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            setTextColor(0xFF333333.toInt())
+            contentDescription = "Espandi notifica"
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xFFEAF5FB.toInt())
+                setStroke(activity.dp(1), 0xFFB7DCEE.toInt())
+            }
+            isClickable = true
+            isFocusable = true
+        }
+        val sintesi = LinearLayout(activity).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(activity.dp(9), activity.dp(8), activity.dp(14), activity.dp(8))
+            background = GradientDrawable().apply {
+                setColor(Color.WHITE)
+                cornerRadius = activity.dp(18).toFloat()
+                setStroke(activity.dp(1), 0xFFB7DCEE.toInt())
+            }
+            addView(frecciaGiu, LinearLayout.LayoutParams(activity.dp(34), activity.dp(34)))
+            addView(TextView(activity).apply {
+                text = oraBreve
+                textSize = 12.5f
+                typeface = outfitBold
+                setTextColor(0xFF333333.toInt())
+                setSingleLine(true)
+            }, LinearLayout.LayoutParams(-2, -2).apply { leftMargin = activity.dp(7) })
+            addView(TextView(activity).apply {
+                text = lezione.classe
+                textSize = 13f
+                typeface = outfitBold
+                setTextColor(celesteClasse)
+                setSingleLine(true)
+                ellipsize = android.text.TextUtils.TruncateAt.END
+                gravity = Gravity.CENTER_VERTICAL
+            }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = activity.dp(12); rightMargin = activity.dp(8) })
+            addView(statoCompatto, LinearLayout.LayoutParams(-2, -2))
+            visibility = View.GONE
+        }
+        statoFirma.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val testo = s?.toString().orEmpty().lowercase(java.util.Locale.ROOT)
+                when {
+                    testo.contains("firmata") -> {
+                        statoCompatto.text = "firmato"
+                        statoCompatto.setTextColor(0xFF16803C.toInt())
+                    }
+                    testo.contains("non firmata") || testo.contains("non riuscita") -> {
+                        statoCompatto.text = "senza firma"
+                        statoCompatto.setTextColor(0xFFD32F2F.toInt())
+                    }
+                    else -> {
+                        statoCompatto.text = "verifica…"
+                        statoCompatto.setTextColor(0xFF777777.toInt())
+                    }
+                }
+            }
+            override fun afterTextChanged(s: android.text.Editable?) {}
+        })
+        val contenitore = FrameLayout(activity).apply {
+            addView(radice, FrameLayout.LayoutParams(-1, -2))
+            addView(sintesi, FrameLayout.LayoutParams(-1, -2))
+        }
+
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        d.setContentView(radice)
+        d.setContentView(contenitore)
         d.setCancelable(false)
         d.window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)
@@ -254,13 +357,14 @@ object FinestraRientro {
         d.show()
         d.window?.setBackgroundDrawableResource(android.R.color.transparent)
         d.window?.setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
-        radice.alpha = 0f
-        radice.scaleX = .92f
-        radice.scaleY = .92f
-        radice.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).start()
+        contenitore.alpha = 0f
+        contenitore.scaleX = .92f
+        contenitore.scaleY = .92f
+        contenitore.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).start()
+        ControlloNotificaRiducibile(d, radice, sintesi, intestazione.getChildAt(1), frecciaGiu)
         handler.postDelayed({
             if (dialog === d) {
-                radice.animate().alpha(0f).scaleX(.96f).scaleY(.96f).setDuration(220).withEndAction {
+                contenitore.animate().alpha(0f).scaleX(.96f).scaleY(.96f).setDuration(220).withEndAction {
                     runCatching { d.dismiss() }
                     if (dialog === d) dialog = null
                 }.start()
