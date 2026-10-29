@@ -470,7 +470,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * I campi sono quelli delle firme vere lette da lessons/mine, più evtNumH che classeviva chiede (412 "missing evtNumH").
      * In [log] finiscono le risposte e la richiesta mandata (mai password o token), da copiare se qualcosa va storto.
      */
-    fun firmaRapida(tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder()): Pair<Int, String> {
+    fun firmaRapida(tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder(), nomeClasse: String = ""): Pair<Int, String> {
         assicuraLogin()
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
         log.append("GET subjects/list/$tipo/$classeId -> HTTP ${m.codice}\n${m.testo.take(2000)}\n\n")
@@ -485,9 +485,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
             ?: mie.singleOrNull() ?: return 404 to "materia \"$materia\" non trovata tra le tue"
         val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k -> voce.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray } }
             ?: return 404 to "materia senza codice"
-        // Classi (C): la firma passa dal registro web come fa il sito ClasseViva, richiesta presa da una firma vera
-        // del 29/10/2026 (4ETA, 3ª ora). Per i gruppi (G) il formato web non è ancora noto: resta la via REST.
-        if (tipo == "C") return firmaWeb(classeId, sid.toString(), data, ora, log)
+        // La firma passa dal registro web come fa il sito ClasseViva, richieste prese da firme vere del 29/10/2026:
+        // classe intera (C, 4ETA 3ª ora) e gruppo di classe articolata (G, 5EA_AUA 1ª ora).
+        // La via REST (POST lessons/sigs) resta solo per altri tipi: chiede un supplyType di cui non si conosce il valore.
+        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log)
+        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log)
         val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
         log.append("tipi di lezione: ${tipi.joinToString { "${it.codice}=${it.nome}" }.ifEmpty { "non letti" }}\n\n")
         val lezione = tipi.firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
@@ -566,17 +568,19 @@ class ClasseViva(private val utente: String, private val password: String, priva
     /**
      * Firma di un'ora di una classe dal registro web, con gli stessi campi che manda il sito quando si firma
      * "Lezione" senza supplenza e senza argomento (POST regclasse_io.php, action FIRMA_INSERT).
+     * Classe intera: [classeId] numerico e gruppo=0. Gruppo di classe articolata: [gruppo] è la sigla (es. 5EA_AUA),
+     * che il sito manda come classe_id insieme a gruppo=1, e la pagina del registro si apre con gruppo_id.
      * Il sito risponde {"status":"OK","evento_id":...} se la firma è inserita.
      */
-    private fun firmaWeb(classeId: String, materiaId: String, data: String, ora: Int, log: StringBuilder): Pair<Int, String> {
+    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
-        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=&data_start=$giorno&corsoextra=0"
+        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=${enc(gruppo)}&data_start=$giorno&corsoextra=0"
         val corpo = listOf(
-            "action" to "FIRMA_INSERT", "classe_id" to classeId, "data_start" to giorno,
+            "action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno,
             "conteggioassenze" to "conteggiaora", "materia" to materiaId, "tipo_attivita" to "Lezione",
             "ora_posizione" to ora.toString(), "numero_ore" to "1", "uda_firma" to "", "fase_firma" to "",
-            "id_progetto_set" to "", "peso_ora" to "1", "text_nota" to "", "output" to "", "gruppo" to "0"
+            "id_progetto_set" to "", "peso_ora" to "1", "text_nota" to "", "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
         ).joinToString("&") { (k, v) -> "$k=${enc(v)}" }
         val web = sessioneWeb()
         try {

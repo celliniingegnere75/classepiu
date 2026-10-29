@@ -319,7 +319,7 @@ object FinestraRientro {
                     "${lezione.classe} non è tra le tue classi"
                 }
                 val parti = classe.chiave.split("|", limit = 3)
-                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log)
+                val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log, nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
