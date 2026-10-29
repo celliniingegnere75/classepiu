@@ -195,6 +195,12 @@ class StudentiScheda : Scheda() {
                 }
             }
             val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
+            // Se lo stato giornaliero non ha alcun codice (nessuna annotazione registrata per la giornata, come
+            // succede quando il docente firma solo le lezioni), ma le presenze per ora ci sono, lo studente
+            // risulta presente: altrimenti il nome resta grigio anche se i pallini orari sono corretti.
+            stato = stato.mapValues { (id, valore) ->
+                if (valore.valore == -1 && statiOre.containsKey(id)) valore.copy(valore = 0) else valore
+            }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             val diagnostica = coppia?.let { (g, l) ->
                 val popup = if (debugOrari.isEmpty()) "" else "\n\nPOPUP WEB ORARIO RITARDO/USCITA\n$debugOrari"
