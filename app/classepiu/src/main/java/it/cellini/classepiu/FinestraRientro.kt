@@ -177,7 +177,7 @@ object FinestraRientro {
             minimumWidth = activity.dp(128)
             minimumHeight = activity.dp(44)
             addView(android.widget.ImageView(activity).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(activity.dp(20), activity.dp(20)).apply { rightMargin = activity.dp(18); bottomMargin = activity.dp(2) })
+                LinearLayout.LayoutParams(activity.dp(30), activity.dp(27)).apply { rightMargin = activity.dp(18); bottomMargin = activity.dp(2) })
             // "firma" e "rapida" allineate a sinistra, una sopra l'altra e più vicine tra loro
             addView(TextView(activity).apply {
                 text = "firma\nrapida"; textSize = 14.3f; typeface = outfitBold; setTextColor(Color.WHITE)
