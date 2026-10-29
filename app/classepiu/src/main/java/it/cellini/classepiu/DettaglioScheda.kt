@@ -133,6 +133,7 @@ class DettaglioScheda : Scheda() {
             r.onSuccess { file ->
                 val uri = FileProvider.getUriForFile(requireContext(), "${requireContext().packageName}.files", file)
                 // Il MIME generico */* impedisce ad Android di proporre spesso Word/LibreOffice.
+                // La mappa esplicita mantiene il riconoscimento corretto anche sui telefoni con MimeTypeMap incompleta.
                 // Ricaviamo il tipo dall'estensione, come fanno i visualizzatori di allegati.
                 val estensione = file.extension.lowercase(java.util.Locale.ROOT)
                 val tipi = mapOf(
