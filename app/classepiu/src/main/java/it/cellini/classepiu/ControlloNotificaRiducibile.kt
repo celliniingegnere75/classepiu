@@ -24,12 +24,10 @@ class ControlloNotificaRiducibile(
     private val prefs = dialog.context.getSharedPreferences("classepiu_notifica", 0)
     private var inizioX = 0f
     private var inizioY = 0f
-    private var animazioneAltezza: ValueAnimator? = null
 
     init {
         stilePulsante(frecciaRiduci, true)
         stilePulsante(frecciaEspandi, false)
-        // La X è il terzo elemento dell'intestazione: logo, freccia, X.
         (frecciaRiduci.parent as? ViewGroup)?.let { intestazione ->
             if (intestazione.childCount > 2) stilePulsante(intestazione.getChildAt(2), true, chiusura = true)
         }
@@ -55,21 +53,18 @@ class ControlloNotificaRiducibile(
                             .setDuration(240)
                             .withEndAction { dialog.dismiss() }
                             .start()
-                        true
                     } else {
                         v.performClick()
-                        true
                     }
+                    true
                 }
                 MotionEvent.ACTION_CANCEL -> true
                 else -> true
             }
         }
-        // Lo swipe funziona trascinando la superficie della finestra o la striscia compatta.
         contenutoCompleto.setOnTouchListener(swipe)
         contenutoCompatto.setOnTouchListener(swipe)
 
-        // Stato iniziale senza animazione: la finestra non deve animarsi all'apertura.
         if (prefs.getBoolean("ridotta", false)) impostaCompatta() else impostaCompleta()
     }
 
@@ -81,8 +76,7 @@ class ControlloNotificaRiducibile(
             else intArrayOf(0xFFEAF7FD.toInt(), 0xFFB9E2F5.toInt())
         ).apply {
             shape = GradientDrawable.OVAL
-            setStroke(ctx.dp(2).coerceAtLeast(1),
-                if (suAzzurro) 0xBFFFFFFF.toInt() else 0xFF69BCE8.toInt())
+            setStroke(ctx.dp(2).coerceAtLeast(1), if (suAzzurro) 0xBFFFFFFF.toInt() else 0xFF69BCE8.toInt())
         }
         view.elevation = ctx.dp(3).toFloat()
         view.minimumWidth = ctx.dp(38)
@@ -113,7 +107,11 @@ class ControlloNotificaRiducibile(
 
     private fun impostaCompatta() {
         contenutoCompleto.visibility = View.GONE
+        contenutoCompleto.alpha = 1f
+        contenutoCompleto.translationY = 0f
         contenutoCompatto.visibility = View.VISIBLE
+        contenutoCompatto.alpha = 1f
+        contenutoCompatto.translationY = 0f
         dialog.window?.setLayout(
             dialog.context.resources.displayMetrics.widthPixels * 92 / 100,
             WindowManager.LayoutParams.WRAP_CONTENT
@@ -122,7 +120,11 @@ class ControlloNotificaRiducibile(
 
     private fun impostaCompleta() {
         contenutoCompatto.visibility = View.GONE
+        contenutoCompatto.alpha = 1f
+        contenutoCompatto.translationY = 0f
         contenutoCompleto.visibility = View.VISIBLE
+        contenutoCompleto.alpha = 1f
+        contenutoCompleto.translationY = 0f
         dialog.window?.setLayout(
             dialog.context.resources.displayMetrics.widthPixels * 88 / 100,
             WindowManager.LayoutParams.WRAP_CONTENT
@@ -130,84 +132,39 @@ class ControlloNotificaRiducibile(
     }
 
     /**
-     * Anima l'altezza della finestra, non i contenuti: testi, icone e pulsanti
-     * conservano le loro dimensioni. La prima visualizzazione resta istantanea.
+     * Anima esplicitamente la sostituzione dei due contenuti con una transizione Android.
+     * L'animazione riguarda la vista, non dipende dal fatto che il Dialog accetti di animare
+     * la propria altezza: così il passaggio resta visibile anche se la finestra si ridimensiona subito.
      */
     private fun animaCambioStato(compatta: Boolean) {
         val window = dialog.window ?: return
-        val decor = window.decorView
-        val larghezza = dialog.context.resources.displayMetrics.widthPixels *
-            (if (compatta) 92 else 88) / 100
-        val altezzaSchermo = dialog.context.resources.displayMetrics.heightPixels
+        val contenitore = (contenutoCompleto.parent as? ViewGroup)
+        val larghezza = dialog.context.resources.displayMetrics.widthPixels * (if (compatta) 92 else 88) / 100
+        val uscente = if (compatta) contenutoCompleto else contenutoCompatto
+        val entrante = if (compatta) contenutoCompatto else contenutoCompleto
 
-        animazioneAltezza?.cancel()
-
-        val altezzaIniziale = decor.height
-        if (altezzaIniziale <= 0 || !dialog.isShowing) {
+        if (!dialog.isShowing || contenitore == null) {
             if (compatta) impostaCompatta() else impostaCompleta()
             return
         }
 
-        // Blocca subito la finestra all'altezza corrente: se resta WRAP_CONTENT,
-        // Android la ridimensiona appena cambia la visibilità e l'animazione non si vede.
-        window.setLayout(larghezza, altezzaIniziale)
-
-        val uscente = if (compatta) contenutoCompleto else contenutoCompatto
-        val entrante = if (compatta) contenutoCompatto else contenutoCompleto
-
-        // Animazione sui contenuti stessi: resta visibile anche sui dispositivi in cui
-        // Android ridimensiona il Dialog in un solo frame ignorando l'animazione d'altezza.
-        entrante.animate().cancel()
-        uscente.animate().cancel()
-        entrante.alpha = 0f
-        entrante.translationY = if (compatta) -dialog.context.dp(8).toFloat() else dialog.context.dp(8).toFloat()
+        // AutoTransition anima fade e cambiamento dei limiti durante la variazione di visibilità.
+        val transizione = android.transition.AutoTransition().apply {
+            duration = 320L
+            interpolator = DecelerateInterpolator()
+        }
+        android.transition.TransitionManager.beginDelayedTransition(contenitore, transizione)
+        uscente.visibility = View.GONE
         entrante.visibility = View.VISIBLE
-        entrante.animate()
-            .alpha(1f)
-            .translationY(0f)
-            .setDuration(260L)
-            .setInterpolator(DecelerateInterpolator())
-            .start()
-        uscente.animate()
-            .alpha(0f)
-            .translationY(if (compatta) dialog.context.dp(8).toFloat() else -dialog.context.dp(8).toFloat())
-            .setDuration(150L)
-            .withEndAction {
-                uscente.visibility = View.GONE
-                uscente.alpha = 1f
-                uscente.translationY = 0f
-            }
-            .start()
+        entrante.alpha = 1f
+        entrante.translationY = 0f
 
-        decor.post {
-            if (!dialog.isShowing) return@post
-
-            decor.measure(
-                View.MeasureSpec.makeMeasureSpec(larghezza, View.MeasureSpec.EXACTLY),
-                View.MeasureSpec.makeMeasureSpec(altezzaSchermo, View.MeasureSpec.AT_MOST)
-            )
-            val altezzaFinale = decor.measuredHeight.coerceAtLeast(1)
-            if (altezzaFinale == altezzaIniziale) {
+        // Lascia WRAP_CONTENT al Dialog: l'altezza finale viene ricalcolata dal layout Android.
+        window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
+        contenitore.requestLayout()
+        contenitore.post {
+            if (dialog.isShowing) {
                 window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
-                return@post
-            }
-
-            animazioneAltezza = ValueAnimator.ofInt(altezzaIniziale, altezzaFinale).apply {
-                duration = if (compatta) 350L else 250L
-                interpolator = DecelerateInterpolator()
-                addUpdateListener { animator ->
-                    if (dialog.isShowing) {
-                        window.setLayout(larghezza, animator.animatedValue as Int)
-                    }
-                }
-                addListener(object : android.animation.AnimatorListenerAdapter() {
-                    override fun onAnimationEnd(animation: android.animation.Animator) {
-                        if (dialog.isShowing) {
-                            window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
-                        }
-                    }
-                })
-                start()
             }
         }
     }
