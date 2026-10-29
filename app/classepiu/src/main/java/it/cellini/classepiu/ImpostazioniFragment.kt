@@ -592,13 +592,17 @@ class ImpostazioniFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             translationY = -ctx.dp(20).toFloat()
-            addView(TextView(ctx).apply {
-                text = if (etichetta == "lezioni") "▤" else if (etichetta == "posizione") "◎" else simbolo
-                textSize = 25f
-                gravity = Gravity.CENTER
-                includeFontPadding = false
+            addView(android.widget.ImageView(ctx).apply {
+                val risorsa = when (etichetta) {
+                    "lezioni" -> R.drawable.ic_scheda_libro
+                    "posizione" -> R.drawable.ic_scheda_mondo
+                    else -> R.drawable.ic_nav_impostazioni
+                }
+                setImageResource(risorsa)
+                imageTintList = ColorStateList.valueOf(0xFF858D95.toInt())
+                scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
                 tag = "icona"
-            }, LinearLayout.LayoutParams(ctx.dp(36), ctx.dp(32)))
+            }, LinearLayout.LayoutParams(ctx.dp(30), ctx.dp(32)))
             addView(TextView(ctx).apply {
                 text = etichetta
                 textSize = 12f
@@ -616,7 +620,7 @@ class ImpostazioniFragment : Fragment() {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
         val colore = if (attiva) azzurro else 0xFF858D95.toInt()
         val riga = scheda.getChildAt(0) as LinearLayout
-        (riga.findViewWithTag<View>("icona") as TextView).setTextColor(colore)
+        (riga.findViewWithTag<View>("icona") as android.widget.ImageView).imageTintList = ColorStateList.valueOf(colore)
         (riga.findViewWithTag<View>("etichetta") as TextView).apply {
             setTextColor(colore)
             setTypeface(null, if (attiva) Typeface.BOLD else Typeface.NORMAL)
