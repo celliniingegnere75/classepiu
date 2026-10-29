@@ -34,7 +34,7 @@ import java.io.File
 
 /**
  * Registro: elenco delle classi letto direttamente da ClasseViva (senza aprire il sito).
- * Due schede: "Le mie classi" e "Tutte le classi".
+ * Due schede: "I miei registri" e "Tutti i registri".
  */
 class RegistroFragment : Fragment() {
 
@@ -94,8 +94,8 @@ class RegistroFragment : Fragment() {
             setPadding(ctx.dp(8), 0, ctx.dp(8), 0)
             setOnClickListener { cambiaScheda(prima) }
         }
-        schedaMie = scheda("le mie classi", true)
-        schedaTutte = scheda("tutte le classi", false)
+        schedaMie = scheda("i miei registri", true)
+        schedaTutte = scheda("tutti i registri", false)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             addView(schedaMie, LinearLayout.LayoutParams(0, ctx.dp(44), 1f))
@@ -257,7 +257,7 @@ class RegistroFragment : Fragment() {
             setPadding(ctx.dp(20), ctx.dp(12), ctx.dp(20), ctx.dp(12))
         }
         MaterialAlertDialogBuilder(ctx)
-            .setTitle(if (mie) "risposta: le mie classi" else "risposta: tutte le classi")
+            .setTitle(if (mie) "risposta: i miei registri" else "risposta: tutti i registri")
             .setView(ScrollView(ctx).apply { addView(t) })
             .setPositiveButton("copia") { _, _ ->
                 val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
