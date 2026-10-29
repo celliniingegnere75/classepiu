@@ -211,7 +211,7 @@ class ImpostazioniFragment : Fragment() {
             v.isClickable = true
             v.isFocusable = true
             v.setOnClickListener { mostraScheda(i) }
-            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(64), 1f))
+            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(68), 1f))
         }
         mostraScheda(0, daClasseviva = false)
         return LinearLayout(ctx).apply {
@@ -573,17 +573,17 @@ class ImpostazioniFragment : Fragment() {
     private fun schedaNavigazione(ctx: android.content.Context, simbolo: String, etichetta: String) = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
-        setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
+        setPadding(ctx.dp(2), ctx.dp(2), ctx.dp(2), ctx.dp(12))
         val riga = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             addView(TextView(ctx).apply {
                 text = simbolo
-                textSize = 23f
+                textSize = 25f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 tag = "icona"
-            }, LinearLayout.LayoutParams(ctx.dp(34), ctx.dp(30)))
+            }, LinearLayout.LayoutParams(ctx.dp(36), ctx.dp(32)))
             addView(TextView(ctx).apply {
                 text = etichetta
                 textSize = 12f
