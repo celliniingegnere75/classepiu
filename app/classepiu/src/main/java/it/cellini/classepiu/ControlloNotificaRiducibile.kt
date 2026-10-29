@@ -1,11 +1,14 @@
 package it.cellini.classepiu
 
+import android.animation.ValueAnimator
 import android.app.Dialog
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 
 /**
  * Controller riutilizzabile per notifiche riducibili, con stato compatto persistente
@@ -21,12 +24,13 @@ class ControlloNotificaRiducibile(
     private val prefs = dialog.context.getSharedPreferences("classepiu_notifica", 0)
     private var inizioX = 0f
     private var inizioY = 0f
+    private var animazioneAltezza: ValueAnimator? = null
 
     init {
         stilePulsante(frecciaRiduci, true)
         stilePulsante(frecciaEspandi, false)
         // La X è il terzo elemento dell'intestazione: logo, freccia, X.
-        (frecciaRiduci.parent as? android.view.ViewGroup)?.let { intestazione ->
+        (frecciaRiduci.parent as? ViewGroup)?.let { intestazione ->
             if (intestazione.childCount > 2) stilePulsante(intestazione.getChildAt(2), true, chiusura = true)
         }
 
@@ -65,7 +69,8 @@ class ControlloNotificaRiducibile(
         contenutoCompleto.setOnTouchListener(swipe)
         contenutoCompatto.setOnTouchListener(swipe)
 
-        if (prefs.getBoolean("ridotta", false)) mostraCompatta() else mostraCompleta()
+        // Stato iniziale senza animazione: la finestra non deve animarsi all'apertura.
+        if (prefs.getBoolean("ridotta", false)) impostaCompatta() else impostaCompleta()
     }
 
     private fun stilePulsante(view: View, suAzzurro: Boolean, chiusura: Boolean = false) {
@@ -96,23 +101,92 @@ class ControlloNotificaRiducibile(
 
     private fun mostraCompatta() {
         prefs.edit().putBoolean("ridotta", true).putBoolean("chiusa", false).apply()
+        animaCambioStato(compatta = true)
+        dialog.window?.setDimAmount(.08f)
+    }
+
+    private fun mostraCompleta() {
+        prefs.edit().putBoolean("ridotta", false).putBoolean("chiusa", false).apply()
+        animaCambioStato(compatta = false)
+        dialog.window?.setDimAmount(.28f)
+    }
+
+    private fun impostaCompatta() {
         contenutoCompleto.visibility = View.GONE
         contenutoCompatto.visibility = View.VISIBLE
         dialog.window?.setLayout(
             dialog.context.resources.displayMetrics.widthPixels * 92 / 100,
             WindowManager.LayoutParams.WRAP_CONTENT
         )
-        dialog.window?.setDimAmount(.08f)
     }
 
-    private fun mostraCompleta() {
-        prefs.edit().putBoolean("ridotta", false).putBoolean("chiusa", false).apply()
+    private fun impostaCompleta() {
         contenutoCompatto.visibility = View.GONE
         contenutoCompleto.visibility = View.VISIBLE
         dialog.window?.setLayout(
             dialog.context.resources.displayMetrics.widthPixels * 88 / 100,
             WindowManager.LayoutParams.WRAP_CONTENT
         )
-        dialog.window?.setDimAmount(.28f)
+    }
+
+    /**
+     * Anima l'altezza della finestra, non i contenuti: testi, icone e pulsanti
+     * conservano le loro dimensioni. La prima visualizzazione resta istantanea.
+     */
+    private fun animaCambioStato(compatta: Boolean) {
+        val window = dialog.window ?: return
+        val decor = window.decorView
+        val larghezza = dialog.context.resources.displayMetrics.widthPixels *
+            (if (compatta) 92 else 88) / 100
+        val altezzaSchermo = dialog.context.resources.displayMetrics.heightPixels
+
+        animazioneAltezza?.cancel()
+
+        val altezzaIniziale = decor.height
+        if (altezzaIniziale <= 0 || !dialog.isShowing) {
+            if (compatta) impostaCompatta() else impostaCompleta()
+            return
+        }
+
+        if (compatta) {
+            contenutoCompleto.visibility = View.GONE
+            contenutoCompatto.visibility = View.VISIBLE
+        } else {
+            contenutoCompatto.visibility = View.GONE
+            contenutoCompleto.visibility = View.VISIBLE
+        }
+
+        decor.post {
+            if (!dialog.isShowing) return@post
+
+            decor.measure(
+                View.MeasureSpec.makeMeasureSpec(larghezza, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(altezzaSchermo, View.MeasureSpec.AT_MOST)
+            )
+            val altezzaFinale = decor.measuredHeight.coerceAtLeast(1)
+            if (altezzaFinale == altezzaIniziale) {
+                window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
+                return@post
+            }
+
+            window.setLayout(larghezza, altezzaIniziale)
+            animazioneAltezza = ValueAnimator.ofInt(altezzaIniziale, altezzaFinale).apply {
+                duration = 250L
+                interpolator = DecelerateInterpolator()
+                addUpdateListener { animator ->
+                    if (dialog.isShowing) {
+                        window.setLayout(larghezza, animator.animatedValue as Int)
+                    }
+                }
+                addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        if (dialog.isShowing) {
+                            window.setLayout(larghezza, WindowManager.LayoutParams.WRAP_CONTENT)
+                        }
+                    }
+                })
+                start()
+            }
+        }
     }
 }
