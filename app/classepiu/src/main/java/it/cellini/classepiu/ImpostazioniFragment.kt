@@ -591,7 +591,7 @@ class ImpostazioniFragment : Fragment() {
         val riga = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
-            translationY = -ctx.dp(20).toFloat()
+            translationY = -ctx.dp(10).toFloat()
             addView(android.widget.ImageView(ctx).apply {
                 val risorsa = when (etichetta) {
                     "lezioni" -> R.drawable.ic_scheda_libro
