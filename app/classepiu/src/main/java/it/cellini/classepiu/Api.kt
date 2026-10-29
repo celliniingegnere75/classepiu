@@ -496,10 +496,23 @@ class ClasseViva(private val utente: String, private val password: String, priva
             // sigStamp = secondi unix della firma seguiti dall'id docente, come nelle firme vere
             // (es. "17931711813236598" = 1793171181, cioè 28/10/2026 07:06:21 UTC, + docente 3236598); 412 "missing sigStamp" se manca
             .put("sigStamp", "${System.currentTimeMillis() / 1000}$id")
-        log.append("PUT lessons/sigs\n${o.toString(2)}\n\n")
-        val r = http("PUT", "$BASE/teachers/$id/lessons/sigs", o)
-        log.append("risposta HTTP ${r.codice}\n${r.testo.take(3000)}\n\n")
-        return r.codice to r.testo
+        // Prova in ordine le varianti più probabili e si ferma alla prima accettata (2xx). Un rifiuto (4xx) non scrive
+        // niente. Ogni tentativo finisce nel log, così si vede quale forma ClasseViva accetta.
+        val varianti = listOf(
+            "PUT con sigStamp" to { body: JSONObject -> http("PUT", "$BASE/teachers/$id/lessons/sigs", body) },
+            "POST con sigStamp" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body) },
+            "PUT con sigStamp vuoto" to { body: JSONObject -> http("PUT", "$BASE/teachers/$id/lessons/sigs", body.put("sigStamp", "")) },
+        )
+        var ultima: Risposta? = null
+        for ((nome, invia) in varianti) {
+            val corpo = JSONObject(o.toString())
+            log.append("tentativo $nome\n${corpo.toString(2)}\n")
+            val r = invia(corpo)
+            log.append("risposta HTTP ${r.codice}\n${r.testo.take(3000)}\n\n")
+            if (r.codice in 200..299) return r.codice to r.testo
+            ultima = r
+        }
+        return (ultima?.codice ?: 0) to (ultima?.testo ?: "")
     }
 
     /** Cancella un voto: la risposta è l'oggetto del voto così come l'ha dato classeviva. */
