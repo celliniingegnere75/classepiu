@@ -70,8 +70,8 @@ class StudentiScheda : Scheda() {
         }
 
         val giorni = StrisciaGiorni(ctx) {
-            mostra(emptyMap(), caricamento = true)
             caricaStato()
+            ridisegna()
         }
         striscia = giorni
 
@@ -98,19 +98,48 @@ class StudentiScheda : Scheda() {
         carica()
     }
 
-    /** Carica l'elenco studenti una volta, poi le presenze del giorno. */
+    /** Ultimi dati del giorno selezionato, ridisegnati quando arriva l'elenco studenti o gli orari del popup. */
+    private data class DatiGiorno(
+        val stato: Map<String, StatoGiornaliero>,
+        val statiOre: Map<String, List<Int>>,
+        val numeroOre: Int,
+        val grezzo: Pair<Int, String>?
+    )
+    private var datiGiorno: DatiGiorno? = null
+
+    // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
+    private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
+
+    private fun fileStudenti() = java.io.File(
+        requireContext().filesDir, "studenti_${tipo.ifEmpty { "ordinary" }}_${classeId.replace(Regex("[^A-Za-z0-9_-]"), "_")}.json"
+    )
+
+    private fun ridisegna() {
+        if (studenti.isEmpty()) return
+        val d = datiGiorno
+        if (d == null) mostra(emptyMap(), caricamento = true)
+        else mostra(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
+    }
+
+    /**
+     * Mostra subito l'elenco salvato l'ultima volta (se c'è), poi scarica elenco e presenze del giorno
+     * in parallelo: prima si aspettava l'elenco e solo dopo partivano le presenze.
+     */
     private fun carica() {
-        testo("carico gli studenti…")
+        studenti = runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList())
+        if (studenti.isEmpty()) testo("carico gli studenti…") else ridisegna()
+        caricaStato()
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
-                runCatching { Impostazioni(requireContext()).client().studentiGrezzi(tipo, classeId) }
+                runCatching { client.studentiGrezzi(tipo, classeId) }
             }
             val (codice, corpo) = r.getOrElse {
-                testo("non riuscito: ${it.message}")
+                if (studenti.isEmpty()) testo("non riuscito: ${it.message}")
                 return@launch
             }
-            studenti = if (codice == 200) leggiStudenti(corpo) else emptyList()
-            if (studenti.isEmpty()) {
+            val nuovi = if (codice == 200) leggiStudenti(corpo) else emptyList()
+            if (nuovi.isEmpty()) {
+                if (studenti.isNotEmpty()) return@launch
                 testo(
                     if (codice == 200) "risposta ricevuta ma nessuno studente riconosciuto."
                     else "classeviva ha risposto con un errore (http $codice).",
@@ -119,13 +148,17 @@ class StudentiScheda : Scheda() {
                 )
                 return@launch
             }
-            mostra(emptyMap(), caricamento = true)
-            caricaStato()
+            withContext(Dispatchers.IO) { runCatching { fileStudenti().writeText(corpo) } }
+            if (nuovi != studenti) {
+                studenti = nuovi
+                ridisegna()
+            }
         }
     }
 
     private fun caricaStato() {
         lavoro?.cancel()
+        datiGiorno = null
         val giorno = formatoApi.format(selezionato.time)
         lavoro = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
@@ -133,14 +166,8 @@ class StudentiScheda : Scheda() {
                     // Le due letture sono indipendenti: eseguirle in parallelo evita di sommare
                     // i tempi di attesa delle due richieste HTTP.
                     coroutineScope {
-                        val giornaliero = async {
-                            Impostazioni(requireContext().applicationContext).client()
-                                .statoGrezzo(tipo, classeId, giorno)
-                        }
-                        val lezioni = async {
-                            Impostazioni(requireContext().applicationContext).client()
-                                .lezioniClasseGrezze(tipo, classeId, giorno)
-                        }
+                        val giornaliero = async { client.statoGrezzo(tipo, classeId, giorno) }
+                        val lezioni = async { client.lezioniClasseGrezze(tipo, classeId, giorno) }
                         giornaliero.await() to lezioni.await()
                     }
                 }
@@ -166,39 +193,41 @@ class StudentiScheda : Scheda() {
                     }
                 }
             }
+            val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
+            val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
+            fun diagnostica(popup: String) = coppia?.let { (g, l) ->
+                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$popup")
+            }
+            // Presenze e pallini si vedono subito; gli orari di Rb/U dal registro web arrivano dopo.
+            datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(""))
+            ridisegna()
+
             // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web
             // in sola lettura. Il popup ha un campo orario per il ritardo e uno per l'uscita (distinti
             // dall'aria-label), quindi li recuperiamo entrambi anche quando capitano lo stesso giorno.
             val ritardiSenzaOra = stato.filterValues { it.isRitardoBreve && it.ritardoBreve == null }.keys
             val usciteSenzaOra = stato.filterValues { it.isUscita && it.uscita == null }.keys
+            if (ritardiSenzaOra.isEmpty() && usciteSenzaOra.isEmpty()) return@launch
             // Tenuto qui (non dentro il blocco IO) così arriva comunque nella diagnostica anche se
             // la lettura fallisce o non trova niente: serve per vedere l'HTML grezzo del popup web.
             val debugOrari = StringBuilder()
-            if (ritardiSenzaOra.isNotEmpty() || usciteSenzaOra.isNotEmpty()) {
-                val orari = withContext(Dispatchers.IO) {
-                    runCatching {
-                        Impostazioni(requireContext()).client().orariEventoWeb(
-                            classeId, giorno, ritardiSenzaOra, usciteSenzaOra, debugOrari
-                        )
-                    }.getOrDefault(emptyMap())
-                }
-                if (orari.isNotEmpty()) {
-                    stato = stato.mapValues { (id, valore) ->
-                        val trovato = orari[id] ?: return@mapValues valore
-                        valore.copy(
-                            ritardoBreve = valore.ritardoBreve ?: trovato.ritardo,
-                            uscita = valore.uscita ?: trovato.uscita
-                        )
-                    }
+            val orari = withContext(Dispatchers.IO) {
+                runCatching {
+                    client.orariEventoWeb(classeId, giorno, ritardiSenzaOra, usciteSenzaOra, debugOrari)
+                }.getOrDefault(emptyMap())
+            }
+            if (orari.isNotEmpty()) {
+                stato = stato.mapValues { (id, valore) ->
+                    val trovato = orari[id] ?: return@mapValues valore
+                    valore.copy(
+                        ritardoBreve = valore.ritardoBreve ?: trovato.ritardo,
+                        uscita = valore.uscita ?: trovato.uscita
+                    )
                 }
             }
-            val statiOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiStatiOre(t) else emptyMap() } ?: emptyMap()
-            val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
-            val diagnostica = coppia?.let { (g, l) ->
-                val popup = if (debugOrari.isEmpty()) "" else "\n\nPOPUP WEB ORARIO RITARDO/USCITA\n$debugOrari"
-                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$popup")
-            }
-            mostra(stato, statiOre = statiOre, numeroOre = numeroOre, caricamento = false, grezzo = diagnostica)
+            val popup = if (debugOrari.isEmpty()) "" else "\n\nPOPUP WEB ORARIO RITARDO/USCITA\n$debugOrari"
+            datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(popup))
+            ridisegna()
         }
     }
 

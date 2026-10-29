@@ -48,8 +48,8 @@ class ClasseVivaException(msg: String) : Exception(msg)
  */
 class ClasseViva(private val utente: String, private val password: String, private val appContext: android.content.Context? = null) {
 
-    private var token: String = ""
-    private var id: String = ""
+    @Volatile private var token: String = ""
+    @Volatile private var id: String = ""
     var ident: String = ""
         private set
     private var percorso: String = ""
@@ -65,7 +65,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val testo get() = String(corpo, Charsets.UTF_8)
     }
 
-    private fun http(metodo: String, url: String, corpo: JSONObject? = null): Risposta {
+    private fun http(metodo: String, url: String, corpo: JSONObject? = null, riprova: Boolean = true): Risposta {
         // Elimina eventuali file diagnostici delle versioni precedenti.
         appContext?.filesDir?.let { dir ->
             runCatching { java.io.File(dir, "classepiu_log.txt").delete() }
@@ -85,7 +85,30 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val out = ByteArrayOutputStream()
         flusso?.use { it.copyTo(out) }
         c.disconnect()
+        // Token condiviso scaduto: un nuovo accesso e una sola nuova prova.
+        if (codice == 401 && riprova && token.isNotEmpty() && !url.endsWith("/auth/login")) {
+            synchronized(blocco) { if (condiviso?.token == token) condiviso = null }
+            login()
+            return http(metodo, url, corpo, riprova = false)
+        }
         return Risposta(codice, out.toByteArray())
+    }
+
+    /**
+     * Accede solo se serve: riusa il token dell'ultimo accesso con le stesse credenziali, così le
+     * schermate che aprono più client (es. elenco classe) non rifanno ogni volta il login.
+     */
+    private fun assicuraLogin() {
+        if (token.isNotEmpty()) return
+        synchronized(blocco) {
+            if (token.isNotEmpty()) return
+            val s = condiviso
+            if (s != null && s.utente == utente && s.password == password && System.currentTimeMillis() < s.scade) {
+                token = s.token; ident = s.ident; id = s.id
+                return
+            }
+            login()
+        }
     }
 
     fun login() {
@@ -105,10 +128,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
         token = j.getString("token")
         ident = j.getString("ident")
         id = ident.filter(Char::isDigit)
+        synchronized(blocco) {
+            condiviso = Sessione(utente, password, token, ident, id, System.currentTimeMillis() + DURATA_TOKEN)
+        }
     }
 
     fun bacheca(): List<Circolare> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val errori = mutableListOf<String>()
         for (p in listOf("students", "teachers")) { // stesso ordine di cv.py
             val r = http("GET", "$BASE/$p/$id/noticeboard")
@@ -158,7 +184,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * Restituisce il codice HTTP e il testo grezzo della risposta (letto da leggiClassi).
      */
     fun classiGrezze(tutte: Boolean): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val percorsoClassi = if (tutte) "classes/all/students1" else "classes/mine"
         val r = http("GET", "$BASE/teachers/$id/$percorsoClassi")
         return r.codice to r.testo
@@ -166,21 +192,21 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     /** Elenco degli studenti di una classe (risposta grezza, letta da leggiStudenti). */
     fun studentiGrezzi(tipo: String, classeId: String): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val r = http("GET", "$BASE/teachers/$id/students/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
         return r.codice to r.testo
     }
 
     /** Presenze della classe in un giorno (yyyyMMdd): risposta grezza, letta da leggiStato. */
     fun statoGrezzo(tipo: String, classeId: String, giorno: String): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val r = http("GET", "$BASE/teachers/$id/students/status2/${tipo.ifEmpty { "ordinary" }}/$classeId/$giorno")
         return r.codice to r.testo
     }
 
     /** Materie assegnate al docente nella classe, anche se non hanno ancora voti. */
     fun materieMie(tipo: String, classeId: String): List<String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val t = tipo.ifEmpty { "ordinary" }
         val r = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
         if (r.codice != 200) return emptyList()
@@ -199,7 +225,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * evaluations/grades2/{tipo}/{classe}/{materia}. Le risposte delle materie leggibili vengono riunite in un solo array JSON.
      */
     fun votiGrezzi(tipo: String, classeId: String): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val t = tipo.ifEmpty { "ordinary" }
         val m = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
         if (m.codice != 200) return m.codice to "subjects/list -> ${m.testo.take(300)}"
@@ -222,7 +248,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     /** Componenti e livelli di voto di ogni materia della classe (evaluations/components), risposte grezze una dopo l'altra. */
     fun componentiGrezzi(tipo: String, classeId: String): String {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val t = tipo.ifEmpty { "ordinary" }
         val m = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
         val sb = StringBuilder("subjects/list HTTP ${m.codice}\n${m.testo.take(3000)}\n")
@@ -240,14 +266,14 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     /** Note disciplinari della classe nell'intervallo (yyyyMMdd), risposta grezza. */
     fun noteGrezze(tipo: String, classeId: String, da: String, a: String): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val r = http("GET", "$BASE/teachers/$id/notes/range/${tipo.ifEmpty { "ordinary" }}/$classeId/$da/$a")
         return r.codice to r.testo
     }
 
     /** Lezioni della classe in un giorno (yyyyMMdd), con i docenti che le hanno firmate: risposta grezza. */
     fun lezioniClasseGrezze(tipo: String, classeId: String, giorno: String): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val r = http("GET", "$BASE/teachers/$id/lessons2/students/${tipo.ifEmpty { "ordinary" }}/$classeId/$giorno")
         return r.codice to r.testo
     }
@@ -305,17 +331,17 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     /** Lezioni del docente nell'intervallo (yyyyMMdd), risposta grezza. */
     fun lezioniGrezze(da: String, a: String): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val r = http("GET", "$BASE/teachers/$id/lessons/mine/$da/$a")
         return r.codice to r.testo
     }
 
     /** Identificativo del docente collegato (serve a riconoscere i propri voti tra quelli di altri insegnanti). */
-    fun idDocente(): String { if (token.isEmpty()) login(); return id }
+    fun idDocente(): String { assicuraLogin(); return id }
 
     /** Risposta di evaluations/components della prima materia del docente (livelli di voto, periodi, componenti), o null. */
     fun componentiPrimaMia(tipo: String, classeId: String): String? {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val t = tipo.ifEmpty { "ordinary" }
         val m = http("GET", "$BASE/teachers/$id/subjects/list/$t/$classeId")
         if (m.codice != 200) return null
@@ -340,7 +366,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
     fun salvaVoto(grezzo: String, valore: String, decimale: Double?, data: String, nota: String,
                   componentPos: Int? = null, displayPos: Int? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val scritta = valore.trim().ifEmpty { o.optString("displayValue") }
         // decimalValue è obbligatorio e numerico (null → HTTP 412)
         val numero = decimale?.takeIf { it.isFinite() && it >= 0.0 }
@@ -380,7 +406,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * Risposta: {"lessontypes":[{"id":1,"usrCode":"Lezione"},...]} e {"sctelessontypes":[...]} (PCTO/FSL sicurezza, orientamento). [grezzo] serve da copiare.
      */
     fun tipiLezione(): Pair<List<TipoLezione>, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         fun JSONObject.t(vararg ks: String): String {
             for (k in ks) { val v = opt(k); if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray && v.toString().isNotBlank()) return v.toString().trim() }
             return ""
@@ -409,7 +435,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     fun salvaFirma(grezzo: String, argomento: String, tipo: TipoLezione? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.firma(grezzo)
-        if (token.isEmpty()) login()
+        assicuraLogin()
         o.remove("studentStatus")
         o.put("lessonArg", argomento)
         // classeviva risponde 412 "missing evtNumH": è il numero di ore della firma, che nella lezione letta si chiama evtDuration
@@ -431,7 +457,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * In [log] finiscono le risposte e la richiesta mandata (mai password o token), da copiare se qualcosa va storto.
      */
     fun firmaRapida(tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder()): Pair<Int, String> {
-        if (token.isEmpty()) login()
+        assicuraLogin()
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
         log.append("GET subjects/list/$tipo/$classeId -> HTTP ${m.codice}\n${m.testo.take(2000)}\n\n")
         if (m.codice != 200) return m.codice to "materie non disponibili: ${m.testo.take(200)}"
@@ -488,7 +514,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     fun cancellaVoto(grezzo: String): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.voto(grezzo)
-        if (token.isEmpty()) login()
+        assicuraLogin()
         // come l'app ufficiale (GradeDeletionConfigurationRequest): la casella del voto e, per ogni studente, evtCode e studentId
         val richiesta = JSONObject()
             .put("evtDate", o.optString("evtDate"))
@@ -680,9 +706,15 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     class CircolareRitirata : Exception("circolare ritirata dalla scuola")
 
+    private class Sessione(val utente: String, val password: String, val token: String, val ident: String, val id: String, val scade: Long)
+
     companion object {
         const val BASE = "https://web.spaggiari.eu/rest/v1"
         const val RITIRATA = "no more active"
+        // Il token REST dura circa 90 minuti: lo riusiamo per 45, poi (o su HTTP 401) nuovo accesso.
+        private const val DURATA_TOKEN = 45 * 60 * 1000L
+        private val blocco = Any()
+        @Volatile private var condiviso: Sessione? = null
     }
 }
 
