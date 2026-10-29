@@ -498,10 +498,12 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("sigStamp", "${System.currentTimeMillis() / 1000}$id")
         // Prova in ordine le varianti più probabili e si ferma alla prima accettata (2xx). Un rifiuto (4xx) non scrive
         // niente. Ogni tentativo finisce nel log, così si vede quale forma ClasseViva accetta.
-        // Dall'APK ufficiale: la POST di una firma nuova vuole anche supplyType (412 "missing supplyType"). Il valore per
-        // una lezione senza supplenza non è noto: si prova in ordine, ma solo valori "nessuna supplenza". Un 4xx non scrive.
-        val varianti = listOf("noSupply", "NOSUPPLY", "N", "0").map { tipo ->
-            "POST supplyType $tipo" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body.apply { remove("sigStamp"); put("supplyType", tipo) }) }
+        // Dall'APK ufficiale: la POST di una firma nuova vuole anche supplyType. Il valore per una lezione senza supplenza
+        // non è noto: si prova in ordine, solo valori "nessuna supplenza". Un 4xx non scrive.
+        // Dal log del 29/10: "noSupply", "NOSUPPLY" e "N" danno 404 "invalid supplyType", "0" dà 412 "missing supplyType".
+        // Quindi si provano il vuoto e null, e altri codici di "nessuna supplenza".
+        val varianti = listOf<Any>("", JSONObject.NULL, "NONE", "NO").map { tipo ->
+            "POST supplyType ${if (tipo == JSONObject.NULL) "null" else "\"$tipo\""}" to { body: JSONObject -> http("POST", "$BASE/teachers/$id/lessons/sigs", body.apply { remove("sigStamp"); put("supplyType", tipo) }) }
         }
         var ultima: Risposta? = null
         for ((nome, invia) in varianti) {
