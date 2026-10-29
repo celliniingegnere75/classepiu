@@ -193,16 +193,19 @@ object FinestraRientro {
         }
         // Pulsante alternativo: per questa lezione indica che non si vuole firmare e nasconde entrambi i pulsanti.
         val nonFirmo = TextView(activity).apply {
-            text = "NON firmo"
-            textSize = 13f
+            text = "NON\\nfirmo"
+            textSize = 14.3f
             typeface = outfitBold
-            setTextColor(0xFF555555.toInt())
+            setTextColor(celesteClasse)
             gravity = Gravity.CENTER
+            includeFontPadding = false
+            setLineSpacing(0f, 0.9f)
             setPadding(activity.dp(8), activity.dp(6), activity.dp(8), activity.dp(6))
+            // Pulsante secondario: fondo bianco e bordo azzurro, più leggero del pulsante principale.
             background = GradientDrawable().apply {
-                setColor(0xFFF2F4F7.toInt())
+                setColor(Color.WHITE)
                 cornerRadius = activity.dp(22).toFloat()
-                setStroke(activity.dp(1), 0xFFD0D5DD.toInt())
+                setStroke(activity.dp(1), azzurro)
             }
             isClickable = true
             isFocusable = true
