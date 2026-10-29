@@ -250,18 +250,18 @@ object FinestraRientro {
             rigaPulsanti.visibility = View.INVISIBLE
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
-        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(14); bottomMargin = activity.dp(6) })
+        radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(14); bottomMargin = activity.dp(2) })
         // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
         val copiaLog = TextView(activity).apply {
             text = "copia log"
             textSize = 13f
             typeface = outfitRegular
             setTextColor(azzurro)
-            setPadding(activity.dp(12), activity.dp(6), activity.dp(12), activity.dp(6))
+            setPadding(activity.dp(12), 0, activity.dp(12), 0)
             isClickable = true
             visibility = View.INVISIBLE
         }
-        radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(8) })
+        radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = 0 })
         verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
