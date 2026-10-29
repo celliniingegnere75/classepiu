@@ -449,12 +449,6 @@ class ImpostazioniFragment : Fragment() {
         }
 
         colonna.addView(TextView(ctx).apply {
-            text = "Firma"
-            textSize = 22f
-            setTextColor(nero)
-            typeface = Typeface.DEFAULT_BOLD
-        }, piena())
-        colonna.addView(TextView(ctx).apply {
             text = "Imposta i valori predefiniti per la firma rapida."
             textSize = 14f
             setTextColor(grigio)
@@ -488,7 +482,7 @@ class ImpostazioniFragment : Fragment() {
         titolo("ARGOMENTO")
         val argomento = EditText(ctx).apply {
             setText(imp.firmaArgomento)
-            hint = "Frase da aggiungere alla firma"
+            hint = "argomento o nota della lezione"
             textSize = 15f
             setTextColor(nero)
             setHintTextColor(0xFF98A2B3.toInt())
@@ -514,6 +508,16 @@ class ImpostazioniFragment : Fragment() {
             textSize = 12f
             setTextColor(grigio)
         }, piena().apply { topMargin = ctx.dp(12) })
+        // Tutti i testi della scheda Firma usano Outfit, mantenendo il peso normale/grassetto.
+        val outfit = runCatching { Typeface.createFromAsset(ctx.assets, "outfit_regular.ttf") }.getOrNull()
+            ?: runCatching { androidx.core.content.res.ResourcesCompat.getFont(ctx, R.font.outfit_regular) }.getOrNull()
+        if (outfit != null) {
+            fun applicaOutfit(v: View) {
+                if (v is TextView) v.typeface = Typeface.create(outfit, if (v.typeface?.isBold == true) Typeface.BOLD else Typeface.NORMAL)
+                if (v is ViewGroup) for (i in 0 until v.childCount) applicaOutfit(v.getChildAt(i))
+            }
+            applicaOutfit(colonna)
+        }
         return ScrollView(ctx).apply {
             setBackgroundColor(sfondo)
             isFillViewport = true
