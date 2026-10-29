@@ -211,7 +211,7 @@ class ImpostazioniFragment : Fragment() {
             v.isClickable = true
             v.isFocusable = true
             v.setOnClickListener { mostraScheda(i) }
-            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(48), 1f))
+            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(64), 1f))
         }
         mostraScheda(0, daClasseviva = false)
         return LinearLayout(ctx).apply {
@@ -569,31 +569,31 @@ class ImpostazioniFragment : Fragment() {
         }
     }
 
-    /** Linguetta con icona, etichetta e indicatore inferiore. */
+    /** Linguetta con icona sopra l'etichetta e indicatore inferiore. */
     private fun schedaNavigazione(ctx: android.content.Context, simbolo: String, etichetta: String) = LinearLayout(ctx).apply {
         orientation = LinearLayout.VERTICAL
         gravity = Gravity.CENTER
-        setPadding(ctx.dp(2), 0, ctx.dp(2), 0)
+        setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
         val riga = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
+            orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
             addView(TextView(ctx).apply {
                 text = simbolo
-                textSize = 19f
+                textSize = 23f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 tag = "icona"
-            }, LinearLayout.LayoutParams(ctx.dp(22), ctx.dp(24)))
+            }, LinearLayout.LayoutParams(ctx.dp(34), ctx.dp(30)))
             addView(TextView(ctx).apply {
                 text = etichetta
-                textSize = 13f
+                textSize = 12f
                 gravity = Gravity.CENTER
                 includeFontPadding = false
                 setSingleLine(true)
                 tag = "etichetta"
-            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(24)).apply { leftMargin = ctx.dp(5) })
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(20)))
         }
-        addView(riga, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 0, 1f))
+        addView(riga, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         addView(View(ctx).apply { tag = "indicatore" }, LinearLayout.LayoutParams(ctx.dp(28), ctx.dp(3)))
     }
 
