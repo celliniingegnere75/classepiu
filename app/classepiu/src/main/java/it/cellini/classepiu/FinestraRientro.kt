@@ -176,7 +176,7 @@ object FinestraRientro {
             setSingleLine(true)
             ellipsize = android.text.TextUtils.TruncateAt.END
             setPadding(activity.dp(12), 0, activity.dp(12), 0)
-            visibility = View.GONE
+            visibility = View.INVISIBLE
         }
         radice.addView(LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
@@ -241,13 +241,13 @@ object FinestraRientro {
         val preferenzeNonFirmo = activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
         // Durante il controllo della firma entrambi i pulsanti restano nascosti.
         // Saranno mostrati solo se ClasseViva conferma che l'ora non è firmata.
-        rigaPulsanti.visibility = View.GONE
+        rigaPulsanti.visibility = View.INVISIBLE
         firmaRapida.visibility = View.GONE
         firmaRapida.isEnabled = false
         firmaRapida.alpha = .5f
         nonFirmo.setOnClickListener {
             preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
-            rigaPulsanti.visibility = View.GONE
+            rigaPulsanti.visibility = View.INVISIBLE
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(25); bottomMargin = activity.dp(12) })
@@ -259,7 +259,7 @@ object FinestraRientro {
             setTextColor(azzurro)
             setPadding(activity.dp(12), activity.dp(6), activity.dp(12), activity.dp(6))
             isClickable = true
-            visibility = View.GONE
+            visibility = View.INVISIBLE
         }
         radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(16) })
         verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
@@ -421,7 +421,7 @@ object FinestraRientro {
                             pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante, copiaLog) }
                         } else {
                             mostraFirmata(etichetta, materia, risultato)
-                            rigaPulsanti.visibility = View.GONE
+                            rigaPulsanti.visibility = View.INVISIBLE
                         }
                     },
                     onFailure = {
@@ -493,7 +493,7 @@ object FinestraRientro {
                     onSuccess = { risultato ->
                         mostraFirmata(etichetta, materia, risultato)
                         pulsante.visibility = View.GONE
-                        (pulsante.parent as? View)?.visibility = View.GONE
+                        (pulsante.parent as? View)?.visibility = View.INVISIBLE
                     },
                     onFailure = {
                         // solo l'esito: il motivo (risposta di classeviva) sta nel log, da copiare con "copia log"
