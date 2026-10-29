@@ -711,8 +711,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
     companion object {
         const val BASE = "https://web.spaggiari.eu/rest/v1"
         const val RITIRATA = "no more active"
-        // Il token REST dura circa 90 minuti: lo riusiamo per 45, poi (o su HTTP 401) nuovo accesso.
-        private const val DURATA_TOKEN = 45 * 60 * 1000L
+        // Il token REST si riusa per 2 minuti (basta per aprire una classe e cambiare giorno), poi o su HTTP 401 nuovo accesso.
+        private const val DURATA_TOKEN = 2 * 60 * 1000L
         private val blocco = Any()
         @Volatile private var condiviso: Sessione? = null
     }
