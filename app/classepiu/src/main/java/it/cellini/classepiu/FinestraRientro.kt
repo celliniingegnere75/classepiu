@@ -251,18 +251,7 @@ object FinestraRientro {
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(14); bottomMargin = activity.dp(2) })
-        // dopo una firma rapida: copia negli appunti cosa si è mandato e cosa ha risposto classeviva
-        val copiaLog = TextView(activity).apply {
-            text = "copia log"
-            textSize = 13f
-            typeface = outfitRegular
-            setTextColor(azzurro)
-            setPadding(activity.dp(12), 0, activity.dp(12), 0)
-            isClickable = true
-            visibility = View.INVISIBLE
-        }
-        radice.addView(copiaLog, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = 0 })
-        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo, copiaLog)
+        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
         val oraBreve = when (lezione.ora) {
@@ -389,8 +378,7 @@ object FinestraRientro {
         pulsante: View,
         rigaPulsanti: View,
         chiaveNonFirmo: String,
-        preferenzeNonFirmo: android.content.SharedPreferences,
-        copiaLog: TextView
+        preferenzeNonFirmo: android.content.SharedPreferences
     ) {
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
         Thread {
@@ -418,7 +406,7 @@ object FinestraRientro {
                                 pulsante.alpha = 1f
                                 rigaPulsanti.visibility = View.VISIBLE
                             }
-                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante, copiaLog) }
+                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante) }
                         } else {
                             mostraFirmata(etichetta, materia, risultato)
                             rigaPulsanti.visibility = View.INVISIBLE
@@ -446,7 +434,7 @@ object FinestraRientro {
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View, copiaLog: TextView) {
+    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
         handler.removeCallbacksAndMessages(null)
         pulsante.isEnabled = false
         pulsante.alpha = .5f
@@ -483,12 +471,6 @@ object FinestraRientro {
             log.append(esito.fold({ "esito: firmata (${it.materia})" }, { "esito: errore ${it.message}" }))
             activity.runOnUiThread {
                 if (activity.isFinishing || activity.isDestroyed || !etichetta.isAttachedToWindow) return@runOnUiThread
-                copiaLog.visibility = View.VISIBLE
-                copiaLog.setOnClickListener {
-                    activity.getSystemService(android.content.ClipboardManager::class.java)
-                        .setPrimaryClip(android.content.ClipData.newPlainText("log firma rapida", log.toString()))
-                    copiaLog.text = "log copiato"
-                }
                 esito.fold(
                     onSuccess = { risultato ->
                         mostraFirmata(etichetta, materia, risultato)
@@ -496,7 +478,7 @@ object FinestraRientro {
                         (pulsante.parent as? View)?.visibility = View.INVISIBLE
                     },
                     onFailure = {
-                        // solo l'esito: il motivo (risposta di classeviva) sta nel log, da copiare con "copia log"
+                        // mostra soltanto l’esito della firma
                         etichetta.text = "firma non riuscita"
                         etichetta.setTextColor(0xFFD32F2F.toInt())
                         pulsante.isEnabled = true
