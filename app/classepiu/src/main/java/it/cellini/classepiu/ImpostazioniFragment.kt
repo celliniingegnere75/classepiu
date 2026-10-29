@@ -464,7 +464,7 @@ class ImpostazioniFragment : Fragment() {
         // "compilazione magica" (wizard) compila classe e materia dalle firme della settimana scorsa, "pulisci" svuota.
         // Il wizard è largo quanto il suo contenuto (cappello e scritta), "pulisci" prende la stessa larghezza;
         // i due tasti stanno al centro con 20 dp di stacco e hanno la stessa altezza.
-        val altezzaTasto = ctx.dp(44)
+        val altezzaTasto = ctx.dp(52)
         val tasti = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER; isBaselineAligned = false
         }
@@ -475,10 +475,10 @@ class ImpostazioniFragment : Fragment() {
             isClickable = true; isFocusable = true
             setPadding(ctx.dp(12), 0, ctx.dp(16), 0)
             addView(android.widget.ImageView(ctx).apply { setImageResource(R.drawable.ic_cappello_mago) },
-                LinearLayout.LayoutParams(ctx.dp(20), ctx.dp(20)).apply { rightMargin = ctx.dp(5) })
+                LinearLayout.LayoutParams(ctx.dp(30), ctx.dp(27)).apply { rightMargin = ctx.dp(7) })
             // "compilazione" e "magica" su due righe con la stessa interlinea di "firma rapida"
             addView(TextView(ctx).apply {
-                text = "compilazione\nmagica"; textSize = 13f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
+                text = "compilazione\nmagica"; textSize = 14.5f; setTextColor(Color.WHITE); setTypeface(typeface, Typeface.BOLD)
                 includeFontPadding = false; gravity = Gravity.START
                 setLineSpacing(0f, 0.9f)
             })
