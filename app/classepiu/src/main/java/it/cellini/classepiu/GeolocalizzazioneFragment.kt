@@ -38,7 +38,11 @@ class GeolocalizzazioneFragment : Fragment() {
     private var statoIstituto: TextView? = null
     private var campoIstituto: EditText? = null
 
-    private val richiestaPosizione = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+    private val richiestaPosizione = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { risultati ->
+        val ctx = context ?: return@registerForActivityResult
+        val concessa = risultati.values.any { it }
+        ctx.getSharedPreferences("classepiu_geolocalizzazione", android.content.Context.MODE_PRIVATE)
+            .edit().putBoolean("posizione_docente_attiva", concessa).apply()
         aggiornaPermesso()
     }
 
@@ -146,16 +150,20 @@ class GeolocalizzazioneFragment : Fragment() {
         rigaPermesso.addView(statoPermesso, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = ctx.dp(8) })
         interruttore = Switch(ctx).apply {
             buttonTintList = null
-            isChecked = haPermesso()
+            isChecked = pref.getBoolean("posizione_docente_attiva", false) && haPermesso()
             setOnCheckedChangeListener { _, acceso ->
-                if (acceso && !haPermesso()) {
-                    richiestaPosizione.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                } else if (!acceso && haPermesso()) {
-                    isChecked = true
-                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${ctx.packageName}")))
-                    Toast.makeText(ctx, "Per revocare il permesso, disattivalo nelle autorizzazioni Android.", Toast.LENGTH_LONG).show()
+                if (acceso) {
+                    if (haPermesso()) {
+                        pref.edit().putBoolean("posizione_docente_attiva", true).apply()
+                        aggiornaPermesso()
+                    } else {
+                        richiestaPosizione.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                    }
+                } else {
+                    // Disattiva solo l'uso interno dell'app: il permesso Android resta invariato.
+                    pref.edit().putBoolean("posizione_docente_attiva", false).apply()
+                    aggiornaPermesso()
                 }
-                aggiornaPermesso()
             }
         }
         rigaPermesso.addView(interruttore)
@@ -180,18 +188,35 @@ class GeolocalizzazioneFragment : Fragment() {
     }
 
     private fun aggiornaPermesso() {
+        val ctx = context ?: return
+        val pref = ctx.getSharedPreferences("classepiu_geolocalizzazione", android.content.Context.MODE_PRIVATE)
         val consentito = haPermesso()
-        statoPermesso?.text = if (consentito) "accesso alla posizione consentito" else "accesso alla posizione non consentito"
-        statoPermesso?.setTextColor(if (consentito) 0xFF16803C.toInt() else 0xFF777777.toInt())
+        var attivo = pref.getBoolean("posizione_docente_attiva", false)
+        if (!consentito && attivo) {
+            pref.edit().putBoolean("posizione_docente_attiva", false).apply()
+            attivo = false
+        }
+        statoPermesso?.text = when {
+            attivo && consentito -> "uso interno della posizione attivo"
+            consentito -> "uso interno disattivato; permesso Android disponibile"
+            else -> "uso interno della posizione disattivato"
+        }
+        statoPermesso?.setTextColor(if (attivo && consentito) 0xFF16803C.toInt() else 0xFF777777.toInt())
         interruttore?.let { sw ->
-            if (sw.isChecked != consentito) {
+            if (sw.isChecked != (attivo && consentito)) {
                 sw.setOnCheckedChangeListener(null)
-                sw.isChecked = consentito
+                sw.isChecked = attivo && consentito
                 sw.setOnCheckedChangeListener { _, acceso ->
-                    if (acceso && !haPermesso()) richiestaPosizione.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
-                    else if (!acceso && haPermesso()) {
-                        sw.isChecked = true
-                        startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${requireContext().packageName}")))
+                    if (acceso) {
+                        if (haPermesso()) {
+                            pref.edit().putBoolean("posizione_docente_attiva", true).apply()
+                            aggiornaPermesso()
+                        } else {
+                            richiestaPosizione.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                        }
+                    } else {
+                        pref.edit().putBoolean("posizione_docente_attiva", false).apply()
+                        aggiornaPermesso()
                     }
                 }
             }
