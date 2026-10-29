@@ -71,7 +71,7 @@ class ControlloNotificaRiducibile(
             else intArrayOf(0xFFEAF7FD.toInt(), 0xFFB9E2F5.toInt())
         ).apply {
             shape = GradientDrawable.OVAL
-            setStroke(ctx.dp(1.5f).toInt().coerceAtLeast(1),
+            setStroke(ctx.dp(2).coerceAtLeast(1),
                 if (suAzzurro) 0xBFFFFFFF.toInt() else 0xFF69BCE8.toInt())
         }
         view.elevation = ctx.dp(3).toFloat()
