@@ -184,38 +184,35 @@ class ImpostazioniFragment : Fragment() {
         aggiornaOre(imp.controlloAutomatico)
         aggiornaVisibilitaControlli()
 
-        // --- due schede in alto: "orario" e "funzioni" (tutto quello che c'era)
+        // Tre schede: lezioni, email (ex funzioni) e firma.
         val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
         val orario = vistaOrario(ctx)
+        val firma = vistaFirma(ctx)
+        val contenuti = listOf(orario, funzioni, firma)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
             setPadding(ctx.dp(15), 0, ctx.dp(15), ctx.dp(16))
         }
-        val schedaFunzioni = schedaPillola(ctx, "funzioni")
-        val schedaOrario = schedaPillola(ctx, "lezioni")
-        fun mostraScheda(primaScheda: Boolean, daClasseviva: Boolean = true) {
-            stilePillola(ctx, schedaFunzioni, primaScheda)
-            stilePillola(ctx, schedaOrario, !primaScheda)
-            funzioni.visibility = if (primaScheda) View.VISIBLE else View.GONE
-            orario.visibility = if (primaScheda) View.GONE else View.VISIBLE
-            // all'apertura dell'app basta l'ultima risposta salvata: classeviva si chiede solo quando serve
-            if (!primaScheda && insegnamenti.isEmpty() && !caricamento) {
+        val pulsanti = listOf(schedaPillola(ctx, "lezioni"), schedaPillola(ctx, "email"), schedaPillola(ctx, "firma"))
+        fun mostraScheda(indice: Int, daClasseviva: Boolean = true) {
+            pulsanti.forEachIndexed { i, v -> stilePillola(ctx, v, i == indice) }
+            contenuti.forEachIndexed { i, v -> v.visibility = if (i == indice) View.VISIBLE else View.GONE }
+            if ((indice == 0 || indice == 2) && insegnamenti.isEmpty() && !caricamento) {
                 if (daClasseviva) caricaInsegnamenti(ctx, avvisa = false)
                 else runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
             }
         }
-        schedaFunzioni.setOnClickListener { mostraScheda(true) }
-        schedaOrario.setOnClickListener { mostraScheda(false) }
-        schede.addView(schedaOrario, LinearLayout.LayoutParams(0, ctx.dp(32), 1f))
-        schede.addView(schedaFunzioni, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { leftMargin = ctx.dp(6) })
-        mostraScheda(false, daClasseviva = false)
+        pulsanti.forEachIndexed { i, v ->
+            v.setOnClickListener { mostraScheda(i) }
+            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { if (i > 0) leftMargin = ctx.dp(5) })
+        }
+        mostraScheda(0, daClasseviva = false)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
             addView(schede, piena())
             addView(FrameLayout(ctx).apply {
-                addView(funzioni, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
-                addView(orario, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                contenuti.forEach { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
     }
@@ -375,6 +372,60 @@ class ImpostazioniFragment : Fragment() {
     private var rispostaClassi = ""
     private var giornoScelto = 0
     private var aggiornaOrario: () -> Unit = {}
+
+    /** Impostazioni predefinite della firma rapida, salvate localmente sul dispositivo. */
+    private fun vistaFirma(ctx: android.content.Context): View {
+        val imp = Impostazioni(ctx)
+        val colonna = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(ctx.dp(18), ctx.dp(22), ctx.dp(18), ctx.dp(18))
+            setBackgroundColor(Color.WHITE)
+        }
+        fun titolo(t: String) {
+            colonna.addView(TextView(ctx).apply {
+                text = t; textSize = 15f; setTextColor(nero); typeface = Typeface.DEFAULT_BOLD
+            }, piena().apply { topMargin = ctx.dp(14) })
+        }
+        fun scelta(testo: String, valore: () -> String, opzioni: () -> List<String>, salva: (String) -> Unit) {
+            val riga = TextView(ctx).apply {
+                textSize = 15f; setTextColor(0xFF333333.toInt())
+                setPadding(ctx.dp(12), ctx.dp(13), ctx.dp(12), ctx.dp(13))
+                background = GradientDrawable().apply { setColor(0xFFF4F4F4.toInt()); cornerRadius = ctx.dp(8).toFloat() }
+                isClickable = true; isFocusable = true
+            }
+            fun aggiorna() { riga.text = "$testo\n${valore().ifBlank { "Seleziona…" }}  ▾" }
+            aggiorna()
+            riga.setOnClickListener {
+                val voci = opzioni().distinct()
+                if (voci.isEmpty()) { messaggio("Accedi a ClasseViva e riprova."); return@setOnClickListener }
+                MaterialAlertDialogBuilder(ctx).setTitle(testo).setSingleChoiceItems(voci.toTypedArray(), voci.indexOf(valore())) { d, i ->
+                    salva(voci[i]); aggiorna(); d.dismiss()
+                }.setNegativeButton("Annulla", null).show()
+            }
+            colonna.addView(riga, piena().apply { topMargin = ctx.dp(7) })
+        }
+        titolo("Firma rapida: impostazioni predefinite")
+        scelta("Tipologia", { imp.firmaTipo }, { listOf("Lezione", "Supplenza", "Compresenza", "Sostegno") }, { imp.firmaTipo = it })
+        fun check(t: String, iniziale: Boolean, salva: (Boolean) -> Unit) {
+            val cb = androidx.appcompat.widget.SwitchCompat(ctx).apply {
+                text = t; textSize = 15f; isChecked = iniziale
+                setOnCheckedChangeListener { _, b -> salva(b) }
+            }
+            colonna.addView(cb, piena().apply { topMargin = ctx.dp(8) })
+        }
+        check("Copresenza", imp.firmaCopresenza) { imp.firmaCopresenza = it }
+        check("Sostegno", imp.firmaSostegno) { imp.firmaSostegno = it }
+        scelta("Materia del docente", { imp.firmaMateria }, {
+            if (insegnamenti.isEmpty()) runCatching { insegnamenti = leggiInsegnamenti(fileClassi(ctx).readText()) }
+            ordinari().map { it.materia }.filter { it.isNotBlank() }.distinct().sorted()
+        }, { imp.firmaMateria = it })
+        val nota = TextView(ctx).apply {
+            text = "Queste preferenze vengono conservate sul dispositivo. La classe e l'ora continuano a provenire dall'orario."
+            textSize = 12f; setTextColor(0xFF777777.toInt())
+        }
+        colonna.addView(nota, piena().apply { topMargin = ctx.dp(16) })
+        return ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(colonna) }
+    }
 
     /** Pillola delle schede, come "le mie classi" / "tutte le classi" nel registro. */
     private fun schedaPillola(ctx: android.content.Context, s: String) = TextView(ctx).apply {
