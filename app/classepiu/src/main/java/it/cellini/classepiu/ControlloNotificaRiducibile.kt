@@ -171,7 +171,7 @@ class ControlloNotificaRiducibile(
 
             window.setLayout(larghezza, altezzaIniziale)
             animazioneAltezza = ValueAnimator.ofInt(altezzaIniziale, altezzaFinale).apply {
-                duration = 250L
+                duration = if (compatta) 350L else 250L
                 interpolator = DecelerateInterpolator()
                 addUpdateListener { animator ->
                     if (dialog.isShowing) {
