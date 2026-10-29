@@ -55,7 +55,8 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
                 gravity = Gravity.CENTER
                 addView(riquadro, LinearLayout.LayoutParams(ctx.dp(54), ctx.dp(34)))
                 addView(etichetta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(2) })
-                translationY = -ctx.dp(20).toFloat()\n                setOnClickListener { scegli(tab) }
+                translationY = -ctx.dp(20).toFloat()
+                setOnClickListener { scegli(tab) }
             }
             vista.addView(voce, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f))
             etichette[tab] = etichetta
