@@ -95,6 +95,20 @@ class Impostazioni(ctx: Context) {
     var controlloAutomatico: Boolean
         get() = p.getBoolean("automatico", true)
         set(v) = p.edit().putBoolean("automatico", v).apply()
+    /** Preferenze predefinite per la firma rapida. */
+    var firmaTipo: String
+        get() = p.getString("firma_tipo", "Lezione") ?: "Lezione"
+        set(v) = p.edit().putString("firma_tipo", v).apply()
+    var firmaCopresenza: Boolean
+        get() = p.getBoolean("firma_copresenza", false)
+        set(v) = p.edit().putBoolean("firma_copresenza", v).apply()
+    var firmaSostegno: Boolean
+        get() = p.getBoolean("firma_sostegno", false)
+        set(v) = p.edit().putBoolean("firma_sostegno", v).apply()
+    var firmaMateria: String
+        get() = p.getString("firma_materia", "") ?: ""
+        set(v) = p.edit().putString("firma_materia", v).apply()
+
     /** Settimana fino a sabato nell'orario (altrimenti da lunedì a venerdì). */
     var sabato: Boolean
         get() = p.getBoolean("sabato", false)
