@@ -184,18 +184,23 @@ class ImpostazioniFragment : Fragment() {
         aggiornaOre(imp.controlloAutomatico)
         aggiornaVisibilitaControlli()
 
-        // Tre schede: lezioni, email (ex funzioni) e firma.
+        // Navigazione a linguette: icona e testo, con indicatore azzurro sulla scheda attiva.
         val funzioni = ScrollView(ctx).apply { setBackgroundColor(Color.WHITE); addView(col) }
         val orario = vistaOrario(ctx)
         val firma = vistaFirma(ctx)
         val contenuti = listOf(orario, funzioni, firma)
         val schede = LinearLayout(ctx).apply {
             orientation = LinearLayout.HORIZONTAL
-            setPadding(ctx.dp(15), 0, ctx.dp(15), ctx.dp(16))
+            setPadding(ctx.dp(12), ctx.dp(4), ctx.dp(12), 0)
+            setBackgroundColor(Color.WHITE)
         }
-        val pulsanti = listOf(schedaPillola(ctx, "lezioni"), schedaPillola(ctx, "email"), schedaPillola(ctx, "firma"))
+        val pulsanti = listOf(
+            schedaNavigazione(ctx, "▤", "lezioni"),
+            schedaNavigazione(ctx, "✉", "email"),
+            schedaNavigazione(ctx, "✎", "firma")
+        )
         fun mostraScheda(indice: Int, daClasseviva: Boolean = true) {
-            pulsanti.forEachIndexed { i, v -> stilePillola(ctx, v, i == indice) }
+            pulsanti.forEachIndexed { i, v -> stileNavigazione(ctx, v, i == indice) }
             contenuti.forEachIndexed { i, v -> v.visibility = if (i == indice) View.VISIBLE else View.GONE }
             if ((indice == 0 || indice == 2) && insegnamenti.isEmpty() && !caricamento) {
                 if (daClasseviva) caricaInsegnamenti(ctx, avvisa = false)
@@ -203,14 +208,17 @@ class ImpostazioniFragment : Fragment() {
             }
         }
         pulsanti.forEachIndexed { i, v ->
+            v.isClickable = true
+            v.isFocusable = true
             v.setOnClickListener { mostraScheda(i) }
-            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(32), 1f).apply { if (i > 0) leftMargin = ctx.dp(5) })
+            schede.addView(v, LinearLayout.LayoutParams(0, ctx.dp(48), 1f))
         }
         mostraScheda(0, daClasseviva = false)
         return LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
             addView(schede, piena())
+            addView(View(ctx).apply { setBackgroundColor(0xFFE7EDF2.toInt()) }, LinearLayout.LayoutParams(-1, ctx.dp(1)))
             addView(FrameLayout(ctx).apply {
                 contenuti.forEach { addView(it, FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)) }
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
@@ -561,15 +569,44 @@ class ImpostazioniFragment : Fragment() {
         }
     }
 
-    /** Pillola delle schede, come "le mie classi" / "tutte le classi" nel registro. */
-    private fun schedaPillola(ctx: android.content.Context, s: String) = TextView(ctx).apply {
-        text = s; textSize = 14f; gravity = Gravity.CENTER; includeFontPadding = false; setSingleLine(true)
+    /** Linguetta con icona, etichetta e indicatore inferiore. */
+    private fun schedaNavigazione(ctx: android.content.Context, simbolo: String, etichetta: String) = LinearLayout(ctx).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER
+        setPadding(ctx.dp(2), 0, ctx.dp(2), 0)
+        val riga = LinearLayout(ctx).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER
+            addView(TextView(ctx).apply {
+                text = simbolo
+                textSize = 19f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                tag = "icona"
+            }, LinearLayout.LayoutParams(ctx.dp(22), ctx.dp(24)))
+            addView(TextView(ctx).apply {
+                text = etichetta
+                textSize = 13f
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+                setSingleLine(true)
+                tag = "etichetta"
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ctx.dp(24)).apply { leftMargin = ctx.dp(5) })
+        }
+        addView(riga, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, 0, 1f))
+        addView(View(ctx).apply { tag = "indicatore" }, LinearLayout.LayoutParams(ctx.dp(28), ctx.dp(3)))
     }
 
-    private fun stilePillola(ctx: android.content.Context, v: TextView, attiva: Boolean) {
+    private fun stileNavigazione(ctx: android.content.Context, scheda: LinearLayout, attiva: Boolean) {
         val azzurro = ContextCompat.getColor(ctx, R.color.logo_sfondo)
-        v.background = GradientDrawable().apply { cornerRadius = ctx.dp(16).toFloat(); setColor(if (attiva) azzurro else 0xFFF0F0F0.toInt()) }
-        v.setTextColor(if (attiva) Color.WHITE else 0xFF333333.toInt())
+        val colore = if (attiva) azzurro else 0xFF858D95.toInt()
+        val riga = scheda.getChildAt(0) as LinearLayout
+        (riga.findViewWithTag<View>("icona") as TextView).setTextColor(colore)
+        (riga.findViewWithTag<View>("etichetta") as TextView).apply {
+            setTextColor(colore)
+            setTypeface(null, if (attiva) Typeface.BOLD else Typeface.NORMAL)
+        }
+        scheda.findViewWithTag<View>("indicatore")?.setBackgroundColor(if (attiva) azzurro else Color.TRANSPARENT)
     }
 
     /** Orario come su classeviva: giorni da lunedì a venerdì (o sabato) in alto, sotto le 8 ore; toccando un'ora si sceglie classe e materia. */
