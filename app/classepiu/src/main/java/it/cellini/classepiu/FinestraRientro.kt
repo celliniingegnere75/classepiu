@@ -297,6 +297,7 @@ object FinestraRientro {
                             etichetta.text = "ora non firmata"
                             etichetta.setTextColor(0xFFD32F2F.toInt())
                             if (!preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
+                                pulsante.visibility = View.VISIBLE
                                 rigaPulsanti.visibility = View.VISIBLE
                             }
                             pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante, copiaLog) }
