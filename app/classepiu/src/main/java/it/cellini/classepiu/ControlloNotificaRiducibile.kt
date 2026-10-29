@@ -152,13 +152,32 @@ class ControlloNotificaRiducibile(
         // Android la ridimensiona appena cambia la visibilità e l'animazione non si vede.
         window.setLayout(larghezza, altezzaIniziale)
 
-        if (compatta) {
-            contenutoCompleto.visibility = View.GONE
-            contenutoCompatto.visibility = View.VISIBLE
-        } else {
-            contenutoCompatto.visibility = View.GONE
-            contenutoCompleto.visibility = View.VISIBLE
-        }
+        val uscente = if (compatta) contenutoCompleto else contenutoCompatto
+        val entrante = if (compatta) contenutoCompatto else contenutoCompleto
+
+        // Animazione sui contenuti stessi: resta visibile anche sui dispositivi in cui
+        // Android ridimensiona il Dialog in un solo frame ignorando l'animazione d'altezza.
+        entrante.animate().cancel()
+        uscente.animate().cancel()
+        entrante.alpha = 0f
+        entrante.translationY = if (compatta) -dialog.context.dp(8).toFloat() else dialog.context.dp(8).toFloat()
+        entrante.visibility = View.VISIBLE
+        entrante.animate()
+            .alpha(1f)
+            .translationY(0f)
+            .setDuration(260L)
+            .setInterpolator(DecelerateInterpolator())
+            .start()
+        uscente.animate()
+            .alpha(0f)
+            .translationY(if (compatta) dialog.context.dp(8).toFloat() else -dialog.context.dp(8).toFloat())
+            .setDuration(150L)
+            .withEndAction {
+                uscente.visibility = View.GONE
+                uscente.alpha = 1f
+                uscente.translationY = 0f
+            }
+            .start()
 
         decor.post {
             if (!dialog.isShowing) return@post
