@@ -462,14 +462,50 @@ class ImpostazioniFragment : Fragment() {
         titolo("MODALITÀ")
         scheda(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
+            // Stessi interruttori a scorrimento della scheda Email: pillola azzurra/grigia
+            // e cursore bianco, con etichetta a sinistra.
             fun interruttore(t: String, iniziale: Boolean, salva: (Boolean) -> Unit) {
-                addView(androidx.appcompat.widget.SwitchCompat(ctx).apply {
-                    text = t
-                    textSize = 15f
-                    setTextColor(nero)
+                val larghezza = ctx.dp(52)
+                val altezza = ctx.dp(30)
+                val cursore = ctx.dp(22)
+                val margine = ctx.dp(4)
+                fun pillola(colore: Int) = GradientDrawable().apply {
+                    setColor(colore)
+                    cornerRadius = altezza / 2f
+                    setSize(larghezza, altezza)
+                }
+                val sfondo = android.graphics.drawable.StateListDrawable().apply {
+                    addState(intArrayOf(android.R.attr.state_checked), pillola(azzurro))
+                    addState(intArrayOf(), pillola(0xFFE3E3E3.toInt()))
+                }
+                val pallino = android.graphics.drawable.InsetDrawable(
+                    GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(Color.WHITE)
+                        setSize(cursore, cursore)
+                    }, margine
+                )
+                val sw = androidx.appcompat.widget.SwitchCompat(ctx, null, 0).apply {
+                    trackDrawable = sfondo
+                    thumbDrawable = pallino
+                    switchMinWidth = larghezza
+                    showText = false
+                    background = null
                     isChecked = iniziale
-                    buttonTintList = ColorStateList.valueOf(azzurro)
                     setOnCheckedChangeListener { _, checked -> salva(checked) }
+                }
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.HORIZONTAL
+                    gravity = Gravity.CENTER_VERTICAL
+                    addView(TextView(ctx).apply {
+                        text = t
+                        textSize = 16f
+                        setTextColor(nero)
+                    }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                    addView(sw, LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                    ).apply { leftMargin = ctx.dp(12) })
+                    setOnClickListener { sw.toggle() }
                 }, piena().apply { topMargin = ctx.dp(3); bottomMargin = ctx.dp(3) })
             }
             interruttore("Copresenza", imp.firmaCopresenza) { imp.firmaCopresenza = it }
