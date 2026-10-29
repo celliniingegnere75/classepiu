@@ -148,6 +148,10 @@ class ControlloNotificaRiducibile(
             return
         }
 
+        // Blocca subito la finestra all'altezza corrente: se resta WRAP_CONTENT,
+        // Android la ridimensiona appena cambia la visibilità e l'animazione non si vede.
+        window.setLayout(larghezza, altezzaIniziale)
+
         if (compatta) {
             contenutoCompleto.visibility = View.GONE
             contenutoCompatto.visibility = View.VISIBLE
@@ -169,7 +173,6 @@ class ControlloNotificaRiducibile(
                 return@post
             }
 
-            window.setLayout(larghezza, altezzaIniziale)
             animazioneAltezza = ValueAnimator.ofInt(altezzaIniziale, altezzaFinale).apply {
                 duration = if (compatta) 350L else 250L
                 interpolator = DecelerateInterpolator()
