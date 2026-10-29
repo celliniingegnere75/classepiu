@@ -122,6 +122,7 @@ class MainActivity : AppCompatActivity() {
                 .add(contenitoreId, RegistroFragment(), "t$TAB_REGISTRO")
                 .add(contenitoreId, ImpostazioniFragment(), "t$TAB_IMPOSTAZIONI")
                 .add(contenitoreId, HomeFragment(), "t$TAB_HOME")
+                .add(contenitoreId, GeolocalizzazioneFragment(), "t$TAB_GEOLOCALIZZAZIONE")
                 .commitNow()
             mostra(TAB_REGISTRO)
             Controllo.pianifica(this)
@@ -234,7 +235,7 @@ class MainActivity : AppCompatActivity() {
     fun mostra(tab: Int) {
         schedaAttiva = tab
         val t = supportFragmentManager.beginTransaction()
-        for (k in listOf(TAB_HOME, TAB_BACHECA, TAB_REGISTRO, TAB_IMPOSTAZIONI)) {
+        for (k in listOf(TAB_HOME, TAB_BACHECA, TAB_REGISTRO, TAB_IMPOSTAZIONI, TAB_GEOLOCALIZZAZIONE)) {
             val f = frammento(k) ?: continue
             if (k == tab) t.show(f) else t.hide(f)
         }
@@ -247,6 +248,7 @@ class MainActivity : AppCompatActivity() {
         const val TAB_REGISTRO = 2
         const val TAB_IMPOSTAZIONI = 3
         const val TAB_HOME = 4
+        const val TAB_GEOLOCALIZZAZIONE = 5
         const val EXTRA_REGISTRO = "apri_registro"
         const val EXTRA_SENZA_ANIMAZIONE = "senza_animazione"
     }
