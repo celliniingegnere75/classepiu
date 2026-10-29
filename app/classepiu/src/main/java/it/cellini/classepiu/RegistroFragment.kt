@@ -206,7 +206,34 @@ class RegistroFragment : Fragment() {
     private fun mostra(errore: String? = null) {
         val q = cerca.trim().lowercase()
         val base = if (mie) datiMie else datiTutte
-        val vis = base.filter { q.isEmpty() || it.nome.lowercase().contains(q) || it.descrizione.lowercase().contains(q) || it.codice.lowercase().contains(q) }
+        // In "le mie classi", prima le classi previste oggi nell'orario personale,
+        // nell'ordine della prima ora; tutte le altre restano in ordine alfabetico.
+        val ordinate = if (!mie) base else {
+            val giornoOggi = when (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)) {
+                java.util.Calendar.MONDAY -> 1
+                java.util.Calendar.TUESDAY -> 2
+                java.util.Calendar.WEDNESDAY -> 3
+                java.util.Calendar.THURSDAY -> 4
+                java.util.Calendar.FRIDAY -> 5
+                java.util.Calendar.SATURDAY -> 6
+                else -> 0
+            }
+            val prioritaOggi = if (giornoOggi in 1..6) {
+                Orario(requireContext()).lezioni()
+                    .filter { it.giorno == giornoOggi }
+                    .sortedBy { it.ora }
+                    .map { it.classe.trim().uppercase(java.util.Locale.ROOT) }
+                    .distinct()
+                    .withIndex()
+                    .associate { it.value to it.index }
+            } else emptyMap()
+            base.sortedWith(
+                compareBy<Classe> { prioritaOggi[it.nome.trim().uppercase(java.util.Locale.ROOT)] ?: Int.MAX_VALUE }
+                    .thenBy { it.nome.lowercase(java.util.Locale.ITALY) }
+                    .thenBy { it.codice.lowercase(java.util.Locale.ITALY) }
+            )
+        }
+        val vis = ordinate.filter { q.isEmpty() || it.nome.lowercase().contains(q) || it.descrizione.lowercase().contains(q) || it.codice.lowercase().contains(q) }
         adattatore.dati = vis
         adattatore.notifyDataSetChanged()
         val testo = when {
@@ -280,7 +307,7 @@ class RegistroFragment : Fragment() {
             }
 
             val appello = TextView(ctx).apply {
-                text = "appello rapido"
+                text = "appello veloce"
                 textSize = 12f
                 typeface = outfitBold
                 setTextColor(Color.WHITE)
