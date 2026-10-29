@@ -18,7 +18,6 @@ import android.widget.Button
 import android.widget.EditText
 import android.widget.LinearLayout
 import android.widget.ScrollView
-import android.widget.Switch
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,7 +32,7 @@ class GeolocalizzazioneFragment : Fragment() {
     private val bluTesto = 0xFF5598BD.toInt()
     private val nero = 0xFF222222.toInt()
     private val executor = Executors.newSingleThreadExecutor()
-    private var interruttore: Switch? = null
+    private var interruttore: androidx.appcompat.widget.SwitchCompat? = null
     private var statoPermesso: TextView? = null
     private var statoIstituto: TextView? = null
     private var campoIstituto: EditText? = null
@@ -148,8 +147,29 @@ class GeolocalizzazioneFragment : Fragment() {
         }
         statoPermesso = TextView(ctx).apply { textSize = 14f; setTextColor(nero) }
         rigaPermesso.addView(statoPermesso, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = ctx.dp(8) })
-        interruttore = Switch(ctx).apply {
-            buttonTintList = null
+        interruttore = androidx.appcompat.widget.SwitchCompat(ctx, null, 0).apply {
+            val larghezza = ctx.dp(52)
+            val altezza = ctx.dp(30)
+            val pallino = ctx.dp(22)
+            val margine = ctx.dp(4)
+            fun traccia(colore: Int) = GradientDrawable().apply {
+                setColor(colore)
+                cornerRadius = altezza / 2f
+                setSize(larghezza, altezza)
+            }
+            trackDrawable = android.graphics.drawable.StateListDrawable().apply {
+                addState(intArrayOf(android.R.attr.state_checked), traccia(azzurro))
+                addState(intArrayOf(), traccia(0xFFE3E3E3.toInt()))
+            }
+            thumbDrawable = android.graphics.drawable.InsetDrawable(
+                GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.WHITE)
+                    setSize(pallino, pallino)
+                }, margine)
+            switchMinWidth = larghezza
+            showText = false
+            background = null
             isChecked = pref.getBoolean("posizione_docente_attiva", false) && haPermesso()
             setOnCheckedChangeListener { _, acceso ->
                 if (acceso) {
