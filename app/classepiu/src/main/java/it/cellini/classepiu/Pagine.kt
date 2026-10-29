@@ -53,7 +53,7 @@ class BarraPagine(ctx: Context, scegli: (Int) -> Unit) {
             val voce = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER
-                addView(riquadro, LinearLayout.LayoutParams(ctx.dp(54), ctx.dp(34)))
+                addView(riquadro, LinearLayout.LayoutParams(ctx.dp(54), ctx.dp(30)))
                 addView(etichetta, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { topMargin = ctx.dp(2) })
                 setOnClickListener { scegli(tab) }
             }
