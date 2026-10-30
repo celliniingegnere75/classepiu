@@ -160,8 +160,17 @@ class GestoreNotificheTest {
     /** Finestra finta: tiene il suo stato e conta dove si trova. */
     private class Finta(val ora: Int, var ridotta: Boolean, val schermo: MutableList<Finta>) : GestoreNotifiche.Finestra {
         var dissolta = false
+        var differita = false // MODIFICA: permette di simulare i 400 ms dell'animazione
+        var completaDissolvenza: (() -> Unit)? = null // MODIFICA
         override fun riduci() { ridotta = true }
-        override fun dissolvi(fatto: () -> Unit) { dissolta = true; fatto() }
+        override fun dissolvi(fatto: () -> Unit) {
+            dissolta = true
+            if (differita) completaDissolvenza = fatto else fatto()
+        }
+        override fun annullaDissolvenza() { // MODIFICA
+            dissolta = false
+            completaDissolvenza = null
+        }
         override fun rimuovi() { schermo.remove(this) }
     }
 
@@ -227,6 +236,28 @@ class GestoreNotificheTest {
         assertEquals(true, quinta.dissolta)
 
         tempo.avanza(5000) // la quarta scade dopo 9,6 s dalla sua interazione
+        assertTrue(schermo.isEmpty())
+    }
+
+    // MODIFICA: un tocco durante l'animazione finale la interrompe e fa ripartire il conteggio.
+    @Test
+    fun interazioneAnnullaAncheLaDissolvenzaGiaIniziata() {
+        rientro(695 * 60)
+        val (quarta, quinta) = schermo.toList()
+        quarta.differita = true
+
+        tempo.avanza(GestoreNotifiche.DURATA_MS)
+        assertEquals(listOf(quarta), schermo)
+        assertTrue(quarta.dissolta)
+
+        gestore.interagita(quarta)
+        assertEquals(false, quarta.dissolta)
+        assertEquals(null, quarta.completaDissolvenza)
+
+        tempo.avanza(GestoreNotifiche.DURATA_MS)
+        assertTrue(quarta.dissolta)
+        assertTrue(quarta.completaDissolvenza != null)
+        quarta.completaDissolvenza?.invoke()
         assertTrue(schermo.isEmpty())
     }
 
