@@ -103,6 +103,16 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
         }
     }
 
+    /**
+     * Avvia subito la dissolvenza di tutte le notifiche aperte, comprese quelle trattenute.
+     * Usato quando l'utente tocca una zona esterna alle schede.
+     */
+    fun dissolviTutto() {
+        aperte.toList().forEach { voce ->
+            if (!voce.chiusa && !voce.dissolvenzaInCorso) dissolvi(voce)
+        }
+    }
+
     /** Ferma i timer di una finestra (es. dopo "firma rapida"): resta finché non la si chiude. */
     fun trattieni(finestra: F) {
         aperte.firstOrNull { it.finestra === finestra && !it.chiusa }?.let {

@@ -337,6 +337,21 @@ class GestoreNotificheTest {
     }
 
     @Test
+    fun toccoEsternoDissolveSubitoTutteAncheQuellaTrattenuta() {
+        rientro(695 * 60)
+        val (quarta, quinta) = schermo.toList()
+
+        gestore.trattieni(quarta)
+        assertEquals(listOf(quarta, quinta), schermo)
+
+        gestore.dissolviTutto()
+
+        assertTrue(schermo.isEmpty())
+        assertTrue(gestore.finestre.isEmpty())
+        assertEquals(0, tempo.inAttesa)
+    }
+
+    @Test
     fun firmaRapidaTrattieneSoloLaSuaNotifica() {
         rientro(695 * 60)
         val (quarta, quinta) = schermo.toList()

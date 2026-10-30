@@ -9,6 +9,7 @@ import android.graphics.RectF
 import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
@@ -113,21 +114,38 @@ object FinestraRientro {
             overScrollMode = View.OVER_SCROLL_NEVER
             addView(colonna, FrameLayout.LayoutParams(-1, -2))
         }
+        // Superficie a schermo intero: i tocchi fuori dalla colonna delle notifiche
+        // vengono intercettati qui e avviano la dissolvenza immediata di tutte le schede.
+        val superficie = FrameLayout(activity).apply {
+            isClickable = true
+            setOnTouchListener { _, event ->
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) gestore.dissolviTutto()
+                true
+            }
+            addView(
+                scorrimento,
+                FrameLayout.LayoutParams(
+                    (activity.resources.displayMetrics.widthPixels * .88f).toInt(),
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    Gravity.CENTER
+                )
+            )
+        }
         val d = Dialog(activity)
         d.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        d.setContentView(scorrimento)
+        d.setContentView(superficie)
         d.setCancelable(false)
         d.window?.apply {
             setBackgroundDrawableResource(android.R.color.transparent)
             addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
             setDimAmount(.28f)
-            setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
+            setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             setGravity(Gravity.CENTER)
         }
         dialog = d
         d.show()
         d.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        d.window?.setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
+        d.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
 
         // dalla più vecchia (in alto) alla più nuova (in basso), ognuna nello stato previsto dall'orario adesso
         gestore.rientro(piano, secondiAdesso) { n ->
