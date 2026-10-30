@@ -64,6 +64,10 @@ object FinestraRientro {
     private var superficieAttiva: FrameLayout? = null
     private var scorrimentoAttivo: ScrollView? = null
     private var campanellaDialog: CampanellaSwipateView? = null // MODIFICA
+    /** Activity che ha aperto le notifiche: alla chiusura del Dialog la sua campanella torna visibile. */
+    private var attivitaNotifiche: java.lang.ref.WeakReference<Activity>? = null
+    /** Scorrimento in corso delle schede rimaste dopo uno swipe (una per scheda). */
+    private val scorrimentiSchede = java.util.WeakHashMap<View, android.animation.Animator>()
     private var preferenzeCompatte: android.content.SharedPreferences? = null
     private var posizioneCompatta = false
     private val aggiornaDopoRiduzione = Runnable { applicaDisposizioneCompatta(animate = true) }
@@ -102,7 +106,11 @@ object FinestraRientro {
         override fun rimuovi() {
             controllo.ferma()
             scheda.animate().cancel()
-            (scheda.parent as? ViewGroup)?.removeView(scheda)
+            val colonna = scheda.parent as? ViewGroup
+            // Nel gruppo già sceso sopra la barra le schede rimaste scivolano al loro posto invece di saltare.
+            val posizioni = if (posizioneCompatta && colonna != null) posizioniSchede(colonna, scheda) else null
+            colonna?.removeView(scheda)
+            if (colonna != null && posizioni != null) ricomponiSenzaScatti(colonna, posizioni)
             aggiornaOmbra()
             programmaAggiornamentoDisposizione() // MODIFICA: se restano solo schede ridotte, compatta il gruppo.
         }
@@ -126,6 +134,57 @@ object FinestraRientro {
         preferenzeCompatte = null
         posizioneCompatta = false
         runCatching { d?.dismiss() }
+        // senza Dialog torna visibile la campanella della fascia azzurra (se ci sono notifiche nascoste)
+        val attivita = attivitaNotifiche?.get()
+        attivitaNotifiche = null
+        if (attivita != null && !attivita.isDestroyed) (attivita as? MainActivity)?.aggiornaCampanella()
+    }
+
+    /** Posizione sullo schermo delle schede che restano dopo aver tolto [tolta]. */
+    private fun posizioniSchede(colonna: ViewGroup, tolta: View): Map<View, Int> {
+        val punto = IntArray(2)
+        return (0 until colonna.childCount).map { colonna.getChildAt(it) }.filter { it !== tolta }.associateWith {
+            it.getLocationOnScreen(punto)
+            punto[1]
+        }
+    }
+
+    /**
+     * Dopo lo swipe di una scheda nel gruppo compatto: la colonna si accorcia e, centrata nella superficie, si
+     * sposterebbe di metà altezza per poi saltare di nuovo giù quando [spostaColonna] la riallinea alla barra.
+     * Qui invece la colonna va subito nella posizione finale e ogni scheda rimasta parte da dove era e scivola al suo posto.
+     */
+    private fun ricomponiSenzaScatti(colonna: ViewGroup, posizioni: Map<View, Int>) {
+        val superficie = superficieAttiva ?: return
+        val scorrimento = scorrimentoAttivo ?: return
+        val osservatore = scorrimento.viewTreeObserver
+        osservatore.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
+            override fun onPreDraw(): Boolean {
+                if (scorrimento.viewTreeObserver.isAlive) scorrimento.viewTreeObserver.removeOnPreDrawListener(this)
+                if (superficieAttiva !== superficie || scorrimentoAttivo !== scorrimento || !posizioneCompatta) return true
+                // stessa destinazione di spostaColonna in modalità compatta
+                val limiteInferiore = superficie.height - superficie.context.dp(ALTEZZA_BARRA + ALZO_BARRA + 4)
+                scorrimento.animate().cancel()
+                scorrimento.translationY = (limiteInferiore - scorrimento.bottom).toFloat()
+                val punto = IntArray(2)
+                for ((scheda, yPrima) in posizioni) {
+                    if (scheda.parent !== colonna) continue
+                    scorrimentiSchede.remove(scheda)?.cancel()
+                    scheda.translationY = 0f
+                    scheda.getLocationOnScreen(punto)
+                    val distanza = (yPrima - punto[1]).toFloat()
+                    if (distanza == 0f) continue
+                    scheda.translationY = distanza
+                    val animazione = android.animation.ObjectAnimator.ofFloat(scheda, View.TRANSLATION_Y, distanza, 0f).apply {
+                        duration = 320L
+                        interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+                    }
+                    scorrimentiSchede[scheda] = animazione
+                    animazione.start()
+                }
+                return true
+            }
+        })
     }
 
     /** MODIFICA: dopo l'animazione interna di riduzione, porta l'intero gruppo sopra la barra delle pagine. */
@@ -274,9 +333,13 @@ object FinestraRientro {
     }
 
     private fun aggiornaIndicatore(activity: Activity) {
-        (activity as? MainActivity)?.aggiornaCampanella()
+        // prima il Dialog: la fascia azzurra nasconde la sua campanella se c'è già quella sopra le notifiche
         aggiornaCampanellaDialog(activity)
+        (activity as? MainActivity)?.aggiornaCampanella()
     }
+
+    /** true mentre la campanella è disegnata sopra le notifiche: quella della fascia azzurra resta nascosta. */
+    val campanellaSopraNotifiche: Boolean get() = campanellaDialog != null
 
     /** MODIFICA: mantiene cliccabile e visibile la campanella anche sopra il Dialog a schermo intero. */
     private fun aggiornaCampanellaDialog(activity: Activity) {
@@ -284,17 +347,49 @@ object FinestraRientro {
         val presente = haNotificheSwippate(activity)
         if (presente && campanellaDialog == null) {
             val indicatore = CampanellaSwipateView(activity).apply {
+                visibility = View.INVISIBLE // compare solo quando è allineata a quella della fascia
                 setOnClickListener { ripristinaSwippate(activity) }
             }
             campanellaDialog = indicatore
-            superficie.addView(indicatore, FrameLayout.LayoutParams(activity.dp(36), activity.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-                leftMargin = activity.dp(90)
-                topMargin = activity.dp(8)
-            })
+            superficie.addView(indicatore, FrameLayout.LayoutParams(activity.dp(26), activity.dp(26), Gravity.TOP or Gravity.START))
+            allineaCampanella(activity, superficie, indicatore, 0)
         } else if (!presente) {
             campanellaDialog?.let { (it.parent as? ViewGroup)?.removeView(it) }
             campanellaDialog = null
         }
+    }
+
+    /**
+     * Mette la campanella del Dialog esattamente sopra quella della fascia azzurra (stessa misura e stessa posizione sullo
+     * schermo): quella della fascia viene nascosta, così se ne vede sempre una sola, non oscurata dall'ombra delle notifiche.
+     */
+    private fun allineaCampanella(activity: Activity, superficie: FrameLayout, indicatore: CampanellaSwipateView, tentativo: Int) {
+        if (campanellaDialog !== indicatore || superficieAttiva !== superficie) return
+        val testa = (activity as? MainActivity)?.campanellaTesta()
+        if (testa == null || !testa.isLaidOut || testa.width == 0 || !superficie.isLaidOut) {
+            if (tentativo < 30) superficie.post { allineaCampanella(activity, superficie, indicatore, tentativo + 1) }
+            else indicatore.visibility = View.VISIBLE
+            return
+        }
+        val posTesta = IntArray(2)
+        val posSuperficie = IntArray(2)
+        testa.getLocationOnScreen(posTesta)
+        superficie.getLocationOnScreen(posSuperficie)
+        indicatore.layoutParams = (indicatore.layoutParams as FrameLayout.LayoutParams).apply {
+            width = testa.width
+            height = testa.height
+            leftMargin = posTesta[0] - posSuperficie[0]
+            topMargin = posTesta[1] - posSuperficie[1]
+        }
+        indicatore.visibility = View.VISIBLE
+    }
+
+    /** Primo avvio dell'app: le notifiche compaiono tutte, quindi si dimenticano quelle nascoste con lo swipe e la campanella è spenta. */
+    fun azzeraSwippate(activity: Activity) {
+        activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE).edit().remove(chiaveSwipate()).apply()
+        scadenzaSwippateProgrammata?.let { handler.removeCallbacks(it) }
+        scadenzaSwippateProgrammata = null
+        aggiornaIndicatore(activity)
     }
 
     fun haNotificheSwippate(activity: Activity): Boolean {
@@ -396,8 +491,9 @@ object FinestraRientro {
         scorrimentoAttivo = scorrimento
         preferenzeCompatte = preferenze
         posizioneCompatta = false
+        attivitaNotifiche = java.lang.ref.WeakReference(activity)
         d.show()
-        aggiornaCampanellaDialog(activity)
+        aggiornaIndicatore(activity)
         d.window?.setBackgroundDrawableResource(android.R.color.transparent)
         d.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
 

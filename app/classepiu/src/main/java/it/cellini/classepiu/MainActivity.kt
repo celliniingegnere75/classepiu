@@ -38,6 +38,8 @@ class MainActivity : AppCompatActivity() {
     private var schedaAttiva = TAB_REGISTRO
     private var barra: BarraPagine? = null
     private var campanella: CampanellaSwipateView? = null // MODIFICA
+    /** true dalla creazione al primo onStart: è l'avvio dell'app, non un rientro. */
+    private var primoAvvio = false
 
     private val permessoNotifiche = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -66,7 +68,8 @@ class MainActivity : AppCompatActivity() {
             addView(logo, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             // MODIFICA: campanella sovrapposta di pochi pixel alla "ù" del logo.
             val indicatore = CampanellaSwipateView(this@MainActivity).apply {
-                visibility = View.GONE
+                // nascosta ma sempre misurata: la campanella sopra le notifiche si allinea a lei
+                visibility = View.INVISIBLE
                 setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
             }
             campanella = indicatore
@@ -133,6 +136,7 @@ class MainActivity : AppCompatActivity() {
             addView(sovraimpressione(barraPagine), FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(ALTEZZA_BARRA + ALZO_BARRA + SOMBRA_BARRA), Gravity.BOTTOM))
         })
 
+        primoAvvio = savedInstanceState == null
         if (savedInstanceState == null) {
             supportFragmentManager.beginTransaction()
                 .add(contenitoreId, BachecaFragment(), "t$TAB_BACHECA")
@@ -199,6 +203,9 @@ class MainActivity : AppCompatActivity() {
         super.onStart()
         if (Impostazioni(this).pronta) {
             Controllo.recupera(this)
+            // al primo avvio le notifiche compaiono sempre tutte: nessuna è nascosta, campanella spenta
+            if (primoAvvio) FinestraRientro.azzeraSwippate(this)
+            primoAvvio = false
             aggiornaCampanella() // MODIFICA
             // Esegue il calcolo sia al primo avvio sia a ogni rientro in primo piano.
             // FinestraRientro calcola le notifiche dovute all'ora corrente ed evita
@@ -220,8 +227,13 @@ class MainActivity : AppCompatActivity() {
 
     /** MODIFICA: aggiorna l'indicatore in base alle notifiche swippate ancora recuperabili. */
     fun aggiornaCampanella() {
-        campanella?.visibility = if (FinestraRientro.haNotificheSwippate(this)) View.VISIBLE else View.GONE
+        // una sola campanella: mentre le notifiche sono aperte si vede quella disegnata sopra di loro, nello stesso punto
+        val visibile = FinestraRientro.haNotificheSwippate(this) && !FinestraRientro.campanellaSopraNotifiche
+        campanella?.visibility = if (visibile) View.VISIBLE else View.INVISIBLE
     }
+
+    /** Campanella della fascia azzurra, per allineare quella mostrata sopra le notifiche. */
+    fun campanellaTesta(): View? = campanella
 
     override fun onResume() {
         super.onResume()
