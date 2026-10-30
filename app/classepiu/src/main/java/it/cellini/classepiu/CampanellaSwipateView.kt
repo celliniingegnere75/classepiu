@@ -12,7 +12,7 @@ class CampanellaSwipateView(context: Context) : View(context) {
     private val pennello = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = Color.WHITE
         style = Paint.Style.STROKE
-        strokeWidth = context.resources.displayMetrics.density * 2.7f
+        strokeWidth = context.resources.displayMetrics.density * 1.6f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
