@@ -197,6 +197,28 @@ object FinestraRientro {
         return valide
     }
 
+    /** La X è una cancellazione definitiva: non deve essere recuperata insieme alle notifiche swippate. */
+    private fun registraCancellazione(activity: Activity, notifica: NotificaPianificata) {
+        val pref = activity.getSharedPreferences(PREFERENZE_CANCELLATE, Activity.MODE_PRIVATE)
+        val chiave = chiaveSwippate()
+        val elementi = pref.getStringSet(chiave, emptySet()).orEmpty().toMutableSet()
+        elementi.add("${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}")
+        pref.edit().putStringSet(chiave, elementi).apply()
+    }
+
+    private fun leggiCancellate(activity: Activity, adesso: Int): Set<String> {
+        val pref = activity.getSharedPreferences(PREFERENZE_CANCELLATE, Activity.MODE_PRIVATE)
+        val chiave = chiaveSwippate()
+        val valide = pref.getStringSet(chiave, emptySet()).orEmpty().filter { voce ->
+            val parti = voce.split(':')
+            parti.size == 3 && parti[2].toIntOrNull()?.let { it > adesso } == true
+        }.toSet()
+        if (valide.size != pref.getStringSet(chiave, emptySet()).orEmpty().size) {
+            pref.edit().putStringSet(chiave, valide).apply()
+        }
+        return valide
+    }
+
     private fun registraSwipe(activity: Activity, notifica: NotificaPianificata) {
         val pref = activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
         val chiave = chiaveSwipate()
@@ -286,13 +308,15 @@ object FinestraRientro {
         val preferenze = activity.getSharedPreferences(PREFERENZE_COMPATTE, Activity.MODE_PRIVATE)
         val compattaSalvata = preferenze.getBoolean(CHIAVE_MODALITA_COMPATTA, false)
         val swippate = leggiSwippate(activity, secondiAdesso)
+        val cancellate = leggiCancellate(activity, secondiAdesso)
         val pianoCompleto = PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso)
+        val pianoSenzaCancellate = PianoNotifiche.escludiSwippate(pianoCompleto, cancellate)
         val pianoVisibile = if (ripristinaSwippate) {
             activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
-                .edit().remove(chiaveSwipate()).apply()
-            pianoCompleto
+                .edit().remove(chiaveSwippate()).apply()
+            pianoSenzaCancellate
         } else {
-            PianoNotifiche.escludiSwippate(pianoCompleto, swippate)
+            PianoNotifiche.escludiSwippate(pianoSenzaCancellate, swippate)
         }
         val piano = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
         aggiornaIndicatore(activity)
@@ -421,7 +445,7 @@ object FinestraRientro {
             // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
             addView(chiudi.apply {
                 // la X chiude solo questa notifica
-                setOnClickListener { gestore.interagita(avviso); gestore.chiudi(avviso) } // MODIFICA
+                setOnClickListener { gestore.interagita(avviso); registraCancellazione(activity, avviso.notifica); gestore.chiudi(avviso) } // MODIFICA
             }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.END).apply {
                 rightMargin = activity.dp(10)
                 topMargin = activity.dp(4)
