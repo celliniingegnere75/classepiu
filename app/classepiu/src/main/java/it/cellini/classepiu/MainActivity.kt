@@ -73,7 +73,6 @@ class MainActivity : AppCompatActivity() {
             campanella = indicatore
             addView(indicatore, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER).apply {
                 leftMargin = dp(90)
-                topMargin = -dp(14) // Alza la campanella per separarla dalle lettere del logo.
             })
             setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
             // a sinistra del logo: omino per uscire dall'account (con conferma)
