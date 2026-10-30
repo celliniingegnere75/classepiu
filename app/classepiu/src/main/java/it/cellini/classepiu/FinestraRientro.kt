@@ -211,13 +211,17 @@ object FinestraRientro {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(activity.dp(20), 0, activity.dp(20), 0)
+            // al centro "ora" e sotto il suo numero, come "classe" e il codice
             if (lezione.aula.isNotBlank()) {
                 addView(blocco("aula", lezione.aula, Gravity.START))
                 addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
+                addView(blocco("ora", "${lezione.ora}°", Gravity.CENTER_HORIZONTAL))
+                addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
                 addView(blocco("classe", lezione.classe, Gravity.END))
             } else {
-                gravity = Gravity.CENTER
-                addView(blocco("classe", lezione.classe, Gravity.CENTER_HORIZONTAL))
+                addView(blocco("ora", "${lezione.ora}°", Gravity.START))
+                addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
+                addView(blocco("classe", lezione.classe, Gravity.END))
             }
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(14) })
 
