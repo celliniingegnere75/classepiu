@@ -136,6 +136,22 @@ class PianoNotificheTest {
     }
 
     @Test
+    fun swipeNascondeLaNotificaMaNeConservaLaScadenzaOriginale() {
+        val piano = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35))
+        val swippata = piano.single { it.ora == 5 }
+        val chiave = "${swippata.ora}:${swippata.comparsa}:${swippata.scadenza}"
+
+        val visibili = PianoNotifiche.escludiSwippate(piano, setOf(chiave))
+        assertEquals(listOf(4), visibili.map { it.ora })
+        assertEquals(s(13, 15), swippata.scadenza)
+
+        // Al ripristino la stessa notifica conserva la scadenza calcolata alla prima comparsa.
+        val ripristinate = PianoNotifiche.escludiSwippate(piano, emptySet())
+        assertEquals(piano, ripristinate)
+        assertEquals(swippata.scadenza, ripristinate.single { it.ora == 5 }.scadenza)
+    }
+
+    @Test
     fun giornoDellaSettimana() {
         fun g(anno: Int, mese: Int, giorno: Int) = Orario.giornoDi(Calendar.getInstance().apply { clear(); set(anno, mese, giorno) })
         assertEquals(1, g(2026, Calendar.OCTOBER, 26)) // lunedì
