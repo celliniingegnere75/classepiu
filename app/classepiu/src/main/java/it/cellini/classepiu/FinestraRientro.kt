@@ -27,7 +27,8 @@ import java.util.Calendar
 /**
  * Notifiche dell'orario mostrate solo al rientro in primo piano: fino a tre schede sovrapposte, la più vecchia in alto e la
  * più nuova in basso, ognuna col suo stato esteso/ridotto, i suoi timer e la sua dissolvenza dopo circa 10 secondi.
- * A ogni rientro si chiude tutto quello che era rimasto e si ricalcola da zero dall'orario del giorno ([PianoNotifiche]).
+ * A ogni rientro si ricrea il piano dall'orario del giorno ([PianoNotifiche]); se l'utente aveva già scelto la modalità
+ * compatta, tutte le schede vengono ripristinate ridotte e il gruppo resta sopra la barra delle pagine.
  * Le schede stanno in un'unica finestra (Dialog), tolta quando sparisce l'ultima scheda o quando l'Activity va in background:
  * così non restano finestre agganciate a un'Activity non più valida.
  */
