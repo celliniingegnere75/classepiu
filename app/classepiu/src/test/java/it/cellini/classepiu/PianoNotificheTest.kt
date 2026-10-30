@@ -122,6 +122,20 @@ class PianoNotificheTest {
     }
 
     @Test
+    fun modalitaCompattaRipristinaTutteLeNotificheRidotteSenzaCambiareITempi() {
+        val originale = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35))
+        assertEquals(listOf(4 to R, 5 to E), originale.map { it.ora to it.stato })
+
+        val compatto = PianoNotifiche.applicaModalitaCompatta(originale, true)
+        assertEquals(listOf(4 to R, 5 to R), compatto.map { it.ora to it.stato })
+        assertEquals(originale.map { it.copy(stato = R) }, compatto)
+
+        // Quando l'utente espande una notifica, il piano successivo torna alle regole ordinarie.
+        assertEquals(originale, PianoNotifiche.applicaModalitaCompatta(originale, false))
+        assertEquals(emptyList<NotificaPianificata>(), PianoNotifiche.applicaModalitaCompatta(emptyList(), true))
+    }
+
+    @Test
     fun giornoDellaSettimana() {
         fun g(anno: Int, mese: Int, giorno: Int) = Orario.giornoDi(Calendar.getInstance().apply { clear(); set(anno, mese, giorno) })
         assertEquals(1, g(2026, Calendar.OCTOBER, 26)) // lunedì
