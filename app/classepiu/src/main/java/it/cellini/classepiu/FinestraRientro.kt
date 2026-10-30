@@ -209,7 +209,7 @@ object FinestraRientro {
 
     private fun leggiCancellate(activity: Activity, adesso: Int): Set<String> {
         val pref = activity.getSharedPreferences(PREFERENZE_CANCELLATE, Activity.MODE_PRIVATE)
-        val chiave = chiaveSwippate()
+        val chiave = chiaveSwipate()
         val valide = pref.getStringSet(chiave, emptySet()).orEmpty().filter { voce ->
             val parti = voce.split(':')
             parti.size == 3 && parti[2].toIntOrNull()?.let { it > adesso } == true
@@ -314,7 +314,7 @@ object FinestraRientro {
         val pianoSenzaCancellate = PianoNotifiche.escludiSwippate(pianoCompleto, cancellate)
         val pianoVisibile = if (ripristinaSwippate) {
             activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
-                .edit().remove(chiaveSwippate()).apply()
+                .edit().remove(chiaveSwipate()).apply()
             pianoSenzaCancellate
         } else {
             PianoNotifiche.escludiSwippate(pianoSenzaCancellate, swippate)
