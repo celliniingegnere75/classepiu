@@ -330,12 +330,12 @@ class RegistroFragment : Fragment() {
                 text = testo; textSize = 11f
                 typeface = outfitBold
                 setTextColor(celesteTesto)
-                gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 1
+                gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 2
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
-            val voti = tasto("voti", 0xFFB3DDF5.toInt())
-            val lezioni = tasto("lezioni", 0xFFD4EEFB.toInt())
-            val note = tasto("note", 0xFFC5D5F2.toInt())
+            val voti = tasto("i miei\nvoti", 0xFFB3DDF5.toInt())
+            val lezioni = tasto("le mie\nlezioni", 0xFFD4EEFB.toInt())
+            val note = tasto("note\nalunni", 0xFFC5D5F2.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 listOf(lezioni, voti, note).forEachIndexed { i, t ->
