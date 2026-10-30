@@ -221,43 +221,66 @@ class GestoreNotificheTest {
         assertEquals(0, tempo.inAttesa)
     }
 
-    // MODIFICA: la dissolvenza riparte dalla singola interazione senza spostare quella delle altre notifiche.
+    // MODIFICA: qualsiasi interazione riavvia il timer generale di tutte le notifiche aperte.
     @Test
-    fun interazioneRiavviaSoloLaDissolvenzaDellaNotificaToccata() {
+    fun interazioneRiavviaLaDissolvenzaDiTutteLeNotifiche() {
         rientro(695 * 60)
         val (quarta, quinta) = schermo.toList()
 
         tempo.avanza(5000)
         gestore.interagita(quarta)
 
-        tempo.avanza(4600) // sono trascorsi 9,6 s dall'apertura: scade solo la quinta
-        assertEquals(listOf(quarta), schermo)
+        tempo.avanza(GestoreNotifiche.DURATA_MS - 1)
+        assertEquals(listOf(quarta, quinta), schermo)
         assertEquals(false, quarta.dissolta)
-        assertEquals(true, quinta.dissolta)
+        assertEquals(false, quinta.dissolta)
 
-        tempo.avanza(5000) // la quarta scade dopo 9,6 s dalla sua interazione
+        tempo.avanza(1)
         assertTrue(schermo.isEmpty())
     }
 
-    // MODIFICA: un tocco durante l'animazione finale la interrompe e fa ripartire il conteggio.
+    // MODIFICA: chiudere con X riavvia il timer generale delle altre notifiche.
     @Test
-    fun interazioneAnnullaAncheLaDissolvenzaGiaIniziata() {
+    fun chiusuraConXRiavviaIlTimerDelleNotificheRimanenti() {
+        rientro(695 * 60)
+        val (quarta, quinta) = schermo.toList()
+
+        tempo.avanza(5000)
+        gestore.interagita(quarta)
+        gestore.chiudi(quarta)
+
+        tempo.avanza(GestoreNotifiche.DURATA_MS - 1)
+        assertEquals(listOf(quinta), schermo)
+        assertEquals(false, quinta.dissolta)
+
+        tempo.avanza(1)
+        assertTrue(schermo.isEmpty())
+    }
+
+    // MODIFICA: un'interazione durante la dissolvenza annulla l'animazione su tutte le schede.
+    @Test
+    fun interazioneAnnullaLeDissolvenzeGiaIniziate() {
         rientro(695 * 60)
         val (quarta, quinta) = schermo.toList()
         quarta.differita = true
+        quinta.differita = true
 
         tempo.avanza(GestoreNotifiche.DURATA_MS)
-        assertEquals(listOf(quarta), schermo)
+        assertEquals(listOf(quarta, quinta), schermo)
         assertTrue(quarta.dissolta)
+        assertTrue(quinta.dissolta)
 
         gestore.interagita(quarta)
         assertEquals(false, quarta.dissolta)
+        assertEquals(false, quinta.dissolta)
         assertEquals(null, quarta.completaDissolvenza)
+        assertEquals(null, quinta.completaDissolvenza)
 
         tempo.avanza(GestoreNotifiche.DURATA_MS)
         assertTrue(quarta.dissolta)
-        assertTrue(quarta.completaDissolvenza != null)
+        assertTrue(quinta.dissolta)
         quarta.completaDissolvenza?.invoke()
+        quinta.completaDissolvenza?.invoke()
         assertTrue(schermo.isEmpty())
     }
 
