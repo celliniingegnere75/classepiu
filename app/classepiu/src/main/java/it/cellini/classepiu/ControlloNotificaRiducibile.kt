@@ -162,7 +162,7 @@ class ControlloNotificaRiducibile(
         entrante.translationY = -altezzaFinale.toFloat()
         contenitore.bringChildToFront(entrante)
         animatore = ValueAnimator.ofFloat(0f, 1f).apply {
-            duration = 420L
+            duration = if (compatta) 420L else 620L
             interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
             addUpdateListener {
                 val f = it.animatedValue as Float
