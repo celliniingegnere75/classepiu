@@ -41,6 +41,8 @@ object FinestraRientro {
     private const val CHIAVE_MODALITA_COMPATTA = "modalita_compatta"
     private const val DURATA_SPOSTAMENTO_COMPATTO_MS = 1000L
     private const val DURATA_ANIMAZIONE_RIDUZIONE_MS = 420L
+    private const val PREFERENZE_SWIPATE = "classepiu_notifiche_swippate"
+    private val formatoGiorno = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
     private var superficieAttiva: FrameLayout? = null
     private var scorrimentoAttivo: ScrollView? = null
     private var preferenzeCompatte: android.content.SharedPreferences? = null
@@ -56,7 +58,7 @@ object FinestraRientro {
     }.apply { allaFine = { togliContenitore() } }
 
     /** Una notifica (scheda bianca estesa + striscia ridotta) con il suo controller. */
-    private class Avviso(val lezione: Lezione, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
+    private class Avviso(val lezione: Lezione, val notifica: NotificaPianificata, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
         lateinit var controllo: ControlloNotificaRiducibile
         var applicaVerifica: (Result<EsitoFirma?>) -> Unit = {}
 
@@ -176,7 +178,52 @@ object FinestraRientro {
         d.window?.setDimAmount(if (gestore.finestre.any { !it.controllo.ridotta }) .28f else .08f)
     }
 
-    fun mostra(activity: Activity) {
+    /** Notifiche nascoste con swipe: restano recuperabili fino alla scadenza scolastica originale. */
+    private fun chiaveSwipate(): String = "giorno_${formatoGiorno.format(java.util.Date())}"
+
+    private fun leggiSwippate(activity: Activity, adesso: Int): Set<String> {
+        val pref = activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
+        val chiave = chiaveSwipate()
+        val valide = pref.getStringSet(chiave, emptySet()).orEmpty().filter { voce ->
+            val parti = voce.split(':')
+            parti.size == 3 && parti[2].toIntOrNull()?.let { it > adesso } == true
+        }.toSet()
+        if (valide.size != pref.getStringSet(chiave, emptySet()).orEmpty().size) {
+            pref.edit().putStringSet(chiave, valide).apply()
+        }
+        return valide
+    }
+
+    private fun registraSwipe(activity: Activity, notifica: NotificaPianificata) {
+        val pref = activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
+        val chiave = chiaveSwipate()
+        val elementi = pref.getStringSet(chiave, emptySet()).orEmpty().toMutableSet()
+        elementi.removeAll { it.startsWith("${notifica.ora}:${notifica.comparsa}:") }
+        elementi.add("${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}")
+        pref.edit().putStringSet(chiave, elementi).apply()
+        aggiornaIndicatore(activity)
+    }
+
+    private fun aggiornaIndicatore(activity: Activity) {
+        (activity as? MainActivity)?.aggiornaCampanella()
+    }
+
+    fun haNotificheSwippate(activity: Activity): Boolean {
+        val adesso = Calendar.getInstance()
+        val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
+        return leggiSwippate(activity, secondi).isNotEmpty()
+    }
+
+    /** Ripristina le notifiche nascoste ancora valide, senza ricalcolare o prolungare la loro scadenza. */
+    fun ripristinaSwippate(activity: Activity) {
+        if (!haNotificheSwippate(activity)) {
+            aggiornaIndicatore(activity)
+            return
+        }
+        mostra(activity, ripristinaSwippate = true)
+    }
+
+    fun mostra(activity: Activity, ripristinaSwippate: Boolean = false) {
         chiudiTutto()
         if (activity.isFinishing || activity.isDestroyed) return
         val gen = generazione
@@ -186,10 +233,17 @@ object FinestraRientro {
         val secondiAdesso = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
         val preferenze = activity.getSharedPreferences(PREFERENZE_COMPATTE, Activity.MODE_PRIVATE)
         val compattaSalvata = preferenze.getBoolean(CHIAVE_MODALITA_COMPATTA, false)
-        val piano = PianoNotifiche.applicaModalitaCompatta(
-            PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso),
-            compattaSalvata
-        )
+        val swippate = leggiSwippate(activity, secondiAdesso)
+        val pianoCompleto = PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso)
+        val pianoVisibile = if (ripristinaSwippate) {
+            activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
+                .edit().remove(chiaveSwipate()).apply()
+            pianoCompleto
+        } else {
+            pianoCompleto.filterNot { n -> swippate.contains("${n.ora}:${n.comparsa}:${n.scadenza}") }
+        }
+        val piano = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
+        aggiornaIndicatore(activity)
         if (piano.isEmpty()) return
 
         // colonna delle notifiche, 10 dp tra l'una e l'altra; scorre solo se non entra nello schermo
@@ -208,7 +262,16 @@ object FinestraRientro {
         val superficie = FrameLayout(activity).apply {
             isClickable = true
             setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) gestore.dissolviTutto()
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val centro = width / 2f
+                    val zonaTitolo = event.y < activity.dp(100) &&
+                        event.x in (centro - activity.dp(95))..(centro + activity.dp(105))
+                    if (zonaTitolo && haNotificheSwippate(activity)) {
+                        ripristinaSwippate(activity)
+                    } else {
+                        gestore.dissolviTutto()
+                    }
+                }
                 true
             }
             addView(
@@ -231,6 +294,15 @@ object FinestraRientro {
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             setGravity(Gravity.CENTER)
         }
+        // Campanella anche sopra il Dialog: il tocco la usa per recuperare le schede nascoste.
+        if (haNotificheSwippate(activity)) {
+            superficie.addView(CampanellaSwipateView(activity).apply {
+                setOnClickListener { ripristinaSwippate(activity) }
+            }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = activity.dp(74)
+                topMargin = activity.dp(8)
+            })
+        }
         dialog = d
         superficieAttiva = superficie
         scorrimentoAttivo = scorrimento
@@ -242,7 +314,7 @@ object FinestraRientro {
 
         // dalla più vecchia (in alto) alla più nuova (in basso), ognuna nello stato previsto dall'orario adesso
         gestore.rientro(piano, secondiAdesso) { n ->
-            costruisci(activity, lezioni.getValue(n.ora), n.stato == StatoNotifica.RIDOTTA).also { avviso ->
+            costruisci(activity, lezioni.getValue(n.ora), n.stato == StatoNotifica.RIDOTTA, n).also { avviso ->
                 colonna.addView(avviso.scheda, LinearLayout.LayoutParams(-1, -2))
                 avviso.scheda.alpha = 0f
                 avviso.scheda.scaleX = .92f
@@ -262,7 +334,7 @@ object FinestraRientro {
     }
 
     /** Costruisce una notifica con la grafica di sempre; [ridotta] = stato iniziale deciso dall'orario. */
-    private fun costruisci(activity: Activity, lezione: Lezione, ridotta: Boolean): Avviso {
+    private fun costruisci(activity: Activity, lezione: Lezione, ridotta: Boolean, notifica: NotificaPianificata): Avviso {
         val fascia = lezione.fascia
         lateinit var avviso: Avviso
         val azzurro = 0xFF69BCE8.toInt()
@@ -534,7 +606,7 @@ object FinestraRientro {
             addView(sintesi, FrameLayout.LayoutParams(-1, -2))
         }
 
-        avviso = Avviso(lezione, contenitore)
+        avviso = Avviso(lezione, notifica, contenitore)
         avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
             alCambioStato = {
                 aggiornaOmbra()
@@ -542,7 +614,11 @@ object FinestraRientro {
             },
             allaChiusura = { gestore.chiudi(avviso) },
             allEspansione = { gestore.espansa(avviso) },
-            alInterazione = { gestore.interagita(avviso) }) // MODIFICA
+            alInterazione = { gestore.interagita(avviso) },
+            allaSwipe = {
+                registraSwipe(activity, avviso.notifica)
+                gestore.chiudi(avviso)
+            }) // MODIFICA
         avviso.applicaVerifica = { esito ->
             mostraVerifica(activity, avviso, esito, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
         }
