@@ -178,7 +178,7 @@ object FinestraRientro {
             // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
             addView(chiudi.apply {
                 // la X chiude solo questa notifica
-                setOnClickListener { gestore.chiudi(avviso) }
+                setOnClickListener { gestore.interagita(avviso); gestore.chiudi(avviso) } // MODIFICA
             }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.END).apply {
                 rightMargin = activity.dp(10)
                 topMargin = activity.dp(4)
@@ -330,6 +330,7 @@ object FinestraRientro {
         firmaRapida.isEnabled = false
         firmaRapida.alpha = .5f
         nonFirmo.setOnClickListener {
+            gestore.interagita(avviso) // MODIFICA
             preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
             rigaPulsanti.visibility = View.INVISIBLE
         }
@@ -411,7 +412,8 @@ object FinestraRientro {
         avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
             alCambioStato = { aggiornaOmbra() },
             allaChiusura = { gestore.chiudi(avviso) },
-            allEspansione = { gestore.espansa(avviso) })
+            allEspansione = { gestore.espansa(avviso) },
+            alInterazione = { gestore.interagita(avviso) }) // MODIFICA
         avviso.applicaVerifica = { esito ->
             mostraVerifica(activity, avviso, esito, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
         }
@@ -502,6 +504,7 @@ object FinestraRientro {
      */
     private fun firmaRapida(activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
         // questa notifica resta aperta finché non si chiude con la X; le altre seguono i loro tempi
+        gestore.interagita(avviso) // MODIFICA: registra anche la pressione di "firma rapida"
         gestore.trattieni(avviso)
         pulsante.isEnabled = false
         pulsante.alpha = .5f
