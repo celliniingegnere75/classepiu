@@ -62,6 +62,8 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
         fun dissolvi(fatto: () -> Unit)
         /** Toglie subito la finestra dallo schermo. */
         fun rimuovi()
+        /** MODIFICA: interrompe una dissolvenza già partita dopo un'interazione. */
+        fun annullaDissolvenza() {}
     }
 
     fun interface Temporizzatore {
@@ -72,6 +74,7 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
     private class Voce<F>(val notifica: NotificaPianificata, val finestra: F) {
         val annulla = mutableListOf<() -> Unit>()
         var annullaDissolvenza: (() -> Unit)? = null // MODIFICA: timer di dissolvenza separato dai timer scolastici
+        var dissolvenzaInCorso = false // MODIFICA: consente di annullare anche l'animazione già avviata
         var chiusa = false
     }
 
@@ -106,7 +109,13 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
 
     /** MODIFICA: un'interazione riavvia solo la dissolvenza della notifica toccata. */
     fun interagita(finestra: F) {
-        aperte.firstOrNull { it.finestra === finestra && !it.chiusa }?.let { programmaDissolvenza(it) }
+        aperte.firstOrNull { it.finestra === finestra && !it.chiusa }?.let { voce ->
+            if (voce.dissolvenzaInCorso) {
+                voce.dissolvenzaInCorso = false
+                voce.finestra.annullaDissolvenza()
+            }
+            programmaDissolvenza(voce)
+        }
     }
 
     /** L'utente ha espanso [finestra]: tutte le altre si riducono, così resta estesa una sola notifica. */
@@ -125,6 +134,7 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
         for (v in tutte) {
             fermaTimer(v)
             v.chiusa = true
+            v.dissolvenzaInCorso = false // MODIFICA
             v.finestra.rimuovi()
         }
         if (tutte.isNotEmpty()) allaFine()
@@ -133,12 +143,16 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
     private fun dissolvi(voce: Voce<F>) {
         if (voce.chiusa) return
         fermaTimer(voce)
-        voce.finestra.dissolvi { togli(voce) }
+        voce.dissolvenzaInCorso = true // MODIFICA
+        voce.finestra.dissolvi {
+            if (!voce.chiusa && voce.dissolvenzaInCorso) togli(voce) // MODIFICA: ignora il completamento di un'animazione annullata
+        }
     }
 
     private fun togli(voce: Voce<F>) {
         if (voce.chiusa) return
         voce.chiusa = true
+        voce.dissolvenzaInCorso = false // MODIFICA
         fermaTimer(voce)
         aperte.remove(voce)
         voce.finestra.rimuovi()
