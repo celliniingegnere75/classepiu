@@ -291,7 +291,7 @@ object FinestraRientro {
                 .edit().remove(chiaveSwipate()).apply()
             pianoCompleto
         } else {
-            pianoCompleto.filterNot { n -> swippate.contains("${n.ora}:${n.comparsa}:${n.scadenza}") }
+            PianoNotifiche.escludiSwippate(pianoCompleto, swippate)
         }
         val piano = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
         aggiornaIndicatore(activity)
