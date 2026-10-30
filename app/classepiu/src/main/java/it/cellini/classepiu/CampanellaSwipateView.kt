@@ -5,13 +5,12 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.Color
-import android.graphics.drawable.GradientDrawable
 import android.view.View
 
-/** MODIFICA: campanella blu contornata su cerchio bianco, indicatore delle notifiche messe da parte con swipe. */
+/** Campanella bianca inclinata, senza sfondo, per le notifiche archiviate con swipe. */
 class CampanellaSwipateView(context: Context) : View(context) {
     private val pennello = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        color = 0xFF2479C8.toInt()
+        color = Color.WHITE
         style = Paint.Style.STROKE
         strokeWidth = context.resources.displayMetrics.density * 2.7f
         strokeCap = Paint.Cap.ROUND
@@ -20,11 +19,8 @@ class CampanellaSwipateView(context: Context) : View(context) {
     private val campana = Path()
 
     init {
-        background = GradientDrawable().apply {
-            shape = GradientDrawable.OVAL
-            setColor(Color.WHITE)
-        }
-        elevation = context.resources.displayMetrics.density * 3f
+        // Nessun cerchio o riempimento: resta visibile solo il tratto bianco.
+        background = null
         contentDescription = "Notifiche nascoste: tocca per ripristinarle"
         isClickable = true
         isFocusable = true
@@ -32,13 +28,15 @@ class CampanellaSwipateView(context: Context) : View(context) {
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val lato = minOf(width, height) * .72f
+        val lato = minOf(width, height) * .82f
         val scala = lato / 48f
         canvas.save()
-        canvas.translate((width - lato) / 2f, (height - lato) / 2f)
+        canvas.translate(width / 2f, height / 2f)
+        // La leggera inclinazione riprende quella dell'icona fornita.
+        canvas.rotate(13f)
         canvas.scale(scala, scala)
+        canvas.translate(-24f, -24f)
 
-        // Sagoma della campana e piccolo anello superiore.
         campana.reset()
         campana.moveTo(17f, 10f)
         campana.cubicTo(17f, 5f, 20f, 2.5f, 24f, 2.5f)
@@ -52,15 +50,15 @@ class CampanellaSwipateView(context: Context) : View(context) {
         campana.cubicTo(9f, 19f, 11f, 13f, 17f, 10f)
         canvas.drawPath(campana, pennello)
 
-        // Attacco superiore e batacchio.
+        // Anello superiore e batacchio.
         canvas.drawArc(17f, 0f, 31f, 14f, 205f, 130f, false, pennello)
         canvas.drawArc(17f, 35f, 31f, 49f, 0f, 180f, false, pennello)
 
-        // Onde sonore laterali.
-        canvas.drawArc(-1f, 11f, 13f, 38f, 105f, 150f, false, pennello)
-        canvas.drawArc(35f, 11f, 49f, 38f, -75f, 150f, false, pennello)
-        canvas.drawArc(4f, 17f, 17f, 34f, 105f, 150f, false, pennello)
-        canvas.drawArc(31f, 17f, 44f, 34f, -75f, 150f, false, pennello)
+        // Due onde sonore per lato, aperte verso l'esterno.
+        canvas.drawArc(-1f, 9f, 13f, 39f, 105f, 150f, false, pennello)
+        canvas.drawArc(35f, 9f, 49f, 39f, -75f, 150f, false, pennello)
+        canvas.drawArc(3f, 16f, 16f, 34f, 105f, 150f, false, pennello)
+        canvas.drawArc(32f, 16f, 45f, 34f, -75f, 150f, false, pennello)
 
         canvas.restore()
     }
