@@ -38,6 +38,7 @@ class MainActivity : AppCompatActivity() {
     private var schedaAttiva = TAB_REGISTRO
     private var barra: BarraPagine? = null
     private var sospesa = false
+    private var campanella: CampanellaSwipateView? = null // MODIFICA
 
     private val permessoNotifiche = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -57,11 +58,22 @@ class MainActivity : AppCompatActivity() {
         val testa = FrameLayout(this).apply {
             setBackgroundColor(azzurro)
             setPadding(0, dp(6), 0, dp(26))
-            addView(ImageView(this@MainActivity).apply {
+            val logo = ImageView(this@MainActivity).apply {
                 setImageResource(R.drawable.logo_bianco)
                 contentDescription = "ClassePiù"
                 adjustViewBounds = true
-            }, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+                setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
+            }
+            addView(logo, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
+            // MODIFICA: campanella sovrapposta di pochi pixel alla "ù" del logo.
+            campanella = CampanellaSwipateView(this@MainActivity).apply {
+                visibility = View.GONE
+                setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
+            }
+            addView(campanella, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER).apply {
+                leftMargin = dp(72)
+            })
+            setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
             // a sinistra del logo: omino per uscire dall'account (con conferma)
             addView(FrameLayout(this@MainActivity).apply {
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(0x40FFFFFF) }
@@ -183,6 +195,7 @@ class MainActivity : AppCompatActivity() {
         sospesa = false
         super.onStart()
         if (Impostazioni(this).pronta) Controllo.recupera(this)
+        aggiornaCampanella() // MODIFICA
         // La finestra compare solo quando l'Activity torna dal background, non nei cambi pagina.
         if (rientroDaSospensione && !isFinishing) FinestraRientro.mostra(this)
     }
@@ -197,6 +210,11 @@ class MainActivity : AppCompatActivity() {
     override fun onDestroy() {
         FinestraRientro.chiudiTutto()
         super.onDestroy()
+    }
+
+    /** MODIFICA: aggiorna l'indicatore in base alle notifiche swippate ancora recuperabili. */
+    fun aggiornaCampanella() {
+        campanella?.visibility = if (FinestraRientro.haNotificheSwippate(this)) View.VISIBLE else View.GONE
     }
 
     override fun onResume() {
