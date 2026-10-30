@@ -210,7 +210,7 @@ object FinestraRientro {
 
     /** MODIFICA: fa sparire la campanella automaticamente alla scadenza dell'ultima notifica nascosta. */
     private fun programmaScadenzaSwippate(activity: Activity) {
-        scadenzaSwippateProgrammata?.let(handler::removeCallbacks)
+        scadenzaSwippateProgrammata?.let { handler.removeCallbacks(it) }
         scadenzaSwippateProgrammata = null
         val adesso = Calendar.getInstance()
         val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
@@ -244,10 +244,11 @@ object FinestraRientro {
         val superficie = superficieAttiva ?: return
         val presente = haNotificheSwippate(activity)
         if (presente && campanellaDialog == null) {
-            campanellaDialog = CampanellaSwipateView(activity).apply {
+            val indicatore = CampanellaSwipateView(activity).apply {
                 setOnClickListener { ripristinaSwippate(activity) }
             }
-            superficie.addView(campanellaDialog, FrameLayout.LayoutParams(activity.dp(36), activity.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+            campanellaDialog = indicatore
+            superficie.addView(indicatore, FrameLayout.LayoutParams(activity.dp(36), activity.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
                 leftMargin = activity.dp(72)
                 topMargin = activity.dp(8)
             })
