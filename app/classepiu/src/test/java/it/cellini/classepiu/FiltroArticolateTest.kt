@@ -58,6 +58,22 @@ class FiltroArticolateTest {
         assertEquals(firme.map { it.second }, FiltroArticolate.visibili(firme.map { it.first }, io, aua))
     }
 
+    /** Log del 23/10/2026: Stortini (LSC0, studentStatus null) è in compresenza con Sanseverinati, che ha la mia metà. */
+    @Test
+    fun compresenzeDel23Ottobre() {
+        val firme = listOf(
+            f(1, "SCIENZE MOTORIE", "vallasciani", aua + ena) to true,
+            f(3, "STORIA", "pierantozzi", aua + ena) to true,
+            f(4, "ELETTROTECNICA ED ELETTRONICA", "stortini", emptySet()) to true,
+            f(4, "MECCANICA", "perticari", ena) to false,
+            f(4, "ELETTROTECNICA ED ELETTRONICA", "sanseverinati", aua) to true,
+            f(5, "ELETTROTECNICA ED ELETTRONICA", "stortini", emptySet()) to true,
+            f(5, "TECNOLOGIE MECCANICHE", "allevi", ena) to false,
+            f(5, "ELETTROTECNICA ED ELETTRONICA", "sanseverinati", aua) to true,
+        )
+        assertEquals(firme.map { it.second }, FiltroArticolate.visibili(firme.map { it.first }, io, aua))
+    }
+
     @Test
     fun compresenzaDellaMiaMeta() {
         val firme = listOf(f(3, "SISTEMI", "titolare", aua), f(3, "SISTEMI", "itp", emptySet()), f(3, "SISTEMI", "altro", ena))
