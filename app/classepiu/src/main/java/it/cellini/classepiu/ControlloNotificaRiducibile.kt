@@ -27,7 +27,9 @@ class ControlloNotificaRiducibile(
     /** Chiamata a fine swipe: la finestra va tolta. */
     private val allaChiusura: () -> Unit,
     /** Chiamata quando l'utente la espande con la freccia: le altre estese si riducono. */
-    private val allEspansione: () -> Unit = {}
+    private val allEspansione: () -> Unit = {},
+    /** MODIFICA: riavvia la dissolvenza quando l'utente tocca questa notifica. */
+    private val alInterazione: () -> Unit = {}
 ) {
     private var inizioX = 0f
     private var inizioY = 0f
@@ -42,12 +44,13 @@ class ControlloNotificaRiducibile(
         stilePulsante(frecciaEspandi)
         stilePulsante(chiudi)
 
-        frecciaRiduci.setOnClickListener { mostraCompatta() }
-        frecciaEspandi.setOnClickListener { mostraCompleta() }
+        frecciaRiduci.setOnClickListener { alInterazione(); mostraCompatta() } // MODIFICA
+        frecciaEspandi.setOnClickListener { alInterazione(); mostraCompleta() } // MODIFICA
 
         val swipe = View.OnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    alInterazione() // MODIFICA: ogni tocco, incluso l'inizio di uno swipe, azzera il conteggio
                     inizioX = event.rawX
                     inizioY = event.rawY
                     true
