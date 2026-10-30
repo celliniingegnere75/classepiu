@@ -71,6 +71,7 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
 
     private class Voce<F>(val notifica: NotificaPianificata, val finestra: F) {
         val annulla = mutableListOf<() -> Unit>()
+        var annullaDissolvenza: (() -> Unit)? = null // MODIFICA: timer di dissolvenza separato dai timer scolastici
         var chiusa = false
     }
 
@@ -88,7 +89,7 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
         for (n in piano) {
             val voce = Voce(n, crea(n))
             aperte += voce
-            voce.annulla += tempo.dopo(DURATA_MS) { dissolvi(voce) }
+            programmaDissolvenza(voce) // MODIFICA: avvia il conteggio autonomo della dissolvenza
             if (n.stato == StatoNotifica.ESTESA) {
                 val ms = (n.riduzione - secondiAdesso) * 1000L
                 if (ms in 1 until DURATA_MS) voce.annulla += tempo.dopo(ms) { if (!voce.chiusa) voce.finestra.riduci() }
@@ -101,6 +102,11 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
     /** Ferma i timer di una finestra (es. dopo "firma rapida"): resta finché non la si chiude. */
     fun trattieni(finestra: F) {
         aperte.firstOrNull { it.finestra === finestra }?.let { fermaTimer(it) }
+    }
+
+    /** MODIFICA: un'interazione riavvia solo la dissolvenza della notifica toccata. */
+    fun interagita(finestra: F) {
+        aperte.firstOrNull { it.finestra === finestra && !it.chiusa }?.let { programmaDissolvenza(it) }
     }
 
     /** L'utente ha espanso [finestra]: tutte le altre si riducono, così resta estesa una sola notifica. */
@@ -139,7 +145,19 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
         if (aperte.isEmpty()) allaFine()
     }
 
+    // MODIFICA: annulla e riprogramma esclusivamente il timer della dissolvenza.
+    private fun programmaDissolvenza(voce: Voce<F>) {
+        if (voce.chiusa) return
+        voce.annullaDissolvenza?.invoke()
+        voce.annullaDissolvenza = tempo.dopo(DURATA_MS) {
+            voce.annullaDissolvenza = null
+            dissolvi(voce)
+        }
+    }
+
     private fun fermaTimer(voce: Voce<F>) {
+        voce.annullaDissolvenza?.invoke() // MODIFICA: arresta anche il timer di dissolvenza
+        voce.annullaDissolvenza = null // MODIFICA
         voce.annulla.forEach { it() }
         voce.annulla.clear()
     }
