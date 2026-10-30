@@ -31,8 +31,8 @@ class ListaScheda : Scheda() {
     private val giorno: Calendar get() = striscia?.selezionato ?: Calendar.getInstance()
     private var mioId = ""
     private var nome = ""
-    /** DEBUG TEMPORANEO: log delle classi articolate (LogArticolate), da togliere. */
-    private var logArticolate = ""
+    /** Classe articolata: gli alunni del mio gruppo, per mostrare solo le firme della mia metà (vuoto = tutte). */
+    private var mieiAlunni: Set<String> = emptySet()
 
     override fun crea(savedInstanceState: Bundle?) {
         cosa = intent.getStringExtra("cosa") ?: "note"
@@ -84,10 +84,9 @@ class ListaScheda : Scheda() {
                         dimClasse = st.size; nomi = st.associate { it.id to it.nome }
                     }
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
-                    else c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time)).also { (cod, testo) ->
-                        logArticolate = if (cod != 200) "" else runCatching {
-                            LogArticolate.genera(c, requireContext().filesDir, tipo, classeId, nome, f.format(giorno.time), testo, mioId)
-                        }.getOrElse { "log non riuscito: ${it.message}" }
+                    else {
+                        mieiAlunni = FiltroArticolate.mieiAlunni(c, requireContext().filesDir, tipo, classeId, nome)
+                        c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time))
                     }
                 }
             }
@@ -102,7 +101,7 @@ class ListaScheda : Scheda() {
 
     /** Una nota o una lezione; per le lezioni [grezzo] è l'oggetto di classeviva e [mia] dice se l'ho firmata io. */
     private class Voce(val data: String, val titolo: String, val testo: String, val alunno: String = "", val tipo: String = "", val ordine: Int = 0,
-                       val grezzo: String = "", val mia: Boolean = false)
+                       val grezzo: String = "", val mia: Boolean = false, val firma: FiltroArticolate.Firma? = null)
     private var grezzo = ""
     private var dimClasse = 0
     private var nomi: Map<String, String> = emptyMap()
@@ -153,8 +152,9 @@ class ListaScheda : Scheda() {
                             val mia = mioId.isNotEmpty() && autoreId == mioId
                             val titolo = listOf(if (ora.isNotEmpty()) "${ora}ª ora" else "", materia)
                                 .filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "firma di lezione" }
+                            val alunni = stati?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.t("studentId") }.toSet() }.orEmpty()
                             out.add(Voce(data.ifEmpty { "" }, titolo, corpo.ifEmpty { "nessun argomento" }, "", riga, ora.toIntOrNull() ?: 99,
-                                v.toString(), mia))
+                                v.toString(), mia, FiltroArticolate.Firma(ora, materia, autoreId, alunni)))
                         } else for (k in v.keys()) cammina(v.opt(k), livello + 1)
                         return
                     }
@@ -179,7 +179,12 @@ class ListaScheda : Scheda() {
             }
         }
         cammina(radice, 0)
-        return if (cosa == "lezioni") out.sortedBy { it.ordine } else out.sortedByDescending { it.data }
+        if (cosa != "lezioni") return out.sortedByDescending { it.data }
+        // classe articolata: solo le firme della mia metà (le mie, quelle con i miei alunni e le loro compresenze)
+        val firme = out.filter { it.firma != null }
+        val vedi = FiltroArticolate.visibili(firme.map { it.firma!! }, mioId, mieiAlunni)
+        val nascoste = firme.filterIndexed { i, _ -> !vedi[i] }.toSet()
+        return out.filter { it !in nascoste }.sortedBy { it.ordine }
     }
 
     private fun formatta(d: String): String {
@@ -225,32 +230,10 @@ class ListaScheda : Scheda() {
         }
     }
 
-    /** DEBUG TEMPORANEO: mostra e copia il log delle classi articolate. */
-    private fun tastoLogArticolate() = TextView(requireContext()).apply {
-        text = "log classi articolate (debug)"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
-        setOnClickListener {
-            val ctx = requireContext()
-            val t = TextView(ctx).apply {
-                text = logArticolate; textSize = 11f; typeface = Typeface.MONOSPACE; setTextIsSelectable(true)
-                setPadding(dp(20), dp(12), dp(20), dp(12))
-            }
-            com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                .setTitle("log classi articolate")
-                .setView(ScrollView(ctx).apply { addView(t) })
-                .setPositiveButton("copia") { _, _ ->
-                    ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("log", logArticolate))
-                    android.widget.Toast.makeText(ctx, "log copiato.", android.widget.Toast.LENGTH_SHORT).show()
-                }
-                .setNegativeButton("chiudi", null)
-                .show()
-        }
-    }
-
     private fun mostra(voci: List<Voce>) {
         lista.removeAllViews()
         voci.forEach { v -> lista.addView(scatola(v.mia).apply { addView(voceView(v, false, azzurro)) }, parametri()) }
         lista.addView(copiaRisposta())
-        if (logArticolate.isNotEmpty()) lista.addView(tastoLogArticolate())
     }
 
     private val arancio = 0xFFF0A040.toInt()
