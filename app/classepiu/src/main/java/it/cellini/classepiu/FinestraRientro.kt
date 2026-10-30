@@ -43,6 +43,7 @@ object FinestraRientro {
     private const val DURATA_ANIMAZIONE_RIDUZIONE_MS = 420L
     private const val PREFERENZE_SWIPATE = "classepiu_notifiche_swippate"
     private val formatoGiorno = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
+    private var scadenzaSwippateProgrammata: Runnable? = null
     private var superficieAttiva: FrameLayout? = null
     private var scorrimentoAttivo: ScrollView? = null
     private var preferenzeCompatte: android.content.SharedPreferences? = null
@@ -202,6 +203,33 @@ object FinestraRientro {
         elementi.add("${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}")
         pref.edit().putStringSet(chiave, elementi).apply()
         aggiornaIndicatore(activity)
+        programmaScadenzaSwippate(activity)
+    }
+
+    /** MODIFICA: fa sparire la campanella automaticamente alla scadenza dell'ultima notifica nascosta. */
+    private fun programmaScadenzaSwippate(activity: Activity) {
+        scadenzaSwippateProgrammata?.let(handler::removeCallbacks)
+        scadenzaSwippateProgrammata = null
+        val adesso = Calendar.getInstance()
+        val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
+        val scadenze = leggiSwippate(activity, secondi).mapNotNull { it.split(':').getOrNull(2)?.toIntOrNull() }
+        val prossima = scadenze.minOrNull() ?: run {
+            aggiornaIndicatore(activity)
+            return
+        }
+        val riferimento = java.lang.ref.WeakReference(activity)
+        val r = Runnable {
+            scadenzaSwippateProgrammata = null
+            riferimento.get()?.takeIf { !it.isFinishing && !it.isDestroyed }?.let { attivita ->
+                val ora = Calendar.getInstance()
+                val sec = (ora.get(Calendar.HOUR_OF_DAY) * 60 + ora.get(Calendar.MINUTE)) * 60 + ora.get(Calendar.SECOND)
+                leggiSwippate(attivita, sec)
+                aggiornaIndicatore(attivita)
+                programmaScadenzaSwippate(attivita)
+            }
+        }
+        scadenzaSwippateProgrammata = r
+        handler.postDelayed(r, ((prossima - secondi).coerceAtLeast(1) * 1000L))
     }
 
     private fun aggiornaIndicatore(activity: Activity) {
@@ -211,7 +239,9 @@ object FinestraRientro {
     fun haNotificheSwippate(activity: Activity): Boolean {
         val adesso = Calendar.getInstance()
         val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
-        return leggiSwippate(activity, secondi).isNotEmpty()
+        val presenti = leggiSwippate(activity, secondi).isNotEmpty()
+        if (presenti && scadenzaSwippateProgrammata == null) programmaScadenzaSwippate(activity)
+        return presenti
     }
 
     /** Ripristina le notifiche nascoste ancora valide, senza ricalcolare o prolungare la loro scadenza. */
@@ -244,6 +274,7 @@ object FinestraRientro {
         }
         val piano = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
         aggiornaIndicatore(activity)
+        programmaScadenzaSwippate(activity)
         if (piano.isEmpty()) return
 
         // colonna delle notifiche, 10 dp tra l'una e l'altra; scorre solo se non entra nello schermo
