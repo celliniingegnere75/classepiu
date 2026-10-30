@@ -19,8 +19,11 @@ class CampanellaSwipateView(context: Context) : View(context) {
     private val campana = Path()
 
     init {
-        // Nessun cerchio o riempimento: resta visibile solo il tratto bianco.
-        background = null
+        // Trasparenza esplicita: niente fondo, tinta, foreground o ripple del tema.
+        setBackgroundColor(Color.TRANSPARENT)
+        backgroundTintList = null
+        foreground = null
+        clipToOutline = false
         contentDescription = "Notifiche nascoste: tocca per ripristinarle"
         isClickable = true
         isFocusable = true
