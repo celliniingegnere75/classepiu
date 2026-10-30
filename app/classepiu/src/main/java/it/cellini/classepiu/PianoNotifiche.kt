@@ -17,7 +17,8 @@ data class NotificaPianificata(val ora: Int, val stato: StatoNotifica, val compa
  *   l'ora in cui il docente non ha lezione); se la fascia successiva non c'è, scade alla fine della sua fascia;
  * - al massimo 3 insieme, le più recenti, dalla più vecchia (in alto) alla più nuova (in basso);
  * - al massimo una estesa: se l'orario ne prevede più di una resta estesa solo la più recente, le altre sono ridotte.
- * Tutto si ricalcola da zero dall'ora attuale: nessuno stato dei risvegli precedenti.
+ * Tempi e notifiche attive si ricalcolano a ogni risveglio; resta invece memorizzata la scelta dell'utente di mantenere
+ * tutte le schede ridotte, finché non ne espande una.
  */
 object PianoNotifiche {
     const val ANTICIPO_MINUTI = 15
