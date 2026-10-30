@@ -34,7 +34,7 @@ class CampanellaSwipateView(context: Context) : View(context) {
         val lato = minOf(width, height) * .82f
         val scala = lato / 48f
         canvas.save()
-        canvas.translate(width / 2f, height / 2f - 10f)
+        canvas.translate(width / 2f, height / 2f - 15f)
         // La leggera inclinazione riprende quella dell'icona fornita.
         canvas.rotate(13f)
         canvas.scale(scala, scala)
