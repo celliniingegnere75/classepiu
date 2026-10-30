@@ -28,6 +28,16 @@ object PianoNotifiche {
     fun applicaModalitaCompatta(piano: List<NotificaPianificata>, compatta: Boolean): List<NotificaPianificata> =
         if (compatta) piano.map { it.copy(stato = StatoNotifica.RIDOTTA) } else piano
 
+    /** Applica le ultime scelte salvate per singola notifica; le voci assenti seguono il piano automatico. */
+    fun applicaStatiSalvati(
+        piano: List<NotificaPianificata>,
+        stati: Map<String, Boolean>
+    ): List<NotificaPianificata> = piano.map { n ->
+        val chiave = "${n.ora}:${n.comparsa}:${n.scadenza}"
+        val ridotta = stati[chiave] ?: (n.stato == StatoNotifica.RIDOTTA)
+        n.copy(stato = if (ridotta) StatoNotifica.RIDOTTA else StatoNotifica.ESTESA)
+    }
+
     /** MODIFICA: esclude le notifiche swippate usando ora, comparsa e scadenza originali. */
     fun escludiSwippate(piano: List<NotificaPianificata>, nascoste: Set<String>): List<NotificaPianificata> =
         piano.filterNot { n -> nascoste.contains("${n.ora}:${n.comparsa}:${n.scadenza}") }
