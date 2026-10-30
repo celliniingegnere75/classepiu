@@ -15,7 +15,8 @@ data class NotificaPianificata(val ora: Int, val stato: StatoNotifica, val compa
  * - diventa ridotta 15 minuti prima della fine della sua fascia;
  * - scade 15 minuti prima della fine della fascia successiva della tabella (due ore scolastiche effettive, conta anche
  *   l'ora in cui il docente non ha lezione); se la fascia successiva non c'è, scade alla fine della sua fascia;
- * - al massimo 3 insieme, le più recenti, dalla più vecchia (in alto) alla più nuova (in basso).
+ * - al massimo 3 insieme, le più recenti, dalla più vecchia (in alto) alla più nuova (in basso);
+ * - al massimo una estesa: se l'orario ne prevede più di una resta estesa solo la più recente, le altre sono ridotte.
  * Tutto si ricalcola da zero dall'ora attuale: nessuno stato dei risvegli precedenti.
  */
 object PianoNotifiche {
@@ -40,6 +41,10 @@ object PianoNotifiche {
             .sortedWith(compareBy({ it.comparsa }, { it.ora }))
             .takeLast(MASSIMO)
             .map { it.copy(stato = if (secondiAdesso >= it.riduzione) StatoNotifica.RIDOTTA else StatoNotifica.ESTESA) }
+            .let { piano ->
+                val estesa = piano.indexOfLast { it.stato == StatoNotifica.ESTESA }
+                piano.mapIndexed { k, n -> if (k != estesa && n.stato == StatoNotifica.ESTESA) n.copy(stato = StatoNotifica.RIDOTTA) else n }
+            }
     }
 }
 
@@ -96,6 +101,11 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
     /** Ferma i timer di una finestra (es. dopo "firma rapida"): resta finché non la si chiude. */
     fun trattieni(finestra: F) {
         aperte.firstOrNull { it.finestra === finestra }?.let { fermaTimer(it) }
+    }
+
+    /** L'utente ha espanso [finestra]: tutte le altre si riducono, così resta estesa una sola notifica. */
+    fun espansa(finestra: F) {
+        aperte.filter { it.finestra !== finestra && !it.chiusa }.forEach { it.finestra.riduci() }
     }
 
     /** Chiusura a mano (X o trascinamento): solo questa finestra. */

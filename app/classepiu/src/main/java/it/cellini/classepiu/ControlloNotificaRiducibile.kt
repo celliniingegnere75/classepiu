@@ -25,7 +25,9 @@ class ControlloNotificaRiducibile(
     /** Avvisa il contenitore che lo stato è cambiato (per l'ombra dietro le finestre). */
     private val alCambioStato: () -> Unit,
     /** Chiamata a fine swipe: la finestra va tolta. */
-    private val allaChiusura: () -> Unit
+    private val allaChiusura: () -> Unit,
+    /** Chiamata quando l'utente la espande con la freccia: le altre estese si riducono. */
+    private val allEspansione: () -> Unit = {}
 ) {
     private var inizioX = 0f
     private var inizioY = 0f
@@ -100,6 +102,7 @@ class ControlloNotificaRiducibile(
     private fun mostraCompleta() {
         ridotta = false
         animaCambioStato(compatta = false)
+        allEspansione()
         alCambioStato()
     }
 

@@ -408,7 +408,8 @@ object FinestraRientro {
         avviso = Avviso(lezione, contenitore)
         avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
             alCambioStato = { aggiornaOmbra() },
-            allaChiusura = { gestore.chiudi(avviso) })
+            allaChiusura = { gestore.chiudi(avviso) },
+            allEspansione = { gestore.espansa(avviso) })
         avviso.applicaVerifica = { esito ->
             mostraVerifica(activity, avviso, esito, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
         }

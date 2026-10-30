@@ -88,6 +88,15 @@ class PianoNotificheTest {
     }
 
     @Test
+    fun maiPiuDiUnaEstesa() {
+        // 1ª e 2ª ora del mercoledì: dalle 8:35 alle 8:40 l'orario le vorrebbe estese entrambe
+        assertEquals(listOf(1 to R, 2 to E), piano(8, 37, ore = listOf(1, 2)))
+        // con quattro lezioni sovrapposte resta estesa solo la più recente
+        val fasce = listOf(Fascia(hm(8, 0), hm(10, 0)), Fascia(hm(8, 15), hm(10, 0)), Fascia(hm(8, 30), hm(10, 0)), Fascia(hm(8, 45), hm(10, 0)))
+        assertEquals(listOf(2 to R, 3 to R, 4 to E), piano(8, 40, fasce, listOf(1, 2, 3, 4)))
+    }
+
+    @Test
     fun ordineCronologicoAncheConOreInDisordine() {
         assertEquals(listOf(4 to R, 5 to E), piano(11, 35, ore = listOf(5, 4, 4)))
     }
@@ -228,6 +237,22 @@ class GestoreNotificheTest {
         assertEquals(listOf(5), schermo.map { it.ora })
         tempo.avanza(GestoreNotifiche.DURATA_MS)
         assertTrue(schermo.isEmpty())
+    }
+
+    @Test
+    fun espandereUnaRidottaRiduceQuellaEstesa() {
+        rientro(695 * 60) // 11:35: 4ª ridotta in alto, 5ª estesa in basso
+        val (quarta, quinta) = schermo.toList()
+        quarta.ridotta = false // l'utente preme la freccia della 4ª
+        gestore.espansa(quarta)
+        assertEquals(false, quarta.ridotta)
+        assertEquals(true, quinta.ridotta)
+        assertEquals(1, schermo.count { !it.ridotta })
+        // e viceversa
+        quinta.ridotta = false
+        gestore.espansa(quinta)
+        assertEquals(true, quarta.ridotta)
+        assertEquals(1, schermo.count { !it.ridotta })
     }
 
     @Test
