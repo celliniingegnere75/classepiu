@@ -39,6 +39,22 @@ object FinestraRientro {
     // MODIFICA: stato compatto persistente tra sospensioni e successivi risvegli.
     private const val PREFERENZE_COMPATTE = "classepiu_notifiche"
     private const val CHIAVE_MODALITA_COMPATTA = "modalita_compatta"
+    private const val PREFERENZE_STATI_NOTIFICHE = "classepiu_stati_notifiche"
+
+    private fun chiaveStato(notifica: NotificaPianificata): String =
+        "stato_${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}"
+
+    private fun leggiStatiNotifiche(activity: Activity): Map<String, Boolean> {
+        val tutti = activity.getSharedPreferences(PREFERENZE_STATI_NOTIFICHE, Activity.MODE_PRIVATE).all
+        return tutti.mapNotNull { (chiave, valore) ->
+            if (chiave.startsWith("stato_") && valore is Boolean) chiave.removePrefix("stato_") to valore else null
+        }.toMap()
+    }
+
+    private fun salvaStatoNotifica(activity: Activity, notifica: NotificaPianificata, ridotta: Boolean) {
+        activity.getSharedPreferences(PREFERENZE_STATI_NOTIFICHE, Activity.MODE_PRIVATE)
+            .edit().putBoolean(chiaveStato(notifica), ridotta).apply()
+    }
     private const val DURATA_SPOSTAMENTO_COMPATTO_MS = 1000L
     private const val DURATA_ANIMAZIONE_RIDUZIONE_MS = 420L
     private const val PREFERENZE_SWIPATE = "classepiu_notifiche_swippate"
@@ -319,7 +335,10 @@ object FinestraRientro {
         } else {
             PianoNotifiche.escludiSwippate(pianoSenzaCancellate, swippate)
         }
-        val piano = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
+        // Prima applica la modalità compatta legacy alle nuove schede, poi prevalgono le scelte
+        // individuali dell'utente salvate per ciascuna notifica (ridotta oppure estesa).
+        val pianoCompatto = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
+        val piano = PianoNotifiche.applicaStatiSalvati(pianoCompatto, leggiStatiNotifiche(activity))
         aggiornaIndicatore(activity)
         programmaScadenzaSwippate(activity)
         if (piano.isEmpty()) return
@@ -679,6 +698,7 @@ object FinestraRientro {
         avviso = Avviso(lezione, notifica, contenitore)
         avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
             alCambioStato = {
+                salvaStatoNotifica(activity, avviso.notifica, avviso.controllo.ridotta)
                 aggiornaOmbra()
                 programmaAggiornamentoDisposizione() // MODIFICA
             },
