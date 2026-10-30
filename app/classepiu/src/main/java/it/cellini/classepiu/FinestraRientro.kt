@@ -42,6 +42,7 @@ object FinestraRientro {
     private const val DURATA_SPOSTAMENTO_COMPATTO_MS = 1000L
     private const val DURATA_ANIMAZIONE_RIDUZIONE_MS = 420L
     private const val PREFERENZE_SWIPATE = "classepiu_notifiche_swippate"
+    private const val PREFERENZE_CANCELLATE = "classepiu_notifiche_cancellate"
     private val formatoGiorno = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
     private var scadenzaSwippateProgrammata: Runnable? = null
     private var superficieAttiva: FrameLayout? = null
@@ -200,7 +201,7 @@ object FinestraRientro {
     /** La X è una cancellazione definitiva: non deve essere recuperata insieme alle notifiche swippate. */
     private fun registraCancellazione(activity: Activity, notifica: NotificaPianificata) {
         val pref = activity.getSharedPreferences(PREFERENZE_CANCELLATE, Activity.MODE_PRIVATE)
-        val chiave = chiaveSwippate()
+        val chiave = chiaveSwipate()
         val elementi = pref.getStringSet(chiave, emptySet()).orEmpty().toMutableSet()
         elementi.add("${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}")
         pref.edit().putStringSet(chiave, elementi).apply()
