@@ -1,7 +1,7 @@
 package it.cellini.classepiu
 
 import android.animation.ValueAnimator
-import android.app.Dialog
+import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.MotionEvent
@@ -10,21 +10,30 @@ import android.view.ViewGroup
 import android.view.animation.DecelerateInterpolator
 
 /**
- * Controller riutilizzabile per notifiche riducibili, con stato compatto persistente
- * e chiusura con swipe verso destra.
+ * Controller di una sola notifica riducibile: ogni finestra ha il suo stato esteso/ridotto, deciso dall'orario
+ * ([ridottaIniziale]) e cambiato solo dalle sue frecce o dal suo timer; chiusura con swipe verso destra.
+ * Nessuna preferenza globale: ridurre una notifica non tocca le altre.
  */
 class ControlloNotificaRiducibile(
-    private val dialog: Dialog,
+    private val ctx: Context,
     private val contenutoCompleto: View,
     private val contenutoCompatto: View,
     private val frecciaRiduci: View,
     private val frecciaEspandi: View,
-    private val chiudi: View
+    private val chiudi: View,
+    ridottaIniziale: Boolean,
+    /** Avvisa il contenitore che lo stato è cambiato (per l'ombra dietro le finestre). */
+    private val alCambioStato: () -> Unit,
+    /** Chiamata a fine swipe: la finestra va tolta. */
+    private val allaChiusura: () -> Unit
 ) {
-    private val prefs = dialog.context.getSharedPreferences("classepiu_notifica", 0)
     private var inizioX = 0f
     private var inizioY = 0f
     private var animatore: ValueAnimator? = null
+
+    /** true = modalità ridotta (striscia). */
+    var ridotta = ridottaIniziale
+        private set
 
     init {
         stilePulsante(frecciaRiduci)
@@ -44,12 +53,12 @@ class ControlloNotificaRiducibile(
                 MotionEvent.ACTION_UP -> {
                     val dx = event.rawX - inizioX
                     val dy = event.rawY - inizioY
-                    if (dx > dialog.context.dp(72) && dx > kotlin.math.abs(dy) * 1.25f) {
+                    if (dx > ctx.dp(72) && dx > kotlin.math.abs(dy) * 1.25f) {
                         v.animate()
-                            .translationX(v.width.toFloat().coerceAtLeast(dialog.context.dp(120).toFloat()))
+                            .translationX(v.width.toFloat().coerceAtLeast(ctx.dp(120).toFloat()))
                             .alpha(0f)
                             .setDuration(240)
-                            .withEndAction { dialog.dismiss() }
+                            .withEndAction { allaChiusura() }
                             .start()
                     } else {
                         v.performClick()
@@ -63,12 +72,17 @@ class ControlloNotificaRiducibile(
         contenutoCompleto.setOnTouchListener(swipe)
         contenutoCompatto.setOnTouchListener(swipe)
 
-        if (prefs.getBoolean("ridotta", false)) impostaCompatta() else impostaCompleta()
+        if (ridotta) impostaCompatta() else impostaCompleta()
     }
+
+    /** Riduzione chiesta dall'orario (15 minuti prima della fine dell'ora), con la stessa animazione della freccia. */
+    fun riduci() { if (!ridotta) mostraCompatta() }
+
+    /** Ferma un'animazione in corso (finestra che viene tolta). */
+    fun ferma() { animatore?.cancel(); animatore = null }
 
     /** Tondo bianco pieno con l'icona azzurra (le icone sono vettori in res/drawable), tutto opaco. */
     private fun stilePulsante(view: View) {
-        val ctx = dialog.context
         view.background = GradientDrawable().apply {
             shape = GradientDrawable.OVAL
             setColor(Color.WHITE)
@@ -78,15 +92,15 @@ class ControlloNotificaRiducibile(
     }
 
     private fun mostraCompatta() {
-        prefs.edit().putBoolean("ridotta", true).apply()
+        ridotta = true
         animaCambioStato(compatta = true)
-        dialog.window?.setDimAmount(.08f)
+        alCambioStato()
     }
 
     private fun mostraCompleta() {
-        prefs.edit().putBoolean("ridotta", false).apply()
+        ridotta = false
         animaCambioStato(compatta = false)
-        dialog.window?.setDimAmount(.28f)
+        alCambioStato()
     }
 
     private fun impostaCompatta() {
@@ -111,7 +125,7 @@ class ControlloNotificaRiducibile(
         val uscente = if (compatta) contenutoCompleto else contenutoCompatto
         val entrante = if (compatta) contenutoCompatto else contenutoCompleto
         animatore?.cancel()
-        if (!dialog.isShowing || contenitore == null || contenitore.width == 0) {
+        if (!contenutoCompleto.isAttachedToWindow || contenitore == null || contenitore.width == 0) {
             if (compatta) impostaCompatta() else impostaCompleta()
             return
         }
@@ -135,7 +149,7 @@ class ControlloNotificaRiducibile(
         contenitore.clipToOutline = true
         contenitore.outlineProvider = object : android.view.ViewOutlineProvider() {
             override fun getOutline(v: View, outline: android.graphics.Outline) {
-                outline.setRoundRect(0, 0, v.width, v.height, dialog.context.dp(24).toFloat())
+                outline.setRoundRect(0, 0, v.width, v.height, ctx.dp(24).toFloat())
             }
         }
         val parametri = contenitore.layoutParams

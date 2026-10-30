@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import android.view.Gravity
 import android.view.View
+import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
 import android.widget.LinearLayout
@@ -18,24 +19,126 @@ import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.ScrollView
 import java.util.Calendar
 
-/** Finestra temporanea classePiù mostrata solo al rientro in primo piano. */
+/**
+ * Notifiche dell'orario mostrate solo al rientro in primo piano: fino a tre schede sovrapposte, la più vecchia in alto e la
+ * più nuova in basso, ognuna col suo stato esteso/ridotto, i suoi timer e la sua dissolvenza dopo circa 10 secondi.
+ * A ogni rientro si chiude tutto quello che era rimasto e si ricalcola da zero dall'orario del giorno ([PianoNotifiche]).
+ * Le schede stanno in un'unica finestra (Dialog), tolta quando sparisce l'ultima scheda o quando l'Activity va in background:
+ * così non restano finestre agganciate a un'Activity non più valida.
+ */
 object FinestraRientro {
     private val handler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
+    /** Cresce a ogni rientro e a ogni chiusura: le risposte di ClasseViva di un rientro vecchio vengono ignorate. */
+    private var generazione = 0
+    private val gestore = GestoreNotifiche<Avviso> { ms, azione ->
+        val r = Runnable { azione() }
+        handler.postDelayed(r, ms)
+        val annulla: () -> Unit = { handler.removeCallbacks(r) }
+        annulla
+    }.apply { allaFine = { togliContenitore() } }
+
+    /** Una notifica (scheda bianca estesa + striscia ridotta) con il suo controller. */
+    private class Avviso(val lezione: Lezione, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
+        lateinit var controllo: ControlloNotificaRiducibile
+        var applicaVerifica: (Result<EsitoFirma?>) -> Unit = {}
+
+        override fun riduci() = controllo.riduci()
+
+        override fun dissolvi(fatto: () -> Unit) {
+            scheda.animate().cancel()
+            scheda.animate().alpha(0f).scaleX(.96f).scaleY(.96f)
+                .setDuration(GestoreNotifiche.DISSOLVENZA_MS)
+                .withEndAction { fatto() }
+                .start()
+        }
+
+        override fun rimuovi() {
+            controllo.ferma()
+            scheda.animate().cancel()
+            (scheda.parent as? ViewGroup)?.removeView(scheda)
+            aggiornaOmbra()
+        }
+    }
+
+    /** Chiude subito tutte le notifiche e i loro timer (rientro nuovo, Activity in background o distrutta). */
+    fun chiudiTutto() {
+        generazione++
+        gestore.chiudiTutto()
+        togliContenitore()
+    }
+
+    private fun togliContenitore() {
+        val d = dialog
+        dialog = null
+        runCatching { d?.dismiss() }
+    }
+
+    /** Ombra dietro le notifiche: piena se almeno una è estesa, leggera se sono tutte ridotte. */
+    private fun aggiornaOmbra() {
+        val d = dialog ?: return
+        d.window?.setDimAmount(if (gestore.finestre.any { !it.controllo.ridotta }) .28f else .08f)
+    }
 
     fun mostra(activity: Activity) {
+        chiudiTutto()
         if (activity.isFinishing || activity.isDestroyed) return
-        val ora = Calendar.getInstance()
-        val lezione = runCatching { Orario(activity).lezioneAlle(ora) }.getOrNull() ?: return
-        val fascia = lezione.fascia
-        val minutiAdesso = ora.get(Calendar.HOUR_OF_DAY) * 60 + ora.get(Calendar.MINUTE)
-        val secondiAdesso = ora.get(Calendar.SECOND)
-        val residui = ((fascia.fine - minutiAdesso) * 60 - secondiAdesso).coerceAtLeast(0)
-        if (residui <= 0) return
+        val gen = generazione
+        val adesso = Calendar.getInstance()
+        val orario = runCatching { Orario(activity) }.getOrNull() ?: return
+        val lezioni = orario.lezioniDel(Orario.giornoDi(adesso)).associateBy { it.ora }
+        val secondiAdesso = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
+        val piano = PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso)
+        if (piano.isEmpty()) return
 
-        dialog?.dismiss()
+        // colonna delle notifiche, 10 dp tra l'una e l'altra; scorre solo se non entra nello schermo
+        val colonna = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            dividerDrawable = GradientDrawable().apply { setSize(0, activity.dp(10)) }
+            showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
+        }
+        val scorrimento = ScrollView(activity).apply {
+            isVerticalScrollBarEnabled = false
+            overScrollMode = View.OVER_SCROLL_NEVER
+            addView(colonna, FrameLayout.LayoutParams(-1, -2))
+        }
+        val d = Dialog(activity)
+        d.requestWindowFeature(Window.FEATURE_NO_TITLE)
+        d.setContentView(scorrimento)
+        d.setCancelable(false)
+        d.window?.apply {
+            setBackgroundDrawableResource(android.R.color.transparent)
+            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+            setDimAmount(.28f)
+            setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
+            setGravity(Gravity.CENTER)
+        }
+        dialog = d
+        d.show()
+        d.window?.setBackgroundDrawableResource(android.R.color.transparent)
+        d.window?.setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
+
+        // dalla più vecchia (in alto) alla più nuova (in basso), ognuna nello stato previsto dall'orario adesso
+        gestore.rientro(piano, secondiAdesso) { n ->
+            costruisci(activity, lezioni.getValue(n.ora), n.stato == StatoNotifica.RIDOTTA).also { avviso ->
+                colonna.addView(avviso.scheda, LinearLayout.LayoutParams(-1, -2))
+                avviso.scheda.alpha = 0f
+                avviso.scheda.scaleX = .92f
+                avviso.scheda.scaleY = .92f
+                avviso.scheda.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).start()
+            }
+        }
+        aggiornaOmbra()
+        verificaFirme(activity, gen, gestore.finestre)
+    }
+
+    /** Costruisce una notifica con la grafica di sempre; [ridotta] = stato iniziale deciso dall'orario. */
+    private fun costruisci(activity: Activity, lezione: Lezione, ridotta: Boolean): Avviso {
+        val fascia = lezione.fascia
+        lateinit var avviso: Avviso
         val azzurro = 0xFF69BCE8.toInt()
         val scuro = 0xFF333333.toInt()
         val celesteClasse = 0xFF5598BD.toInt()
@@ -74,12 +177,8 @@ object FinestraRientro {
             })
             // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
             addView(chiudi.apply {
-                setOnClickListener {
-                    handler.removeCallbacksAndMessages(null)
-                    val daChiudere = dialog
-                    dialog = null
-                    daChiudere?.dismiss()
-                }
+                // la X chiude solo questa notifica
+                setOnClickListener { gestore.chiudi(avviso) }
             }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.END).apply {
                 rightMargin = activity.dp(10)
                 topMargin = activity.dp(4)
@@ -232,7 +331,6 @@ object FinestraRientro {
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
-        verificaFirma(activity, lezione, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
         val oraBreve = when (lezione.ora) {
@@ -307,53 +405,27 @@ object FinestraRientro {
             addView(sintesi, FrameLayout.LayoutParams(-1, -2))
         }
 
-        val d = Dialog(activity)
-        d.requestWindowFeature(Window.FEATURE_NO_TITLE)
-        d.setContentView(contenitore)
-        d.setCancelable(false)
-        d.window?.apply {
-            setBackgroundDrawableResource(android.R.color.transparent)
-            addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
-            setDimAmount(.28f)
-            setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
-            setGravity(Gravity.CENTER)
+        avviso = Avviso(lezione, contenitore)
+        avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
+            alCambioStato = { aggiornaOmbra() },
+            allaChiusura = { gestore.chiudi(avviso) })
+        avviso.applicaVerifica = { esito ->
+            mostraVerifica(activity, avviso, esito, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
         }
-        dialog = d
-        d.show()
-        d.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        d.window?.setLayout((activity.resources.displayMetrics.widthPixels * .88f).toInt(), WindowManager.LayoutParams.WRAP_CONTENT)
-        contenitore.alpha = 0f
-        contenitore.scaleX = .92f
-        contenitore.scaleY = .92f
-        contenitore.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).start()
-        ControlloNotificaRiducibile(d, radice, sintesi, frecciaSu, frecciaGiu, chiudi)
-        handler.postDelayed({
-            if (dialog === d) {
-                contenitore.animate().alpha(0f).scaleX(.96f).scaleY(.96f).setDuration(220).withEndAction {
-                    runCatching { d.dismiss() }
-                    if (dialog === d) dialog = null
-                }.start()
-            }
-        }, 9580) // circa 9,8 secondi in tutto, compresa la dissolvenza
+        return avviso
     }
 
+    private class FirmeOggi(val grezzo: String, val mioId: String, val nomi: Map<String, String>)
+
     /**
-     * Controlla la firma del docente nell'endpoint lessons/mine per la data odierna.
+     * Controlla le firme del docente nell'endpoint lessons/mine per la data odierna, una sola volta per tutte le notifiche.
      * L'ora è considerata firmata solo se coincidono docente, classe, materia e fascia oraria.
      */
-    private fun verificaFirma(
-        activity: Activity,
-        lezione: Lezione,
-        etichetta: TextView,
-        materia: TextView,
-        pulsante: View,
-        rigaPulsanti: View,
-        chiaveNonFirmo: String,
-        preferenzeNonFirmo: android.content.SharedPreferences
-    ) {
+    private fun verificaFirme(activity: Activity, gen: Int, avvisi: List<Avviso>) {
+        if (avvisi.isEmpty()) return
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
         Thread {
-            val esito = runCatching {
+            val firme = runCatching {
                 val imp = Impostazioni(activity)
                 check(imp.pronta) { "Credenziali non configurate" }
                 val client = imp.client().also { it.login() }
@@ -362,34 +434,53 @@ object FinestraRientro {
                 val nomi = OrarioDalleFirme.nomiClassi(leggiClassi(classiGrezze))
                 val (codice, grezzo) = client.lezioniGrezze(data, data)
                 check(codice == 200) { "Firme non disponibili (HTTP $codice)" }
-                firmaCorrispondente(grezzo, client.idDocente(), data, lezione, nomi)
+                FirmeOggi(grezzo, client.idDocente(), nomi)
             }
             activity.runOnUiThread {
-                if (activity.isFinishing || activity.isDestroyed || !etichetta.isAttachedToWindow) return@runOnUiThread
-                esito.fold(
-                    onSuccess = { risultato ->
-                        if (risultato == null) {
-                            etichetta.text = "ora non firmata"
-                            etichetta.setTextColor(0xFFD32F2F.toInt())
-                            if (!preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
-                                pulsante.visibility = View.VISIBLE
-                                pulsante.isEnabled = true
-                                pulsante.alpha = 1f
-                                rigaPulsanti.visibility = View.VISIBLE
-                            }
-                            pulsante.setOnClickListener { firmaRapida(activity, lezione, etichetta, materia, pulsante) }
-                        } else {
-                            mostraFirmata(etichetta, materia, risultato)
-                            rigaPulsanti.visibility = View.INVISIBLE
-                        }
-                    },
-                    onFailure = {
-                        etichetta.text = "firma non verificata"
-                        etichetta.setTextColor(0xFF8A6D00.toInt())
-                    }
-                )
+                if (gen != generazione || activity.isFinishing || activity.isDestroyed) return@runOnUiThread
+                for (a in avvisi) {
+                    if (!a.scheda.isAttachedToWindow) continue
+                    a.applicaVerifica(firme.mapCatching { firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi) })
+                }
             }
         }.start()
+    }
+
+    private fun mostraVerifica(
+        activity: Activity,
+        avviso: Avviso,
+        esito: Result<EsitoFirma?>,
+        etichetta: TextView,
+        materia: TextView,
+        pulsante: View,
+        rigaPulsanti: View,
+        chiaveNonFirmo: String,
+        preferenzeNonFirmo: android.content.SharedPreferences
+    ) {
+        if (!etichetta.isAttachedToWindow) return
+        val lezione = avviso.lezione
+        esito.fold(
+            onSuccess = { risultato ->
+                if (risultato == null) {
+                    etichetta.text = "ora non firmata"
+                    etichetta.setTextColor(0xFFD32F2F.toInt())
+                    if (!preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
+                        pulsante.visibility = View.VISIBLE
+                        pulsante.isEnabled = true
+                        pulsante.alpha = 1f
+                        rigaPulsanti.visibility = View.VISIBLE
+                    }
+                    pulsante.setOnClickListener { firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante) }
+                } else {
+                    mostraFirmata(etichetta, materia, risultato)
+                    rigaPulsanti.visibility = View.INVISIBLE
+                }
+            },
+            onFailure = {
+                etichetta.text = "firma non verificata"
+                etichetta.setTextColor(0xFF8A6D00.toInt())
+            }
+        )
     }
 
     private fun mostraFirmata(etichetta: TextView, materia: TextView, risultato: EsitoFirma) {
@@ -404,10 +495,11 @@ object FinestraRientro {
      * subjects/list (o educazione civica), data e ora dall'orario, tipologia "Lezione" e argomento dalla scheda "firma"
      * delle opzioni (registro web, FIRMA_INSERT).
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
-     * La finestra resta aperta finché non si chiude con la X, così l'esito si legge.
+     * La notifica resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    private fun firmaRapida(activity: Activity, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
-        handler.removeCallbacksAndMessages(null)
+    private fun firmaRapida(activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
+        // questa notifica resta aperta finché non si chiude con la X; le altre seguono i loro tempi
+        gestore.trattieni(avviso)
         pulsante.isEnabled = false
         pulsante.alpha = .5f
         etichetta.text = "firmo…"

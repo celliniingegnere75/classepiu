@@ -44,6 +44,8 @@ Tutte derivano dalla classe base `Scheda`.
 | `ClasseVivaPayloadValidation.kt` | Controllo del contenuto delle richieste prima dell'invio (voti) |
 | `Store.kt` | Impostazioni cifrate (`Impostazioni`), orario (`Orario`), registro attività (`Diario`) |
 | `Scuola.kt` | Dati fissi della scuola |
+| `FinestraRientro.kt` | Notifiche dell'orario al rientro in primo piano (fino a 3, ognuna col suo stato e i suoi timer) |
+| `PianoNotifiche.kt` | Regole delle notifiche (comparsa, riduzione, scadenza a due ore scolastiche) e vita delle finestre, provate da `PianoNotificheTest` |
 | `Controllo.kt` | Controllo periodico delle nuove circolari con WorkManager e notifiche |
 | `GoogleMail.kt` | Accesso Google e invio tramite Gmail API (scope `gmail.send`) |
 | `Mailer.kt` | Composizione delle email con gli allegati |

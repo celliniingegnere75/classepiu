@@ -31,7 +31,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          gradle -p app :classepiu:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
+          gradle -p app :classepiu:testReleaseUnitTest :classepiu:assembleRelease --no-daemon --stacktrace 2>&1 | tee build.log
 
       - name: Pubblica APK e log sul ramo apk
         if: always()

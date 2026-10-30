@@ -189,7 +189,14 @@ class MainActivity : AppCompatActivity() {
 
     override fun onStop() {
         sospesa = true
+        // le notifiche del rientro non sopravvivono alla sospensione: al prossimo rientro si ricalcolano da zero
+        FinestraRientro.chiudiTutto()
         super.onStop()
+    }
+
+    override fun onDestroy() {
+        FinestraRientro.chiudiTutto()
+        super.onDestroy()
     }
 
     override fun onResume() {

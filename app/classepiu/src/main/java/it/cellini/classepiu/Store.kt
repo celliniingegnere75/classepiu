@@ -325,6 +325,13 @@ class Orario(ctx: Context) {
     /** Tutte le lezioni con una classe, in ordine di giorno e ora (per gli usi futuri). */
     fun lezioni(): List<Lezione> = celle.filterNotNull().filter { it.classe.isNotEmpty() }
 
+    /** Tutte le fasce della tabella, in ordine di ora (indice 0 = 1ª ora). */
+    fun fasce(): List<Fascia> = fasce.toList()
+
+    /** Le lezioni con una classe di un giorno (1 = lunedì … 6 = sabato), in ordine di ora; vuota negli altri giorni. */
+    fun lezioniDel(giorno: Int): List<Lezione> =
+        if (giorno !in 1..GIORNI.size) emptyList() else (1..ORE).mapNotNull { o -> celle[i(giorno, o)]?.takeIf { it.classe.isNotEmpty() } }
+
     /** La lezione in corso in quel momento, se c'è. */
     fun lezioneAlle(quando: java.util.Calendar = java.util.Calendar.getInstance()): Lezione? {
         val g = quando.get(java.util.Calendar.DAY_OF_WEEK) - java.util.Calendar.MONDAY + 1
@@ -335,6 +342,10 @@ class Orario(ctx: Context) {
     }
 
     companion object {
+        /** Giorno dell'orario di una data: 1 = lunedì … 6 = sabato, 7 = domenica (senza lezioni). */
+        fun giornoDi(quando: java.util.Calendar): Int =
+            (quando.get(java.util.Calendar.DAY_OF_WEEK) - java.util.Calendar.MONDAY + 7) % 7 + 1
+
         val GIORNI = listOf("lun", "mar", "mer", "gio", "ven", "sab")
         const val ORE = 9
         const val AULA_MAX = 5

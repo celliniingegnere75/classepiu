@@ -1,0 +1,142 @@
+package it.cellini.classepiu
+
+/** Come appare una notifica dell'orario in un certo istante. */
+enum class StatoNotifica { ESTESA, RIDOTTA }
+
+/**
+ * Una notifica da mostrare al rientro: l'ora di lezione (1…ORE), lo stato previsto adesso e gli istanti dei tre passaggi,
+ * in secondi dalla mezzanotte (comparsa, riduzione, scadenza).
+ */
+data class NotificaPianificata(val ora: Int, val stato: StatoNotifica, val comparsa: Int, val riduzione: Int, val scadenza: Int)
+
+/**
+ * Regole delle notifiche dell'orario, senza Android (si provano con i test):
+ * - compare estesa 15 minuti prima dell'inizio della sua fascia;
+ * - diventa ridotta 15 minuti prima della fine della sua fascia;
+ * - scade 15 minuti prima della fine della fascia successiva della tabella (due ore scolastiche effettive, conta anche
+ *   l'ora in cui il docente non ha lezione); se la fascia successiva non c'è, scade alla fine della sua fascia;
+ * - al massimo 3 insieme, le più recenti, dalla più vecchia (in alto) alla più nuova (in basso).
+ * Tutto si ricalcola da zero dall'ora attuale: nessuno stato dei risvegli precedenti.
+ */
+object PianoNotifiche {
+    const val ANTICIPO_MINUTI = 15
+    const val MASSIMO = 3
+
+    /**
+     * @param fasce tutte le fasce della tabella "lezioni" in ordine di ora (indice 0 = 1ª ora), così come le ha salvate l'utente
+     * @param oreConLezione le ore del giorno in cui il docente ha lezione
+     * @param secondiAdesso l'istante attuale in secondi dalla mezzanotte
+     */
+    fun calcola(fasce: List<Fascia>, oreConLezione: Collection<Int>, secondiAdesso: Int): List<NotificaPianificata> {
+        val anticipo = ANTICIPO_MINUTI * 60
+        return oreConLezione.distinct().filter { it in 1..fasce.size }.map { ora ->
+            val fascia = fasce[ora - 1]
+            val successiva = fasce.getOrNull(ora)
+            val riduzione = fascia.fine * 60 - anticipo
+            val scadenza = if (successiva != null) successiva.fine * 60 - anticipo else fascia.fine * 60
+            NotificaPianificata(ora, StatoNotifica.ESTESA, fascia.inizio * 60 - anticipo, riduzione, scadenza.coerceAtLeast(riduzione))
+        }
+            .filter { secondiAdesso >= it.comparsa && secondiAdesso < it.scadenza }
+            .sortedWith(compareBy({ it.comparsa }, { it.ora }))
+            .takeLast(MASSIMO)
+            .map { it.copy(stato = if (secondiAdesso >= it.riduzione) StatoNotifica.RIDOTTA else StatoNotifica.ESTESA) }
+    }
+}
+
+/**
+ * Vita delle finestre di un solo risveglio, senza Android: ogni rientro chiude tutto quello del rientro precedente
+ * (finestre e timer) e apre solo le notifiche del piano. Ogni finestra ha i suoi timer: dissolvenza dopo ~10 secondi e,
+ * se cadono in quei secondi, riduzione e scadenza.
+ */
+class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Temporizzatore) {
+
+    interface Finestra {
+        /** Passa alla modalità ridotta con la sua animazione (solo questa finestra). */
+        fun riduci()
+        /** Dissolvenza animata; a fine animazione chiama [fatto]. */
+        fun dissolvi(fatto: () -> Unit)
+        /** Toglie subito la finestra dallo schermo. */
+        fun rimuovi()
+    }
+
+    fun interface Temporizzatore {
+        /** Esegue [azione] dopo [ms] millisecondi e restituisce la funzione che la annulla. */
+        fun dopo(ms: Long, azione: () -> Unit): () -> Unit
+    }
+
+    private class Voce<F>(val notifica: NotificaPianificata, val finestra: F) {
+        val annulla = mutableListOf<() -> Unit>()
+        var chiusa = false
+    }
+
+    private val aperte = mutableListOf<Voce<F>>()
+
+    /** Chiamata quando non resta nessuna finestra (per togliere il contenitore). */
+    var allaFine: () -> Unit = {}
+
+    /** Le finestre ancora sullo schermo, dalla più vecchia (in alto) alla più nuova (in basso). */
+    val finestre: List<F> get() = aperte.map { it.finestra }
+    val notifiche: List<NotificaPianificata> get() = aperte.map { it.notifica }
+
+    fun rientro(piano: List<NotificaPianificata>, secondiAdesso: Int, crea: (NotificaPianificata) -> F) {
+        chiudiTutto()
+        for (n in piano) {
+            val voce = Voce(n, crea(n))
+            aperte += voce
+            voce.annulla += tempo.dopo(DURATA_MS) { dissolvi(voce) }
+            if (n.stato == StatoNotifica.ESTESA) {
+                val ms = (n.riduzione - secondiAdesso) * 1000L
+                if (ms in 1 until DURATA_MS) voce.annulla += tempo.dopo(ms) { if (!voce.chiusa) voce.finestra.riduci() }
+            }
+            val ms = (n.scadenza - secondiAdesso) * 1000L
+            if (ms in 1 until DURATA_MS) voce.annulla += tempo.dopo(ms) { dissolvi(voce) }
+        }
+    }
+
+    /** Ferma i timer di una finestra (es. dopo "firma rapida"): resta finché non la si chiude. */
+    fun trattieni(finestra: F) {
+        aperte.firstOrNull { it.finestra === finestra }?.let { fermaTimer(it) }
+    }
+
+    /** Chiusura a mano (X o trascinamento): solo questa finestra. */
+    fun chiudi(finestra: F) {
+        aperte.firstOrNull { it.finestra === finestra }?.let { togli(it) }
+    }
+
+    fun chiudiTutto() {
+        val tutte = aperte.toList()
+        aperte.clear()
+        for (v in tutte) {
+            fermaTimer(v)
+            v.chiusa = true
+            v.finestra.rimuovi()
+        }
+        if (tutte.isNotEmpty()) allaFine()
+    }
+
+    private fun dissolvi(voce: Voce<F>) {
+        if (voce.chiusa) return
+        fermaTimer(voce)
+        voce.finestra.dissolvi { togli(voce) }
+    }
+
+    private fun togli(voce: Voce<F>) {
+        if (voce.chiusa) return
+        voce.chiusa = true
+        fermaTimer(voce)
+        aperte.remove(voce)
+        voce.finestra.rimuovi()
+        if (aperte.isEmpty()) allaFine()
+    }
+
+    private fun fermaTimer(voce: Voce<F>) {
+        voce.annulla.forEach { it() }
+        voce.annulla.clear()
+    }
+
+    companion object {
+        /** Ogni finestra resta circa 10 secondi: 9,6 visibile + 0,4 di dissolvenza. */
+        const val DURATA_MS = 9600L
+        const val DISSOLVENZA_MS = 400L
+    }
+}
