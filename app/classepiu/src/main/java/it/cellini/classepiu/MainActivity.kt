@@ -72,7 +72,7 @@ class MainActivity : AppCompatActivity() {
             }
             campanella = indicatore
             addView(indicatore, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER).apply {
-                leftMargin = dp(72)
+                leftMargin = dp(90)
             })
             setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
             // a sinistra del logo: omino per uscire dall'account (con conferma)
