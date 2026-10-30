@@ -72,6 +72,8 @@ class MainActivity : AppCompatActivity() {
             }
             campanella = indicatore
             indicatore.elevation = dp(8).toFloat()
+            // Rialza leggermente la campanella rispetto al centro geometrico della fascia.
+            indicatore.translationY = -dp(5).toFloat()
             addView(indicatore, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER).apply {
                 leftMargin = dp(90)
             })
