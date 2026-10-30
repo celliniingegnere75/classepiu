@@ -136,6 +136,24 @@ class PianoNotificheTest {
     }
 
     @Test
+    fun statiIndividualiSalvatiPrevalgonoSullaModalitaAutomatica() {
+        val piano = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35))
+        assertEquals(listOf(4 to R, 5 to E), piano.map { it.ora to it.stato })
+
+        // L'utente espande la 4ª e riduce manualmente la 5ª: al risveglio le scelte prevalgono
+        // sullo stato che l'orario ricalcolerebbe, anche se prima era stata attivata la modalità compatta.
+        val stati = mapOf(
+            "${4}:${piano[0].comparsa}:${piano[0].scadenza}" to false,
+            "${5}:${piano[1].comparsa}:${piano[1].scadenza}" to true
+        )
+        val ricostruito = PianoNotifiche.applicaStatiSalvati(
+            PianoNotifiche.applicaModalitaCompatta(piano, true),
+            stati
+        )
+        assertEquals(listOf(4 to E, 5 to R), ricostruito.map { it.ora to it.stato })
+    }
+
+    @Test
     fun swipeNascondeLaNotificaMaNeConservaLaScadenzaOriginale() {
         val piano = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35))
         val swippata = piano.single { it.ora == 5 }
