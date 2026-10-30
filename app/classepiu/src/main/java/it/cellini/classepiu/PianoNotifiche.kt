@@ -75,6 +75,7 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
         val annulla = mutableListOf<() -> Unit>()
         var annullaDissolvenza: (() -> Unit)? = null // MODIFICA: timer di dissolvenza separato dai timer scolastici
         var dissolvenzaInCorso = false // MODIFICA: consente di annullare anche l'animazione già avviata
+        var trattenuta = false // MODIFICA: la firma rapida mantiene aperta solo questa notifica
         var chiusa = false
     }
 
@@ -104,12 +105,20 @@ class GestoreNotifiche<F : GestoreNotifiche.Finestra>(private val tempo: Tempori
 
     /** Ferma i timer di una finestra (es. dopo "firma rapida"): resta finché non la si chiude. */
     fun trattieni(finestra: F) {
-        aperte.firstOrNull { it.finestra === finestra }?.let { fermaTimer(it) }
+        aperte.firstOrNull { it.finestra === finestra && !it.chiusa }?.let {
+            it.trattenuta = true // MODIFICA: non rientra nel timer generale dopo la firma rapida
+            fermaTimer(it)
+        }
     }
 
-    /** MODIFICA: un'interazione riavvia solo la dissolvenza della notifica toccata. */
+    /**
+     * MODIFICA: il conteggio della dissolvenza è generale. Qualsiasi interazione su una scheda
+     * riavvia contemporaneamente il timer di tutte le notifiche aperte, non trattenute.
+     * Se una dissolvenza è già partita, viene annullata anche sulle altre schede.
+     */
     fun interagita(finestra: F) {
-        aperte.firstOrNull { it.finestra === finestra && !it.chiusa }?.let { voce ->
+        if (aperte.none { it.finestra === finestra && !it.chiusa }) return
+        aperte.filter { !it.chiusa && !it.trattenuta }.forEach { voce ->
             if (voce.dissolvenzaInCorso) {
                 voce.dissolvenzaInCorso = false
                 voce.finestra.annullaDissolvenza()
