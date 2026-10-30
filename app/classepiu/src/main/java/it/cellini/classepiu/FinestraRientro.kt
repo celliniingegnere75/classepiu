@@ -333,10 +333,8 @@ object FinestraRientro {
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
 
         // Riepilogo compatto: ora scolastica, codice classe e stato effettivo della firma.
-        val oraBreve = when (lezione.ora) {
-            1 -> "I° ora"; 2 -> "II° ora"; 3 -> "III° ora"; 4 -> "IV° ora"; 5 -> "V° ora"
-            6 -> "VI° ora"; 7 -> "VII° ora"; 8 -> "VIII° ora"; else -> "${lezione.ora}° ora"
-        }
+        // numeri arabi per tutte le ore, come in "lezioni" (1° ora … 9° ora)
+        val oraBreve = "${lezione.ora}° ora"
         val statoCompatto = TextView(activity).apply {
             text = "verifica…"
             textSize = 12.5f
