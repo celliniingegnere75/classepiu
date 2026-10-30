@@ -121,17 +121,32 @@ class ListaScheda : Scheda() {
                     val data = v.t("evtDate", "date", "noteDate", "lessonDate", "day")
                     val corpo = v.t("evtText", "noteText", "text", "note", "notes", "lessonArg", "lessonDesc", "description")
                     if (cosa == "lezioni") {
-                        // una lezione firmata: ora, materia, argomento e docente (campi dedotti)
-                        val materia = v.t("subjectDesc", "subjectName", "subject")
-                        val firma = v.t("authorName", "teacherName", "signedBy", "teacher")
-                        if (materia.isNotEmpty() && (corpo.isNotEmpty() || firma.isNotEmpty() || v.t("evtHPos", "hourPos", "evtHour").isNotEmpty())) {
-                            val ora = v.t("evtHPos", "hourPos", "evtHour", "hour")
+                        // lessons2/students restituisce le firme di tutti i docenti della classe.
+                        // La materia non è obbligatoria: alcune firme, inclusa Educazione civica,
+                        // possono avere i dati della materia in forma diversa o non esporre subjectDesc.
+                        val docente = v.optJSONObject("author") ?: v.optJSONObject("teacher") ?: v.optJSONObject("signedBy")
+                        val materiaObj = v.optJSONObject("subject")
+                        val materia = v.t("subjectDesc", "subjectName", "subjectCode", "subject")
+                            .ifEmpty { materiaObj?.t("subjectDesc", "subjectName", "description", "name").orEmpty() }
+                        val firma = v.t("authorName", "teacherName", "signedBy", "teacher", "author")
+                            .ifEmpty { docente?.t("name", "fullName", "teacherName", "authorName").orEmpty() }
+                        val autoreId = v.t("authorId", "teacherId", "signedById", "author_id", "teacher_id")
+                            .ifEmpty { docente?.t("id", "teacherId", "authorId").orEmpty() }
+                        val ora = v.t("evtHPos", "hourPos", "evtHour", "hour")
+                        val codiceEvento = v.t("evtCode", "eventCode")
+                        val eFirma = codiceEvento.equals("LSF0", true) ||
+                            (firma.isNotEmpty() && (ora.isNotEmpty() || corpo.isNotEmpty() || materia.isNotEmpty()))
+                        if (eFirma) {
                             val tipoLezione = v.t("lessonType").takeIf { it.isNotEmpty() && !it.equals("Lezione", ignoreCase = true) }
                             val stati = v.optJSONArray("studentStatus")
                             val assenti = stati?.let { a -> (0 until a.length()).count { a.optJSONObject(it)?.optString("status", "")?.startsWith("HAB") == true } } ?: 0
                             val riga = listOfNotNull(if (firma.isNotEmpty()) "firmata da $firma" else null, tipoLezione?.lowercase(), if (assenti > 0) "$assenti assent${if (assenti == 1) "e" else "i"}" else null).joinToString(" · ")
-                            val mia = mioId.isNotEmpty() && v.t("authorId", "teacherId") == mioId
-                            out.add(Voce(data.ifEmpty { "" }, (if (ora.isNotEmpty()) "${ora}ª ora · " else "") + materia, corpo.ifEmpty { "nessun argomento" }, "", riga, ora.toIntOrNull() ?: 99,
+                            // L'editabilità dipende esclusivamente dall'ID del docente, mai dalla materia:
+                            // quindi sono modificabili anche le proprie firme di Educazione civica.
+                            val mia = mioId.isNotEmpty() && autoreId == mioId
+                            val titolo = listOf(if (ora.isNotEmpty()) "${ora}ª ora" else "", materia)
+                                .filter { it.isNotEmpty() }.joinToString(" · ").ifEmpty { "firma di lezione" }
+                            out.add(Voce(data.ifEmpty { "" }, titolo, corpo.ifEmpty { "nessun argomento" }, "", riga, ora.toIntOrNull() ?: 99,
                                 v.toString(), mia))
                         } else for (k in v.keys()) cammina(v.opt(k), livello + 1)
                         return
