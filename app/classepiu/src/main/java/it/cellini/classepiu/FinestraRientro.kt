@@ -68,6 +68,8 @@ object FinestraRientro {
     private var attivitaNotifiche: java.lang.ref.WeakReference<Activity>? = null
     /** Scorrimento in corso delle schede rimaste dopo uno swipe (una per scheda). */
     private val scorrimentiSchede = java.util.WeakHashMap<View, android.animation.Animator>()
+    /** Scorrimento in corso dell'intera colonna dopo che una scheda è stata tolta. */
+    private var animazioneColonna: android.animation.Animator? = null
     private var preferenzeCompatte: android.content.SharedPreferences? = null
     private var posizioneCompatta = false
     private val aggiornaDopoRiduzione = Runnable { applicaDisposizioneCompatta(animate = true) }
@@ -125,6 +127,8 @@ object FinestraRientro {
     }
 
     private fun togliContenitore() {
+        animazioneColonna?.cancel()
+        animazioneColonna = null
         handler.removeCallbacks(aggiornaDopoRiduzione) // MODIFICA
         val d = dialog
         dialog = null
@@ -171,26 +175,41 @@ object FinestraRientro {
                 posizioneCompatta = compatta
                 val limiteInferiore = superficie.height - superficie.context.dp(ALTEZZA_BARRA + ALZO_BARRA + 4)
                 scorrimento.animate().cancel()
-                scorrimento.translationY = if (compatta) (limiteInferiore - scorrimento.bottom).toFloat() else 0f
+                animazioneColonna?.cancel()
+                val destinazione = if (compatta) (limiteInferiore - scorrimento.bottom).toFloat() else 0f
+                scorrimento.translationY = destinazione
+                // quanto si è spostata ogni scheda rispetto a prima, con la colonna già nella posizione finale
                 val punto = IntArray(2)
-                for ((scheda, yPrima) in posizioni) {
-                    if (scheda.parent !== colonna) continue
+                val distanze = posizioni.filterKeys { it.parent === colonna }.mapValues { (scheda, yPrima) ->
                     scorrimentiSchede.remove(scheda)?.cancel()
                     scheda.translationY = 0f
                     scheda.getLocationOnScreen(punto)
-                    val distanza = (yPrima - punto[1]).toFloat()
-                    if (distanza == 0f) continue
-                    scheda.translationY = distanza
-                    val animazione = android.animation.ObjectAnimator.ofFloat(scheda, View.TRANSLATION_Y, distanza, 0f).apply {
-                        // la discesa verso la barra ha la stessa durata e lo stesso andamento di spostaColonna
-                        if (discesa) {
-                            duration = DURATA_SPOSTAMENTO_COMPATTO_MS
-                            interpolator = DecelerateInterpolator()
-                        } else {
-                            duration = 320L
-                            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
-                        }
+                    (yPrima - punto[1]).toFloat()
+                }
+                if (distanze.isEmpty()) return true
+                // Lo spostamento comune lo fa la colonna intera (che non taglia le schede); ogni scheda fa solo la sua
+                // differenza. Spostare le schede dentro la colonna le faceva uscire dai suoi bordi: sparivano e riapparivano.
+                val comune = distanze.values.first()
+                fun prepara(animazione: android.animation.Animator) = animazione.apply {
+                    // la discesa verso la barra ha la stessa durata e lo stesso andamento di spostaColonna
+                    if (discesa) {
+                        duration = DURATA_SPOSTAMENTO_COMPATTO_MS
+                        interpolator = DecelerateInterpolator()
+                    } else {
+                        duration = 320L
+                        interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
                     }
+                }
+                if (comune != 0f) {
+                    scorrimento.translationY = destinazione + comune
+                    animazioneColonna = prepara(android.animation.ObjectAnimator.ofFloat(
+                        scorrimento, View.TRANSLATION_Y, destinazione + comune, destinazione)).also { it.start() }
+                }
+                for ((scheda, distanza) in distanze) {
+                    val propria = distanza - comune
+                    if (propria == 0f) continue
+                    scheda.translationY = propria
+                    val animazione = prepara(android.animation.ObjectAnimator.ofFloat(scheda, View.TRANSLATION_Y, propria, 0f))
                     scorrimentiSchede[scheda] = animazione
                     animazione.start()
                 }
@@ -239,6 +258,9 @@ object FinestraRientro {
         val applica = {
             if (superficieAttiva !== superficie || scorrimentoAttivo !== scorrimento) {
                 Unit
+            } else if (!animate && animazioneColonna?.isRunning == true) {
+                // la colonna sta già scivolando nella posizione giusta dopo una scheda tolta: non va interrotta
+                Unit
             } else {
                 val destinazione = if (compatta) {
                     val limiteInferiore = superficie.height -
@@ -246,6 +268,7 @@ object FinestraRientro {
                     (limiteInferiore - scorrimento.bottom).toFloat()
                 } else 0f
 
+                animazioneColonna?.cancel()
                 scorrimento.animate().cancel()
                 if (animate) {
                     scorrimento.animate()
@@ -455,10 +478,13 @@ object FinestraRientro {
             orientation = LinearLayout.VERTICAL
             dividerDrawable = GradientDrawable().apply { setSize(0, activity.dp(10)) }
             showDividers = LinearLayout.SHOW_DIVIDER_MIDDLE
+            clipChildren = false // una scheda che scivola al suo posto non viene tagliata
         }
         val scorrimento = ScrollView(activity).apply {
             isVerticalScrollBarEnabled = false
             overScrollMode = View.OVER_SCROLL_NEVER
+            clipChildren = false // una scheda che scivola al suo posto non viene tagliata
+            clipToPadding = false
             addView(colonna, FrameLayout.LayoutParams(-1, -2))
         }
         // Superficie a schermo intero: i tocchi fuori dalla colonna delle notifiche
