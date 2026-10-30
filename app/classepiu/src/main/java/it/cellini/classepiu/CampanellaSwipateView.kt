@@ -13,7 +13,7 @@ class CampanellaSwipateView(context: Context) : View(context) {
     private val pennello = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF2479C8.toInt()
         style = Paint.Style.STROKE
-        strokeWidth = context.dp(2.7f)
+        strokeWidth = context.resources.displayMetrics.density * 2.7f
         strokeCap = Paint.Cap.ROUND
         strokeJoin = Paint.Join.ROUND
     }
@@ -24,7 +24,7 @@ class CampanellaSwipateView(context: Context) : View(context) {
             shape = GradientDrawable.OVAL
             setColor(Color.WHITE)
         }
-        elevation = context.dp(3f)
+        elevation = context.resources.displayMetrics.density * 3f
         contentDescription = "Notifiche nascoste: tocca per ripristinarle"
         isClickable = true
         isFocusable = true
@@ -65,5 +65,3 @@ class CampanellaSwipateView(context: Context) : View(context) {
         canvas.restore()
     }
 }
-
-private fun Context.dp(value: Float): Float = value * resources.displayMetrics.density
