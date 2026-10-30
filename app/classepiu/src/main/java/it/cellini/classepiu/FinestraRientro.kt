@@ -56,6 +56,14 @@ object FinestraRientro {
                 .start()
         }
 
+        // MODIFICA: se l'utente tocca durante i 400 ms finali, la scheda torna opaca e il conteggio riparte.
+        override fun annullaDissolvenza() {
+            scheda.animate().cancel()
+            scheda.alpha = 1f
+            scheda.scaleX = 1f
+            scheda.scaleY = 1f
+        }
+
         override fun rimuovi() {
             controllo.ferma()
             scheda.animate().cancel()
