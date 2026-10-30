@@ -28,6 +28,10 @@ object PianoNotifiche {
     fun applicaModalitaCompatta(piano: List<NotificaPianificata>, compatta: Boolean): List<NotificaPianificata> =
         if (compatta) piano.map { it.copy(stato = StatoNotifica.RIDOTTA) } else piano
 
+    /** MODIFICA: esclude le notifiche swippate usando ora, comparsa e scadenza originali. */
+    fun escludiSwippate(piano: List<NotificaPianificata>, nascoste: Set<String>): List<NotificaPianificata> =
+        piano.filterNot { n -> nascoste.contains("${n.ora}:${n.comparsa}:${n.scadenza}") }
+
     /**
      * @param fasce tutte le fasce della tabella "lezioni" in ordine di ora (indice 0 = 1ª ora), così come le ha salvate l'utente
      * @param oreConLezione le ore del giorno in cui il docente ha lezione
