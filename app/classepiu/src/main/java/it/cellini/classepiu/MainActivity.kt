@@ -66,11 +66,12 @@ class MainActivity : AppCompatActivity() {
             }
             addView(logo, FrameLayout.LayoutParams(dp(160), ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER))
             // MODIFICA: campanella sovrapposta di pochi pixel alla "ù" del logo.
-            campanella = CampanellaSwipateView(this@MainActivity).apply {
+            val indicatore = CampanellaSwipateView(this@MainActivity).apply {
                 visibility = View.GONE
                 setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
             }
-            addView(campanella, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER).apply {
+            campanella = indicatore
+            addView(indicatore, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER).apply {
                 leftMargin = dp(72)
             })
             setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
