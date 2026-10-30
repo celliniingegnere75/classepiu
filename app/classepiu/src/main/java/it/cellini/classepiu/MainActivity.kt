@@ -37,7 +37,6 @@ class MainActivity : AppCompatActivity() {
     private val schedeId = View.generateViewId()
     private var schedaAttiva = TAB_REGISTRO
     private var barra: BarraPagine? = null
-    private var sospesa = false
     private var campanella: CampanellaSwipateView? = null // MODIFICA
 
     private val permessoNotifiche = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
@@ -197,18 +196,19 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onStart() {
-        val rientroDaSospensione = sospesa
-        sospesa = false
         super.onStart()
-        if (Impostazioni(this).pronta) Controllo.recupera(this)
-        aggiornaCampanella() // MODIFICA
-        // La finestra compare solo quando l'Activity torna dal background, non nei cambi pagina.
-        if (rientroDaSospensione && !isFinishing) FinestraRientro.mostra(this)
+        if (Impostazioni(this).pronta) {
+            Controllo.recupera(this)
+            aggiornaCampanella() // MODIFICA
+            // Esegue il calcolo sia al primo avvio sia a ogni rientro in primo piano.
+            // FinestraRientro calcola le notifiche dovute all'ora corrente ed evita
+            // di mostrarle quando il piano risultante è vuoto.
+            if (!isFinishing) FinestraRientro.mostra(this)
+        }
     }
 
     override fun onStop() {
-        sospesa = true
-        // le notifiche del rientro non sopravvivono alla sospensione: al prossimo rientro si ricalcolano da zero
+        // Le notifiche vengono ricostruite al successivo onStart, anche dopo l'avvio iniziale.
         FinestraRientro.chiudiTutto()
         super.onStop()
     }
