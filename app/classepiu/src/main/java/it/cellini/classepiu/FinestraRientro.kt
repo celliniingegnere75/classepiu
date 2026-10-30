@@ -107,8 +107,8 @@ object FinestraRientro {
             controllo.ferma()
             scheda.animate().cancel()
             val colonna = scheda.parent as? ViewGroup
-            // Nel gruppo già sceso sopra la barra le schede rimaste scivolano al loro posto invece di saltare.
-            val posizioni = if (posizioneCompatta && colonna != null) posizioniSchede(colonna, scheda) else null
+            // Le schede rimaste scivolano al loro posto invece di saltare.
+            val posizioni = if (colonna != null && superficieAttiva != null) posizioniSchede(colonna, scheda) else null
             colonna?.removeView(scheda)
             if (colonna != null && posizioni != null) ricomponiSenzaScatti(colonna, posizioni)
             aggiornaOmbra()
@@ -150,9 +150,10 @@ object FinestraRientro {
     }
 
     /**
-     * Dopo lo swipe di una scheda nel gruppo compatto: la colonna si accorcia e, centrata nella superficie, si
-     * sposterebbe di metà altezza per poi saltare di nuovo giù quando [spostaColonna] la riallinea alla barra.
-     * Qui invece la colonna va subito nella posizione finale e ogni scheda rimasta parte da dove era e scivola al suo posto.
+     * Dopo che una scheda è stata tolta la colonna si accorcia e, centrata nella superficie, saltava di metà altezza; poi
+     * [spostaColonna] la portava sopra la barra, così le schede rimaste prima si sollevavano e poi scendevano.
+     * Qui invece la colonna va subito nella posizione finale (sopra la barra se restano solo ridotte, al centro altrimenti)
+     * e ogni scheda rimasta parte da dove era e scivola direttamente al suo posto.
      */
     private fun ricomponiSenzaScatti(colonna: ViewGroup, posizioni: Map<View, Int>) {
         val superficie = superficieAttiva ?: return
@@ -161,11 +162,16 @@ object FinestraRientro {
         osservatore.addOnPreDrawListener(object : android.view.ViewTreeObserver.OnPreDrawListener {
             override fun onPreDraw(): Boolean {
                 if (scorrimento.viewTreeObserver.isAlive) scorrimento.viewTreeObserver.removeOnPreDrawListener(this)
-                if (superficieAttiva !== superficie || scorrimentoAttivo !== scorrimento || !posizioneCompatta) return true
-                // stessa destinazione di spostaColonna in modalità compatta
+                if (superficieAttiva !== superficie || scorrimentoAttivo !== scorrimento) return true
+                val avvisi = gestore.finestre
+                if (avvisi.isEmpty()) return true
+                val compatta = avvisi.all { it.controllo.ridotta }
+                val discesa = compatta && !posizioneCompatta
+                // stessa destinazione di spostaColonna; da qui in poi spostaColonna non deve più muovere la colonna
+                posizioneCompatta = compatta
                 val limiteInferiore = superficie.height - superficie.context.dp(ALTEZZA_BARRA + ALZO_BARRA + 4)
                 scorrimento.animate().cancel()
-                scorrimento.translationY = (limiteInferiore - scorrimento.bottom).toFloat()
+                scorrimento.translationY = if (compatta) (limiteInferiore - scorrimento.bottom).toFloat() else 0f
                 val punto = IntArray(2)
                 for ((scheda, yPrima) in posizioni) {
                     if (scheda.parent !== colonna) continue
@@ -176,8 +182,14 @@ object FinestraRientro {
                     if (distanza == 0f) continue
                     scheda.translationY = distanza
                     val animazione = android.animation.ObjectAnimator.ofFloat(scheda, View.TRANSLATION_Y, distanza, 0f).apply {
-                        duration = 320L
-                        interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+                        // la discesa verso la barra ha la stessa durata e lo stesso andamento di spostaColonna
+                        if (discesa) {
+                            duration = DURATA_SPOSTAMENTO_COMPATTO_MS
+                            interpolator = DecelerateInterpolator()
+                        } else {
+                            duration = 320L
+                            interpolator = android.view.animation.PathInterpolator(0.4f, 0f, 0.2f, 1f)
+                        }
                     }
                     scorrimentiSchede[scheda] = animazione
                     animazione.start()
@@ -461,6 +473,8 @@ object FinestraRientro {
                     if (zonaTitolo && haNotificheSwippate(activity)) {
                         ripristinaSwippate(activity)
                     } else {
+                        // chiuse col tocco fuori: restano recuperabili con la campanella, come con lo swipe
+                        gestore.finestre.forEach { registraSwipe(activity, it.notifica) }
                         gestore.dissolviTutto()
                     }
                 }

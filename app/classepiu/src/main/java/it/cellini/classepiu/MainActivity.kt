@@ -40,6 +40,8 @@ class MainActivity : AppCompatActivity() {
     private var campanella: CampanellaSwipateView? = null // MODIFICA
     /** true dalla creazione al primo onStart: è l'avvio dell'app, non un rientro. */
     private var primoAvvio = false
+    /** true finché l'animazione di apertura è sullo schermo: le notifiche compaiono solo dopo. */
+    private var attesaSplash = false
 
     private val permessoNotifiche = registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
 
@@ -77,7 +79,7 @@ class MainActivity : AppCompatActivity() {
             // Rialza leggermente la campanella rispetto al centro geometrico della fascia.
             indicatore.translationY = -dp(5).toFloat()
             addView(indicatore, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER).apply {
-                leftMargin = dp(90)
+                leftMargin = dp(93)
             })
             // La campanella deve restare sopra al logo e agli elementi della fascia.
             indicatore.bringToFront()
@@ -167,7 +169,14 @@ class MainActivity : AppCompatActivity() {
         } else chiediBatteria()
         gestisci(intent)
         // dopo l'ingresso con le credenziali si entra subito, senza animazione
-        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) Splash.mostra(this)
+        if (savedInstanceState == null && !intent.getBooleanExtra(EXTRA_SENZA_ANIMAZIONE, false)) {
+            attesaSplash = true
+            Splash.mostra(this) {
+                attesaSplash = false
+                if (lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED) && !isFinishing && !isDestroyed)
+                    FinestraRientro.mostra(this)
+            }
+        }
     }
 
     /** Stessa uscita del pulsante in opzioni: toglie la password, ferma il controllo e torna all'accesso. */
@@ -210,7 +219,7 @@ class MainActivity : AppCompatActivity() {
             // Esegue il calcolo sia al primo avvio sia a ogni rientro in primo piano.
             // FinestraRientro calcola le notifiche dovute all'ora corrente ed evita
             // di mostrarle quando il piano risultante è vuoto.
-            if (!isFinishing) FinestraRientro.mostra(this)
+            if (!isFinishing && !attesaSplash) FinestraRientro.mostra(this)
         }
     }
 

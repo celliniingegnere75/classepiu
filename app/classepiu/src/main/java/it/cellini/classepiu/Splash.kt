@@ -15,8 +15,8 @@ import android.widget.TextView
  * la frase scherzosa "è intelligente ma si applica!" e l'animazione dura 3 secondi in più.
  */
 object Splash {
-    fun mostra(a: Activity, conFrase: Boolean = false) {
-        val radice = a.findViewById<ViewGroup>(android.R.id.content) ?: return
+    fun mostra(a: Activity, conFrase: Boolean = false, allaFine: () -> Unit = {}) {
+        val radice = a.findViewById<ViewGroup>(android.R.id.content) ?: return allaFine()
         val frase = TextView(a).apply {
             text = "è intelligente ma si applica!"
             textSize = 22f
@@ -46,7 +46,7 @@ object Splash {
         radice.addView(velo, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         // senza frase: logo per 900 ms; con frase resta 3 secondi dopo la comparsa del logo (450 ms)
         velo.postDelayed({
-            velo.animate().alpha(0f).setDuration(350).withEndAction { radice.removeView(velo) }.start()
+            velo.animate().alpha(0f).setDuration(350).withEndAction { radice.removeView(velo); allaFine() }.start()
         }, if (conFrase) 450L + 3000L else 900L)
     }
 }
