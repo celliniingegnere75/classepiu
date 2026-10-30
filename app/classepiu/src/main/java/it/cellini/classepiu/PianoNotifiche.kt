@@ -23,6 +23,10 @@ object PianoNotifiche {
     const val ANTICIPO_MINUTI = 15
     const val MASSIMO = 3
 
+    /** MODIFICA: ripristina la modalità compatta rendendo ridotte tutte le notifiche del piano, senza alterarne i tempi. */
+    fun applicaModalitaCompatta(piano: List<NotificaPianificata>, compatta: Boolean): List<NotificaPianificata> =
+        if (compatta) piano.map { it.copy(stato = StatoNotifica.RIDOTTA) } else piano
+
     /**
      * @param fasce tutte le fasce della tabella "lezioni" in ordine di ora (indice 0 = 1ª ora), così come le ha salvate l'utente
      * @param oreConLezione le ore del giorno in cui il docente ha lezione
