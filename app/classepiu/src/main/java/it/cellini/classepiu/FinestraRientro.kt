@@ -46,6 +46,7 @@ object FinestraRientro {
     private var scadenzaSwippateProgrammata: Runnable? = null
     private var superficieAttiva: FrameLayout? = null
     private var scorrimentoAttivo: ScrollView? = null
+    private var campanellaDialog: CampanellaSwipateView? = null // MODIFICA
     private var preferenzeCompatte: android.content.SharedPreferences? = null
     private var posizioneCompatta = false
     private val aggiornaDopoRiduzione = Runnable { applicaDisposizioneCompatta(animate = true) }
@@ -104,6 +105,7 @@ object FinestraRientro {
         dialog = null
         superficieAttiva = null
         scorrimentoAttivo = null
+        campanellaDialog = null
         preferenzeCompatte = null
         posizioneCompatta = false
         runCatching { d?.dismiss() }
@@ -234,6 +236,25 @@ object FinestraRientro {
 
     private fun aggiornaIndicatore(activity: Activity) {
         (activity as? MainActivity)?.aggiornaCampanella()
+        aggiornaCampanellaDialog(activity)
+    }
+
+    /** MODIFICA: mantiene cliccabile e visibile la campanella anche sopra il Dialog a schermo intero. */
+    private fun aggiornaCampanellaDialog(activity: Activity) {
+        val superficie = superficieAttiva ?: return
+        val presente = haNotificheSwippate(activity)
+        if (presente && campanellaDialog == null) {
+            campanellaDialog = CampanellaSwipateView(activity).apply {
+                setOnClickListener { ripristinaSwippate(activity) }
+            }
+            superficie.addView(campanellaDialog, FrameLayout.LayoutParams(activity.dp(36), activity.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = activity.dp(72)
+                topMargin = activity.dp(8)
+            })
+        } else if (!presente) {
+            campanellaDialog?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            campanellaDialog = null
+        }
     }
 
     fun haNotificheSwippate(activity: Activity): Boolean {
@@ -325,21 +346,13 @@ object FinestraRientro {
             setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
             setGravity(Gravity.CENTER)
         }
-        // Campanella anche sopra il Dialog: il tocco la usa per recuperare le schede nascoste.
-        if (haNotificheSwippate(activity)) {
-            superficie.addView(CampanellaSwipateView(activity).apply {
-                setOnClickListener { ripristinaSwippate(activity) }
-            }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-                leftMargin = activity.dp(74)
-                topMargin = activity.dp(8)
-            })
-        }
         dialog = d
         superficieAttiva = superficie
         scorrimentoAttivo = scorrimento
         preferenzeCompatte = preferenze
         posizioneCompatta = false
         d.show()
+        aggiornaCampanellaDialog(activity)
         d.window?.setBackgroundDrawableResource(android.R.color.transparent)
         d.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
 
