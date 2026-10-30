@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
                 setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
             }
             campanella = indicatore
-            addView(indicatore, FrameLayout.LayoutParams(dp(36), dp(36), Gravity.CENTER).apply {
+            addView(indicatore, FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER).apply {
                 leftMargin = dp(90)
             })
             setOnClickListener { FinestraRientro.ripristinaSwippate(this@MainActivity) }
