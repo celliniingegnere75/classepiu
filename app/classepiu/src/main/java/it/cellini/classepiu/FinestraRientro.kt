@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.graphics.Typeface
@@ -33,6 +34,17 @@ import java.util.Calendar
 object FinestraRientro {
     private val handler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
+
+    // MODIFICA: stato compatto persistente tra sospensioni e successivi risvegli.
+    private const val PREFERENZE_COMPATTE = "classepiu_notifiche"
+    private const val CHIAVE_MODALITA_COMPATTA = "modalita_compatta"
+    private const val DURATA_SPOSTAMENTO_COMPATTO_MS = 1000L
+    private const val DURATA_ANIMAZIONE_RIDUZIONE_MS = 420L
+    private var superficieAttiva: FrameLayout? = null
+    private var scorrimentoAttivo: ScrollView? = null
+    private var preferenzeCompatte: android.content.SharedPreferences? = null
+    private var posizioneCompatta = false
+    private val aggiornaDopoRiduzione = Runnable { applicaDisposizioneCompatta(animate = true) }
     /** Cresce a ogni rientro e a ogni chiusura: le risposte di ClasseViva di un rientro vecchio vengono ignorate. */
     private var generazione = 0
     private val gestore = GestoreNotifiche<Avviso> { ms, azione ->
@@ -70,20 +82,91 @@ object FinestraRientro {
             scheda.animate().cancel()
             (scheda.parent as? ViewGroup)?.removeView(scheda)
             aggiornaOmbra()
+            programmaAggiornamentoDisposizione() // MODIFICA: se restano solo schede ridotte, compatta il gruppo.
         }
     }
 
     /** Chiude subito tutte le notifiche e i loro timer (rientro nuovo, Activity in background o distrutta). */
     fun chiudiTutto() {
+        handler.removeCallbacks(aggiornaDopoRiduzione) // MODIFICA
         generazione++
         gestore.chiudiTutto()
         togliContenitore()
     }
 
     private fun togliContenitore() {
+        handler.removeCallbacks(aggiornaDopoRiduzione) // MODIFICA
         val d = dialog
         dialog = null
+        superficieAttiva = null
+        scorrimentoAttivo = null
+        preferenzeCompatte = null
+        posizioneCompatta = false
         runCatching { d?.dismiss() }
+    }
+
+    /** MODIFICA: dopo l'animazione interna di riduzione, porta l'intero gruppo sopra la barra delle pagine. */
+    private fun programmaAggiornamentoDisposizione() {
+        val avvisi = gestore.finestre
+        if (avvisi.isEmpty()) {
+            handler.removeCallbacks(aggiornaDopoRiduzione)
+            return
+        }
+        val tutteRidotte = avvisi.all { it.controllo.ridotta }
+        if (!tutteRidotte) {
+            handler.removeCallbacks(aggiornaDopoRiduzione)
+            preferenzeCompatte?.edit()?.putBoolean(CHIAVE_MODALITA_COMPATTA, false)?.apply()
+            applicaDisposizioneCompatta(animate = true)
+        } else {
+            // Salva subito lo stato: anche una sospensione durante l'animazione non lo perde.
+            preferenzeCompatte?.edit()?.putBoolean(CHIAVE_MODALITA_COMPATTA, true)?.apply()
+            handler.removeCallbacks(aggiornaDopoRiduzione)
+            handler.postDelayed(aggiornaDopoRiduzione, DURATA_ANIMAZIONE_RIDUZIONE_MS + 40L)
+        }
+    }
+
+    /** MODIFICA: applica o ripristina la posizione compatta; al risveglio il ripristino è immediato. */
+    private fun applicaDisposizioneCompatta(animate: Boolean) {
+        val avvisi = gestore.finestre
+        if (avvisi.isEmpty()) return
+        val compatta = avvisi.all { it.controllo.ridotta }
+        preferenzeCompatte?.edit()?.putBoolean(CHIAVE_MODALITA_COMPATTA, compatta)?.apply()
+
+        val cambiata = posizioneCompatta != compatta
+        posizioneCompatta = compatta
+        spostaColonna(compatta, animate && cambiata)
+    }
+
+    /** MODIFICA: l'ultima scheda termina appena sopra la barra inferiore, lasciandola libera e visibile. */
+    private fun spostaColonna(compatta: Boolean, animate: Boolean) {
+        val superficie = superficieAttiva ?: return
+        val scorrimento = scorrimentoAttivo ?: return
+
+        val applica = {
+            if (superficieAttiva !== superficie || scorrimentoAttivo !== scorrimento) {
+                Unit
+            } else {
+                val destinazione = if (compatta) {
+                    val limiteInferiore = superficie.height -
+                        superficie.context.dp(ALTEZZA_BARRA + ALZO_BARRA + 4)
+                    (limiteInferiore - scorrimento.bottom).toFloat()
+                } else 0f
+
+                scorrimento.animate().cancel()
+                if (animate) {
+                    scorrimento.animate()
+                        .translationY(destinazione)
+                        .setDuration(DURATA_SPOSTAMENTO_COMPATTO_MS)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
+                } else {
+                    scorrimento.translationY = destinazione
+                }
+            }
+        }
+
+        if (superficie.height == 0 || scorrimento.height == 0) superficie.post { applica() }
+        else applica()
     }
 
     /** Ombra dietro le notifiche: piena se almeno una è estesa, leggera se sono tutte ridotte. */
@@ -100,7 +183,12 @@ object FinestraRientro {
         val orario = runCatching { Orario(activity) }.getOrNull() ?: return
         val lezioni = orario.lezioniDel(Orario.giornoDi(adesso)).associateBy { it.ora }
         val secondiAdesso = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
-        val piano = PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso)
+        val preferenze = activity.getSharedPreferences(PREFERENZE_COMPATTE, Activity.MODE_PRIVATE)
+        val compattaSalvata = preferenze.getBoolean(CHIAVE_MODALITA_COMPATTA, false)
+        val piano = PianoNotifiche.applicaModalitaCompatta(
+            PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso),
+            compattaSalvata
+        )
         if (piano.isEmpty()) return
 
         // colonna delle notifiche, 10 dp tra l'una e l'altra; scorre solo se non entra nello schermo
@@ -143,6 +231,10 @@ object FinestraRientro {
             setGravity(Gravity.CENTER)
         }
         dialog = d
+        superficieAttiva = superficie
+        scorrimentoAttivo = scorrimento
+        preferenzeCompatte = preferenze
+        posizioneCompatta = false
         d.show()
         d.window?.setBackgroundDrawableResource(android.R.color.transparent)
         d.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
@@ -158,6 +250,13 @@ object FinestraRientro {
             }
         }
         aggiornaOmbra()
+        // MODIFICA: se la modalità compatta era già attiva, si ripristina senza animazione;
+        // altrimenti, se il piano nasce già tutto ridotto, il gruppo scende in un secondo.
+        superficie.post {
+            if (gen == generazione && dialog === d) {
+                applicaDisposizioneCompatta(animate = !compattaSalvata)
+            }
+        }
         verificaFirme(activity, gen, gestore.finestre)
     }
 
@@ -436,7 +535,10 @@ object FinestraRientro {
 
         avviso = Avviso(lezione, contenitore)
         avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
-            alCambioStato = { aggiornaOmbra() },
+            alCambioStato = {
+                aggiornaOmbra()
+                programmaAggiornamentoDisposizione() // MODIFICA
+            },
             allaChiusura = { gestore.chiudi(avviso) },
             allEspansione = { gestore.espansa(avviso) },
             alInterazione = { gestore.interagita(avviso) }) // MODIFICA
