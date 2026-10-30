@@ -17,11 +17,20 @@ data class NotificaPianificata(val ora: Int, val stato: StatoNotifica, val compa
  *   l'ora in cui il docente non ha lezione); se la fascia successiva non c'è, scade alla fine della sua fascia;
  * - al massimo 3 insieme, le più recenti, dalla più vecchia (in alto) alla più nuova (in basso);
  * - al massimo una estesa: se l'orario ne prevede più di una resta estesa solo la più recente, le altre sono ridotte.
- * Tutto si ricalcola da zero dall'ora attuale: nessuno stato dei risvegli precedenti.
+ * Tempi e notifiche attive si ricalcolano a ogni risveglio; resta invece memorizzata la scelta dell'utente di mantenere
+ * tutte le schede ridotte, finché non ne espande una.
  */
 object PianoNotifiche {
     const val ANTICIPO_MINUTI = 15
     const val MASSIMO = 3
+
+    /** MODIFICA: ripristina la modalità compatta rendendo ridotte tutte le notifiche del piano, senza alterarne i tempi. */
+    fun applicaModalitaCompatta(piano: List<NotificaPianificata>, compatta: Boolean): List<NotificaPianificata> =
+        if (compatta) piano.map { it.copy(stato = StatoNotifica.RIDOTTA) } else piano
+
+    /** MODIFICA: esclude le notifiche swippate usando ora, comparsa e scadenza originali. */
+    fun escludiSwippate(piano: List<NotificaPianificata>, nascoste: Set<String>): List<NotificaPianificata> =
+        piano.filterNot { n -> nascoste.contains("${n.ora}:${n.comparsa}:${n.scadenza}") }
 
     /**
      * @param fasce tutte le fasce della tabella "lezioni" in ordine di ora (indice 0 = 1ª ora), così come le ha salvate l'utente

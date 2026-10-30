@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.view.WindowManager
+import android.view.animation.DecelerateInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.graphics.Typeface
@@ -26,13 +27,29 @@ import java.util.Calendar
 /**
  * Notifiche dell'orario mostrate solo al rientro in primo piano: fino a tre schede sovrapposte, la più vecchia in alto e la
  * più nuova in basso, ognuna col suo stato esteso/ridotto, i suoi timer e la sua dissolvenza dopo circa 10 secondi.
- * A ogni rientro si chiude tutto quello che era rimasto e si ricalcola da zero dall'orario del giorno ([PianoNotifiche]).
+ * A ogni rientro si ricrea il piano dall'orario del giorno ([PianoNotifiche]); se l'utente aveva già scelto la modalità
+ * compatta, tutte le schede vengono ripristinate ridotte e il gruppo resta sopra la barra delle pagine.
  * Le schede stanno in un'unica finestra (Dialog), tolta quando sparisce l'ultima scheda o quando l'Activity va in background:
  * così non restano finestre agganciate a un'Activity non più valida.
  */
 object FinestraRientro {
     private val handler = Handler(Looper.getMainLooper())
     private var dialog: Dialog? = null
+
+    // MODIFICA: stato compatto persistente tra sospensioni e successivi risvegli.
+    private const val PREFERENZE_COMPATTE = "classepiu_notifiche"
+    private const val CHIAVE_MODALITA_COMPATTA = "modalita_compatta"
+    private const val DURATA_SPOSTAMENTO_COMPATTO_MS = 1000L
+    private const val DURATA_ANIMAZIONE_RIDUZIONE_MS = 420L
+    private const val PREFERENZE_SWIPATE = "classepiu_notifiche_swippate"
+    private val formatoGiorno = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
+    private var scadenzaSwippateProgrammata: Runnable? = null
+    private var superficieAttiva: FrameLayout? = null
+    private var scorrimentoAttivo: ScrollView? = null
+    private var campanellaDialog: CampanellaSwipateView? = null // MODIFICA
+    private var preferenzeCompatte: android.content.SharedPreferences? = null
+    private var posizioneCompatta = false
+    private val aggiornaDopoRiduzione = Runnable { applicaDisposizioneCompatta(animate = true) }
     /** Cresce a ogni rientro e a ogni chiusura: le risposte di ClasseViva di un rientro vecchio vengono ignorate. */
     private var generazione = 0
     private val gestore = GestoreNotifiche<Avviso> { ms, azione ->
@@ -43,7 +60,7 @@ object FinestraRientro {
     }.apply { allaFine = { togliContenitore() } }
 
     /** Una notifica (scheda bianca estesa + striscia ridotta) con il suo controller. */
-    private class Avviso(val lezione: Lezione, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
+    private class Avviso(val lezione: Lezione, val notifica: NotificaPianificata, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
         lateinit var controllo: ControlloNotificaRiducibile
         var applicaVerifica: (Result<EsitoFirma?>) -> Unit = {}
 
@@ -70,20 +87,92 @@ object FinestraRientro {
             scheda.animate().cancel()
             (scheda.parent as? ViewGroup)?.removeView(scheda)
             aggiornaOmbra()
+            programmaAggiornamentoDisposizione() // MODIFICA: se restano solo schede ridotte, compatta il gruppo.
         }
     }
 
     /** Chiude subito tutte le notifiche e i loro timer (rientro nuovo, Activity in background o distrutta). */
     fun chiudiTutto() {
+        handler.removeCallbacks(aggiornaDopoRiduzione) // MODIFICA
         generazione++
         gestore.chiudiTutto()
         togliContenitore()
     }
 
     private fun togliContenitore() {
+        handler.removeCallbacks(aggiornaDopoRiduzione) // MODIFICA
         val d = dialog
         dialog = null
+        superficieAttiva = null
+        scorrimentoAttivo = null
+        campanellaDialog = null
+        preferenzeCompatte = null
+        posizioneCompatta = false
         runCatching { d?.dismiss() }
+    }
+
+    /** MODIFICA: dopo l'animazione interna di riduzione, porta l'intero gruppo sopra la barra delle pagine. */
+    private fun programmaAggiornamentoDisposizione() {
+        val avvisi = gestore.finestre
+        if (avvisi.isEmpty()) {
+            handler.removeCallbacks(aggiornaDopoRiduzione)
+            return
+        }
+        val tutteRidotte = avvisi.all { it.controllo.ridotta }
+        if (!tutteRidotte) {
+            handler.removeCallbacks(aggiornaDopoRiduzione)
+            preferenzeCompatte?.edit()?.putBoolean(CHIAVE_MODALITA_COMPATTA, false)?.apply()
+            applicaDisposizioneCompatta(animate = true)
+        } else {
+            // Salva subito lo stato: anche una sospensione durante l'animazione non lo perde.
+            preferenzeCompatte?.edit()?.putBoolean(CHIAVE_MODALITA_COMPATTA, true)?.apply()
+            handler.removeCallbacks(aggiornaDopoRiduzione)
+            handler.postDelayed(aggiornaDopoRiduzione, DURATA_ANIMAZIONE_RIDUZIONE_MS + 40L)
+        }
+    }
+
+    /** MODIFICA: applica o ripristina la posizione compatta; al risveglio il ripristino è immediato. */
+    private fun applicaDisposizioneCompatta(animate: Boolean) {
+        val avvisi = gestore.finestre
+        if (avvisi.isEmpty()) return
+        val compatta = avvisi.all { it.controllo.ridotta }
+        preferenzeCompatte?.edit()?.putBoolean(CHIAVE_MODALITA_COMPATTA, compatta)?.apply()
+
+        val cambiata = posizioneCompatta != compatta
+        posizioneCompatta = compatta
+        spostaColonna(compatta, animate && cambiata)
+    }
+
+    /** MODIFICA: l'ultima scheda termina appena sopra la barra inferiore, lasciandola libera e visibile. */
+    private fun spostaColonna(compatta: Boolean, animate: Boolean) {
+        val superficie = superficieAttiva ?: return
+        val scorrimento = scorrimentoAttivo ?: return
+
+        val applica = {
+            if (superficieAttiva !== superficie || scorrimentoAttivo !== scorrimento) {
+                Unit
+            } else {
+                val destinazione = if (compatta) {
+                    val limiteInferiore = superficie.height -
+                        superficie.context.dp(ALTEZZA_BARRA + ALZO_BARRA + 4)
+                    (limiteInferiore - scorrimento.bottom).toFloat()
+                } else 0f
+
+                scorrimento.animate().cancel()
+                if (animate) {
+                    scorrimento.animate()
+                        .translationY(destinazione)
+                        .setDuration(DURATA_SPOSTAMENTO_COMPATTO_MS)
+                        .setInterpolator(DecelerateInterpolator())
+                        .start()
+                } else {
+                    scorrimento.translationY = destinazione
+                }
+            }
+        }
+
+        if (superficie.height == 0 || scorrimento.height == 0) superficie.post { applica() }
+        else applica()
     }
 
     /** Ombra dietro le notifiche: piena se almeno una è estesa, leggera se sono tutte ridotte. */
@@ -92,7 +181,101 @@ object FinestraRientro {
         d.window?.setDimAmount(if (gestore.finestre.any { !it.controllo.ridotta }) .28f else .08f)
     }
 
-    fun mostra(activity: Activity) {
+    /** Notifiche nascoste con swipe: restano recuperabili fino alla scadenza scolastica originale. */
+    private fun chiaveSwipate(): String = "giorno_${formatoGiorno.format(java.util.Date())}"
+
+    private fun leggiSwippate(activity: Activity, adesso: Int): Set<String> {
+        val pref = activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
+        val chiave = chiaveSwipate()
+        val valide = pref.getStringSet(chiave, emptySet()).orEmpty().filter { voce ->
+            val parti = voce.split(':')
+            parti.size == 3 && parti[2].toIntOrNull()?.let { it > adesso } == true
+        }.toSet()
+        if (valide.size != pref.getStringSet(chiave, emptySet()).orEmpty().size) {
+            pref.edit().putStringSet(chiave, valide).apply()
+        }
+        return valide
+    }
+
+    private fun registraSwipe(activity: Activity, notifica: NotificaPianificata) {
+        val pref = activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
+        val chiave = chiaveSwipate()
+        val elementi = pref.getStringSet(chiave, emptySet()).orEmpty().toMutableSet()
+        elementi.removeAll { it.startsWith("${notifica.ora}:${notifica.comparsa}:") }
+        elementi.add("${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}")
+        pref.edit().putStringSet(chiave, elementi).apply()
+        aggiornaIndicatore(activity)
+        programmaScadenzaSwippate(activity)
+    }
+
+    /** MODIFICA: fa sparire la campanella automaticamente alla scadenza dell'ultima notifica nascosta. */
+    private fun programmaScadenzaSwippate(activity: Activity) {
+        scadenzaSwippateProgrammata?.let { handler.removeCallbacks(it) }
+        scadenzaSwippateProgrammata = null
+        val adesso = Calendar.getInstance()
+        val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
+        val scadenze = leggiSwippate(activity, secondi).mapNotNull { it.split(':').getOrNull(2)?.toIntOrNull() }
+        val prossima = scadenze.minOrNull() ?: run {
+            aggiornaIndicatore(activity)
+            return
+        }
+        val riferimento = java.lang.ref.WeakReference(activity)
+        val r = Runnable {
+            scadenzaSwippateProgrammata = null
+            riferimento.get()?.takeIf { !it.isFinishing && !it.isDestroyed }?.let { attivita ->
+                val ora = Calendar.getInstance()
+                val sec = (ora.get(Calendar.HOUR_OF_DAY) * 60 + ora.get(Calendar.MINUTE)) * 60 + ora.get(Calendar.SECOND)
+                leggiSwippate(attivita, sec)
+                aggiornaIndicatore(attivita)
+                programmaScadenzaSwippate(attivita)
+            }
+        }
+        scadenzaSwippateProgrammata = r
+        handler.postDelayed(r, ((prossima - secondi).coerceAtLeast(1) * 1000L))
+    }
+
+    private fun aggiornaIndicatore(activity: Activity) {
+        (activity as? MainActivity)?.aggiornaCampanella()
+        aggiornaCampanellaDialog(activity)
+    }
+
+    /** MODIFICA: mantiene cliccabile e visibile la campanella anche sopra il Dialog a schermo intero. */
+    private fun aggiornaCampanellaDialog(activity: Activity) {
+        val superficie = superficieAttiva ?: return
+        val presente = haNotificheSwippate(activity)
+        if (presente && campanellaDialog == null) {
+            val indicatore = CampanellaSwipateView(activity).apply {
+                setOnClickListener { ripristinaSwippate(activity) }
+            }
+            campanellaDialog = indicatore
+            superficie.addView(indicatore, FrameLayout.LayoutParams(activity.dp(36), activity.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
+                leftMargin = activity.dp(72)
+                topMargin = activity.dp(8)
+            })
+        } else if (!presente) {
+            campanellaDialog?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            campanellaDialog = null
+        }
+    }
+
+    fun haNotificheSwippate(activity: Activity): Boolean {
+        val adesso = Calendar.getInstance()
+        val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
+        val presenti = leggiSwippate(activity, secondi).isNotEmpty()
+        if (presenti && scadenzaSwippateProgrammata == null) programmaScadenzaSwippate(activity)
+        return presenti
+    }
+
+    /** Ripristina le notifiche nascoste ancora valide, senza ricalcolare o prolungare la loro scadenza. */
+    fun ripristinaSwippate(activity: Activity) {
+        if (!haNotificheSwippate(activity)) {
+            aggiornaIndicatore(activity)
+            return
+        }
+        mostra(activity, ripristinaSwippate = true)
+    }
+
+    fun mostra(activity: Activity, ripristinaSwippate: Boolean = false) {
         chiudiTutto()
         if (activity.isFinishing || activity.isDestroyed) return
         val gen = generazione
@@ -100,7 +283,20 @@ object FinestraRientro {
         val orario = runCatching { Orario(activity) }.getOrNull() ?: return
         val lezioni = orario.lezioniDel(Orario.giornoDi(adesso)).associateBy { it.ora }
         val secondiAdesso = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
-        val piano = PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso)
+        val preferenze = activity.getSharedPreferences(PREFERENZE_COMPATTE, Activity.MODE_PRIVATE)
+        val compattaSalvata = preferenze.getBoolean(CHIAVE_MODALITA_COMPATTA, false)
+        val swippate = leggiSwippate(activity, secondiAdesso)
+        val pianoCompleto = PianoNotifiche.calcola(orario.fasce(), lezioni.keys, secondiAdesso)
+        val pianoVisibile = if (ripristinaSwippate) {
+            activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE)
+                .edit().remove(chiaveSwipate()).apply()
+            pianoCompleto
+        } else {
+            PianoNotifiche.escludiSwippate(pianoCompleto, swippate)
+        }
+        val piano = PianoNotifiche.applicaModalitaCompatta(pianoVisibile, compattaSalvata)
+        aggiornaIndicatore(activity)
+        programmaScadenzaSwippate(activity)
         if (piano.isEmpty()) return
 
         // colonna delle notifiche, 10 dp tra l'una e l'altra; scorre solo se non entra nello schermo
@@ -119,7 +315,16 @@ object FinestraRientro {
         val superficie = FrameLayout(activity).apply {
             isClickable = true
             setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) gestore.dissolviTutto()
+                if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    val centro = width / 2f
+                    val zonaTitolo = event.y < activity.dp(100) &&
+                        event.x in (centro - activity.dp(95))..(centro + activity.dp(105))
+                    if (zonaTitolo && haNotificheSwippate(activity)) {
+                        ripristinaSwippate(activity)
+                    } else {
+                        gestore.dissolviTutto()
+                    }
+                }
                 true
             }
             addView(
@@ -143,13 +348,18 @@ object FinestraRientro {
             setGravity(Gravity.CENTER)
         }
         dialog = d
+        superficieAttiva = superficie
+        scorrimentoAttivo = scorrimento
+        preferenzeCompatte = preferenze
+        posizioneCompatta = false
         d.show()
+        aggiornaCampanellaDialog(activity)
         d.window?.setBackgroundDrawableResource(android.R.color.transparent)
         d.window?.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT)
 
         // dalla più vecchia (in alto) alla più nuova (in basso), ognuna nello stato previsto dall'orario adesso
         gestore.rientro(piano, secondiAdesso) { n ->
-            costruisci(activity, lezioni.getValue(n.ora), n.stato == StatoNotifica.RIDOTTA).also { avviso ->
+            costruisci(activity, lezioni.getValue(n.ora), n.stato == StatoNotifica.RIDOTTA, n).also { avviso ->
                 colonna.addView(avviso.scheda, LinearLayout.LayoutParams(-1, -2))
                 avviso.scheda.alpha = 0f
                 avviso.scheda.scaleX = .92f
@@ -158,11 +368,18 @@ object FinestraRientro {
             }
         }
         aggiornaOmbra()
+        // MODIFICA: se la modalità compatta era già attiva, si ripristina senza animazione;
+        // altrimenti, se il piano nasce già tutto ridotto, il gruppo scende in un secondo.
+        superficie.post {
+            if (gen == generazione && dialog === d) {
+                applicaDisposizioneCompatta(animate = !compattaSalvata)
+            }
+        }
         verificaFirme(activity, gen, gestore.finestre)
     }
 
     /** Costruisce una notifica con la grafica di sempre; [ridotta] = stato iniziale deciso dall'orario. */
-    private fun costruisci(activity: Activity, lezione: Lezione, ridotta: Boolean): Avviso {
+    private fun costruisci(activity: Activity, lezione: Lezione, ridotta: Boolean, notifica: NotificaPianificata): Avviso {
         val fascia = lezione.fascia
         lateinit var avviso: Avviso
         val azzurro = 0xFF69BCE8.toInt()
@@ -434,12 +651,19 @@ object FinestraRientro {
             addView(sintesi, FrameLayout.LayoutParams(-1, -2))
         }
 
-        avviso = Avviso(lezione, contenitore)
+        avviso = Avviso(lezione, notifica, contenitore)
         avviso.controllo = ControlloNotificaRiducibile(activity, radice, sintesi, frecciaSu, frecciaGiu, chiudi, ridotta,
-            alCambioStato = { aggiornaOmbra() },
+            alCambioStato = {
+                aggiornaOmbra()
+                programmaAggiornamentoDisposizione() // MODIFICA
+            },
             allaChiusura = { gestore.chiudi(avviso) },
             allEspansione = { gestore.espansa(avviso) },
-            alInterazione = { gestore.interagita(avviso) }) // MODIFICA
+            alInterazione = { gestore.interagita(avviso) },
+            allaSwipe = {
+                registraSwipe(activity, avviso.notifica)
+                gestore.chiudi(avviso)
+            }) // MODIFICA
         avviso.applicaVerifica = { esito ->
             mostraVerifica(activity, avviso, esito, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
         }

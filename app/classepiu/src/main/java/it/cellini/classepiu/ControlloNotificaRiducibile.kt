@@ -29,7 +29,9 @@ class ControlloNotificaRiducibile(
     /** Chiamata quando l'utente la espande con la freccia: le altre estese si riducono. */
     private val allEspansione: () -> Unit = {},
     /** MODIFICA: riavvia la dissolvenza quando l'utente tocca questa notifica. */
-    private val alInterazione: () -> Unit = {}
+    private val alInterazione: () -> Unit = {},
+    /** MODIFICA: distingue lo swipe recuperabile dalla cancellazione definitiva con X. */
+    private val allaSwipe: () -> Unit = allaChiusura
 ) {
     private var inizioX = 0f
     private var inizioY = 0f
@@ -63,7 +65,7 @@ class ControlloNotificaRiducibile(
                             .translationX(v.width.toFloat().coerceAtLeast(ctx.dp(120).toFloat()))
                             .alpha(0f)
                             .setDuration(240)
-                            .withEndAction { allaChiusura() }
+                            .withEndAction { allaSwipe() }
                             .start()
                     } else {
                         v.performClick()
