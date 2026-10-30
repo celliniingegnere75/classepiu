@@ -36,6 +36,28 @@ class FiltroArticolateTest {
         assertEquals(giorno.map { it.second }, FiltroArticolate.visibili(giorno.map { it.first }, io, aua))
     }
 
+    /** Log del 20/10/2026: Facello è in compresenza con me (si vede), Camilli con De Fiore (no). */
+    @Test
+    fun compresenzeDel20Ottobre() {
+        val firme = listOf(
+            f(1, "IMPIANTI", "camilli", emptySet()) to false,
+            f(1, "SISTEMI AUTOMATICI", "faro", aua) to true,
+            f(1, "IMPIANTI", "defiore", ena) to false,
+            f(2, "IMPIANTI", "camilli", emptySet()) to false,
+            f(2, "SISTEMI AUTOMATICI", "faro", aua) to true,
+            f(2, "IMPIANTI", "defiore", ena) to false,
+            f(3, "TPSEE", "facello", emptySet()) to true,
+            f(3, "LINGUA INGLESE", "zallocco", ena) to false,
+            f(3, "TPSEE", io, aua) to true,
+            f(4, "TPSEE", "facello", emptySet()) to true,
+            f(4, "IMPIANTI", "defiore", ena) to false,
+            f(4, "TPSEE", io, aua) to true,
+            f(5, "STORIA", "pierantozzi", aua + ena) to true,
+            f(6, "STORIA", "pierantozzi", aua + ena) to true,
+        )
+        assertEquals(firme.map { it.second }, FiltroArticolate.visibili(firme.map { it.first }, io, aua))
+    }
+
     @Test
     fun compresenzaDellaMiaMeta() {
         val firme = listOf(f(3, "SISTEMI", "titolare", aua), f(3, "SISTEMI", "itp", emptySet()), f(3, "SISTEMI", "altro", ena))
