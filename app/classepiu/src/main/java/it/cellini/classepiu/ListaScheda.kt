@@ -30,12 +30,15 @@ class ListaScheda : Scheda() {
     private var striscia: StrisciaGiorni? = null
     private val giorno: Calendar get() = striscia?.selezionato ?: Calendar.getInstance()
     private var mioId = ""
+    private var nome = ""
+    /** DEBUG TEMPORANEO: log delle classi articolate (LogArticolate), da togliere. */
+    private var logArticolate = ""
 
     override fun crea(savedInstanceState: Bundle?) {
         cosa = intent.getStringExtra("cosa") ?: "note"
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
-        val nome = intent.getStringExtra("nome") ?: ""
+        nome = intent.getStringExtra("nome") ?: ""
         val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
@@ -81,7 +84,11 @@ class ListaScheda : Scheda() {
                         dimClasse = st.size; nomi = st.associate { it.id to it.nome }
                     }
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
-                    else c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time))
+                    else c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time)).also { (cod, testo) ->
+                        logArticolate = if (cod != 200) "" else runCatching {
+                            LogArticolate.genera(c, requireContext().filesDir, tipo, classeId, nome, f.format(giorno.time), testo, mioId)
+                        }.getOrElse { "log non riuscito: ${it.message}" }
+                    }
                 }
             }
             val (codice, corpo) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
@@ -218,10 +225,32 @@ class ListaScheda : Scheda() {
         }
     }
 
+    /** DEBUG TEMPORANEO: mostra e copia il log delle classi articolate. */
+    private fun tastoLogArticolate() = TextView(requireContext()).apply {
+        text = "log classi articolate (debug)"; textSize = 14f; setTextColor(azzurro); setPadding(dp(8), dp(4), dp(8), dp(12))
+        setOnClickListener {
+            val ctx = requireContext()
+            val t = TextView(ctx).apply {
+                text = logArticolate; textSize = 11f; typeface = Typeface.MONOSPACE; setTextIsSelectable(true)
+                setPadding(dp(20), dp(12), dp(20), dp(12))
+            }
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                .setTitle("log classi articolate")
+                .setView(ScrollView(ctx).apply { addView(t) })
+                .setPositiveButton("copia") { _, _ ->
+                    ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("log", logArticolate))
+                    android.widget.Toast.makeText(ctx, "log copiato.", android.widget.Toast.LENGTH_SHORT).show()
+                }
+                .setNegativeButton("chiudi", null)
+                .show()
+        }
+    }
+
     private fun mostra(voci: List<Voce>) {
         lista.removeAllViews()
         voci.forEach { v -> lista.addView(scatola(v.mia).apply { addView(voceView(v, false, azzurro)) }, parametri()) }
         lista.addView(copiaRisposta())
+        if (logArticolate.isNotEmpty()) lista.addView(tastoLogArticolate())
     }
 
     private val arancio = 0xFFF0A040.toInt()
