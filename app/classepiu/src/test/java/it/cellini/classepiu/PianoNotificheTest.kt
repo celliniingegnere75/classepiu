@@ -212,6 +212,24 @@ class GestoreNotificheTest {
         assertEquals(0, tempo.inAttesa)
     }
 
+    // MODIFICA: la dissolvenza riparte dalla singola interazione senza spostare quella delle altre notifiche.
+    @Test
+    fun interazioneRiavviaSoloLaDissolvenzaDellaNotificaToccata() {
+        rientro(695 * 60)
+        val (quarta, quinta) = schermo.toList()
+
+        tempo.avanza(5000)
+        gestore.interagita(quarta)
+
+        tempo.avanza(4600) // sono trascorsi 9,6 s dall'apertura: scade solo la quinta
+        assertEquals(listOf(quarta), schermo)
+        assertEquals(false, quarta.dissolta)
+        assertEquals(true, quinta.dissolta)
+
+        tempo.avanza(5000) // la quarta scade dopo 9,6 s dalla sua interazione
+        assertTrue(schermo.isEmpty())
+    }
+
     @Test
     fun caso12_statiIndipendenti() {
         // 9:39:55: la 2ª è estesa e si riduce dopo 5 secondi, da sola
