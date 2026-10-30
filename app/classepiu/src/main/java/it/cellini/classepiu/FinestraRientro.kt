@@ -271,7 +271,7 @@ object FinestraRientro {
             }
             campanellaDialog = indicatore
             superficie.addView(indicatore, FrameLayout.LayoutParams(activity.dp(36), activity.dp(36), Gravity.TOP or Gravity.CENTER_HORIZONTAL).apply {
-                leftMargin = activity.dp(72)
+                leftMargin = activity.dp(90)
                 topMargin = activity.dp(8)
             })
         } else if (!presente) {
