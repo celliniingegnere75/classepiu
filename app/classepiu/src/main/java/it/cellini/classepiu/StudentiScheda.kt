@@ -708,7 +708,8 @@ class LinguetteView(
         pennaTesto.textSize = dimensione * d
         while (dimensione > 11f && voci.maxOf { pennaTesto.measureText(it) } > lw - 20f * d) { dimensione -= 0.5f; pennaTesto.textSize = dimensione * d }
         val y = h / 2f - (pennaTesto.ascent() + pennaTesto.descent()) / 2f
-        voci.forEachIndexed { i, t -> c.drawText(t, lw * i + lw / 2f, y, pennaTesto) }
+        // le linguette di mezzo hanno entrambi i bordi curvi verso sinistra: l'etichetta va spostata di 5 dp a sinistra per restare al centro
+        voci.forEachIndexed { i, t -> c.drawText(t, lw * i + lw / 2f - (if (i in 1 until voci.size - 1) 5f * d else 0f), y, pennaTesto) }
     }
 
     override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
