@@ -1000,13 +1000,18 @@ object FinestraRientro {
             addView(civica)
             check(if (imp.firmaTipo.equals("Educazione civica", ignoreCase = true)) civica.id else ordinaria.id)
         }
-        // tipo attività: solo i valori visti in firme vere (HAR del 30/10/2026), scritti come li vuole il registro web
-        val attivita = listOf("Lezione", "Spiegazione")
-        val bottoniAttivita = attivita.map { voce -> android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = voce.lowercase() } }
-        val tipologia = android.widget.RadioGroup(activity).apply {
-            orientation = android.widget.RadioGroup.HORIZONTAL
-            bottoniAttivita.forEach { addView(it) }
-            check(bottoniAttivita.first().id)
+        // tipo attività: le voci del menu della finestra "Nuova lezione" del registro web (schermata di Cristian del
+        // 31/10/2026), scritte come lì; "Lezione" e "Spiegazione" confermate da firme vere (HAR del 30/10/2026)
+        val attivita = listOf(
+            "Lezione", "Spiegazione", "Interrogazione", "Interrogazione e spiegazione", "Prova pratica",
+            "Compito in classe", "Verifica scritta", "Verifiche orali", "Attività di laboratorio", "Orientamento",
+            "Didattica a distanza", "Video Lezione", "Video Verifica", "Video Interrogazione",
+            "Didattica a Distanza Materiale", "Didattica a Distanza Compito", "Didattica a Distanza Verifica",
+            "Video Lezione Sostegno", "Video Compresenza Sostegno"
+        )
+        val tipologia = android.widget.Spinner(activity).apply {
+            adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, attivita)
+            setSelection(0)
         }
         val argomento = android.widget.EditText(activity).apply {
             hint = "argomento della lezione"
@@ -1024,7 +1029,7 @@ object FinestraRientro {
             addView(sceltaMateria)
             addView(TextView(activity).apply { text = "tipo attività"; setTextColor(azzurro); textSize = 14f },
                 LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
-            addView(tipologia)
+            addView(tipologia, LinearLayout.LayoutParams(-1, -2))
             addView(TextView(activity).apply { text = "argomento"; setTextColor(azzurro); textSize = 14f },
                 LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
             addView(argomento, LinearLayout.LayoutParams(-1, -2))
@@ -1035,7 +1040,7 @@ object FinestraRientro {
             .setPositiveButton("firma") { _, _ ->
                 firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
                     scelta = SceltaFirma(sceltaMateria.checkedRadioButtonId == civica.id, argomento.text.toString(),
-                        attivita[bottoniAttivita.indexOfFirst { it.id == tipologia.checkedRadioButtonId }.coerceAtLeast(0)]))
+                        attivita[tipologia.selectedItemPosition.coerceIn(0, attivita.lastIndex)]))
             }
             .setNegativeButton("annulla", null)
             .show()
