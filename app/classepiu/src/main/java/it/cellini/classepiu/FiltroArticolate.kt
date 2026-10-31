@@ -46,7 +46,14 @@ object FiltroArticolate {
         fun alunni(t: String, id: String) = runCatching { leggiStudenti(c.studentiGrezzi(t, id).second).map { it.id } }.getOrDefault(emptyList())
         if (tipo.equals("G", true) || classeId.contains('_') || nome.contains('_')) return alunni(tipo, classeId).toSet()
         val sigla = nome.trim().uppercase().substringBefore(' ')
-        val mie = runCatching { leggiClassi(File(filesDir, "classi_mie.json").readText()) }.getOrDefault(emptyList())
+        // i miei registri: dalla copia salvata, oppure direttamente da classeviva se non c'è ancora
+        val fileMie = File(filesDir, "classi_mie.json")
+        val mie = runCatching { leggiClassi(fileMie.readText()) }.getOrDefault(emptyList()).ifEmpty {
+            runCatching {
+                val (codice, testo) = c.classiGrezze(false)
+                if (codice == 200) leggiClassi(testo).also { if (it.isNotEmpty()) fileMie.writeText(testo) } else emptyList()
+            }.getOrDefault(emptyList())
+        }
         // se insegno anche alla classe intera, la classe è tutta mia
         if (mie.any { it.chiave.split("|", limit = 3).getOrElse(1) { "" } == classeId }) return emptySet()
         return mie.map { it.chiave.split("|", limit = 3) to it.nome.uppercase() }
