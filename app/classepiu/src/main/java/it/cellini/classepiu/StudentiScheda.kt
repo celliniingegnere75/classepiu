@@ -36,6 +36,7 @@ class StudentiScheda : Scheda() {
     private var lavoro: Job? = null
     private var tipo = ""
     private var classeId = ""
+    private var nome = ""
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
 
     // Colori della scheda e degli indicatori.
@@ -47,7 +48,7 @@ class StudentiScheda : Scheda() {
     private val grigioOra = 0xFFB8B8B8.toInt()
 
     override fun crea(savedInstanceState: Bundle?) {
-        val nome = intent.getStringExtra("nome") ?: ""
+        nome = intent.getStringExtra("nome") ?: ""
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         val ctx = requireContext()
@@ -121,23 +122,35 @@ class StudentiScheda : Scheda() {
         else mostra(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
     }
 
+    /** Classe articolata (es. 5AN = 5AN_CAA + 5AN_CNA) aperta intera: gli alunni del mio gruppo, salvati per l'avvio veloce. */
+    private fun fileMiei() = java.io.File(requireContext().filesDir, "miei_${classeId.replace(Regex("[^A-Za-z0-9_-]"), "_")}.txt")
+
+    private fun soloMiei(lista: List<Studente>, miei: Set<String>) = if (miei.isEmpty()) lista else lista.filter { it.id in miei }
+
     /**
      * Mostra subito l'elenco salvato l'ultima volta (se c'è), poi scarica elenco e presenze del giorno
      * in parallelo: prima si aspettava l'elenco e solo dopo partivano le presenze.
      */
     private fun carica() {
-        studenti = runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList())
+        val mieiSalvati = runCatching { fileMiei().readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
+        studenti = soloMiei(runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList()), mieiSalvati)
         if (studenti.isEmpty()) testo("carico gli studenti…") else ridisegna()
         caricaStato()
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
-                runCatching { client.studentiGrezzi(tipo, classeId) }
+                runCatching {
+                    val miei = if (tipo.equals("G", true)) emptySet()
+                        else FiltroArticolate.mieiAlunni(client, requireContext().filesDir, tipo, classeId, nome)
+                    runCatching { fileMiei().writeText(miei.joinToString("\n")) }
+                    client.studentiGrezzi(tipo, classeId) to miei
+                }
             }
-            val (codice, corpo) = r.getOrElse {
+            val (risposta, miei) = r.getOrElse {
                 if (studenti.isEmpty()) testo("non riuscito: ${it.message}")
                 return@launch
             }
-            val nuovi = if (codice == 200) leggiStudenti(corpo) else emptyList()
+            val (codice, corpo) = risposta
+            val nuovi = if (codice == 200) soloMiei(leggiStudenti(corpo), miei) else emptyList()
             if (nuovi.isEmpty()) {
                 if (studenti.isNotEmpty()) return@launch
                 testo(

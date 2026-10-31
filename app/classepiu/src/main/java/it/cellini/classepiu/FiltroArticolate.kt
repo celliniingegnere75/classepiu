@@ -47,6 +47,8 @@ object FiltroArticolate {
         if (tipo.equals("G", true) || classeId.contains('_') || nome.contains('_')) return alunni(tipo, classeId).toSet()
         val sigla = nome.trim().uppercase().substringBefore(' ')
         val mie = runCatching { leggiClassi(File(filesDir, "classi_mie.json").readText()) }.getOrDefault(emptyList())
+        // se insegno anche alla classe intera, la classe è tutta mia
+        if (mie.any { it.chiave.split("|", limit = 3).getOrElse(1) { "" } == classeId }) return emptySet()
         return mie.map { it.chiave.split("|", limit = 3) to it.nome.uppercase() }
             .filter { (p, n) -> p.getOrElse(0) { "" }.equals("G", true) && n.contains('_') && n.substringBefore('_') == sigla }
             .flatMap { (p, _) -> alunni(p[0], p.getOrElse(1) { "" }) }
