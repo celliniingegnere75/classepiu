@@ -797,10 +797,7 @@ object FinestraRientro {
         firmaRapida.visibility = View.GONE
         firmaRapida.isEnabled = false
         firmaRapida.alpha = .5f
-        firmaOrdinaria.setOnClickListener {
-            gestore.interagita(avviso)
-            android.widget.Toast.makeText(activity, "firma ordinaria: in arrivo", android.widget.Toast.LENGTH_SHORT).show()
-        }
+        firmaOrdinaria.setOnClickListener { apriFirmaOrdinaria(activity, avviso, lezione, statoFirma, materiaFirma, firmaRapida) }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
 
@@ -983,7 +980,59 @@ object FinestraRientro {
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La notifica resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    private fun firmaRapida(activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
+    /**
+     * Firma ordinaria: come la firma rapida (stesso FIRMA_INSERT del registro web, HAR di Cristian del 30/10/2026) ma
+     * tipologia e argomento si scelgono qui per questa ora, invece di venire dalla scheda "firma" delle opzioni.
+     * Educazione civica è una materia a sé (sul sito è una voce del menu "Materia"); tipo_attivita resta "Lezione".
+     */
+    private fun apriFirmaOrdinaria(activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
+        // la notifica resta aperta mentre si compila, come dopo la firma rapida
+        gestore.interagita(avviso)
+        gestore.trattieni(avviso)
+        val imp = Impostazioni(activity)
+        val azzurro = 0xFF69BCE8.toInt()
+        val ordinaria = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = "lezione ordinaria" }
+        val civica = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = "educazione civica" }
+        val tipologia = android.widget.RadioGroup(activity).apply {
+            orientation = android.widget.RadioGroup.VERTICAL
+            addView(ordinaria)
+            addView(civica)
+            check(if (imp.firmaTipo.equals("Educazione civica", ignoreCase = true)) civica.id else ordinaria.id)
+        }
+        val argomento = android.widget.EditText(activity).apply {
+            hint = "argomento della lezione"
+            setText(imp.firmaArgomento)
+            minLines = 2
+            maxLines = 5
+            gravity = Gravity.TOP or Gravity.START
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val corpo = LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(activity.dp(22), activity.dp(8), activity.dp(22), 0)
+            addView(TextView(activity).apply { text = "tipologia"; setTextColor(azzurro); textSize = 14f })
+            addView(tipologia)
+            addView(TextView(activity).apply { text = "argomento"; setTextColor(azzurro); textSize = 14f },
+                LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
+            addView(argomento, LinearLayout.LayoutParams(-1, -2))
+        }
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
+            .setTitle("firma ordinaria · ${lezione.ora}° ora, ${lezione.classe}")
+            .setView(corpo)
+            .setPositiveButton("firma") { _, _ ->
+                firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
+                    scelta = (tipologia.checkedRadioButtonId == civica.id) to argomento.text.toString())
+            }
+            .setNegativeButton("annulla", null)
+            .show()
+    }
+
+    /** [scelta] = (educazione civica, argomento) della firma ordinaria; null = firma rapida coi valori delle opzioni. */
+    private fun firmaRapida(
+        activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View,
+        scelta: Pair<Boolean, String>? = null
+    ) {
         // questa notifica resta aperta finché non si chiude con la X; le altre seguono i loro tempi
         gestore.interagita(avviso) // MODIFICA: registra anche la pressione di "firma rapida"
         gestore.trattieni(avviso)
@@ -992,16 +1041,17 @@ object FinestraRientro {
         etichetta.text = "firmo…"
         etichetta.setTextColor(0xFF777777.toInt())
         val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
-        val log = StringBuilder("firma rapida classePiù ${BuildConfig.VERSION_NAME}\n")
+        val log = StringBuilder("${if (scelta == null) "firma rapida" else "firma ordinaria"} classePiù ${BuildConfig.VERSION_NAME}\n")
             .append("data $data, ora ${lezione.ora}, classe ${lezione.classe}, materia ${lezione.materia}\n\n")
         Thread {
             val esito = runCatching {
                 val imp = Impostazioni(activity)
                 // copresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
                 // credenziali del secondo docente): finché non c'è una firma vera da copiare non si manda niente
-                check(!imp.firmaCopresenza && !imp.firmaSostegno) { "non firmata: copresenza/sostegno dal registro web" }
-                val civica = imp.firmaTipo.equals("Educazione civica", ignoreCase = true)
-                log.append("tipologia ${imp.firmaTipo}, argomento \"${imp.firmaArgomento.trim()}\"\n")
+                if (scelta == null) check(!imp.firmaCopresenza && !imp.firmaSostegno) { "non firmata: copresenza/sostegno dal registro web" }
+                val civica = scelta?.first ?: imp.firmaTipo.equals("Educazione civica", ignoreCase = true)
+                val testoArgomento = scelta?.second ?: imp.firmaArgomento
+                log.append("tipologia ${if (civica) "educazione civica" else "lezione"}, argomento \"${testoArgomento.trim()}\"\n")
                 val client = imp.client().also { it.login() }
                 val mioId = client.idDocente()
                 log.append("docente $mioId\n")
@@ -1020,7 +1070,7 @@ object FinestraRientro {
                 val parti = classe.chiave.split("|", limit = 3)
                 val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log,
                     nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome,
-                    educazioneCivica = civica, argomento = imp.firmaArgomento)
+                    educazioneCivica = civica, argomento = testoArgomento)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
@@ -1034,7 +1084,8 @@ object FinestraRientro {
                     onSuccess = { risultato ->
                         mostraFirmata(etichetta, materia, risultato)
                         pulsante.visibility = View.GONE
-                        (pulsante.parent as? View)?.visibility = View.INVISIBLE
+                        // spariscono i due pulsanti e la riga "swipe a sinistra per non firmare" sotto di loro
+                        ((pulsante.parent as? View)?.parent as? View)?.visibility = View.INVISIBLE
                     },
                     onFailure = {
                         // mostra soltanto l’esito della firma; per copresenza/sostegno anche il perché
