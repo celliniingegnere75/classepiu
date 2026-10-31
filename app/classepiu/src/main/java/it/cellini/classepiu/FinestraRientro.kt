@@ -1101,7 +1101,9 @@ object FinestraRientro {
                 val imp = Impostazioni(activity)
                 // copresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
                 // credenziali del secondo docente): finché non c'è una firma vera da copiare non si manda niente
-                if (scelta == null) check(!imp.firmaCopresenza && !imp.firmaSostegno) { "non firmata: copresenza/sostegno dal registro web" }
+                // il sostegno sul sito è un'altra finestra, di cui manca ancora una firma vera da copiare
+                if (scelta == null) check(!imp.firmaSostegno) { "non firmata: sostegno dal registro web" }
+                val compresenza = scelta == null && imp.firmaCopresenza
                 val civica = scelta?.civica ?: imp.firmaTipo.equals("Educazione civica", ignoreCase = true)
                 val testoArgomento = scelta?.argomento ?: imp.firmaArgomento
                 val tipoAttivita = scelta?.tipoAttivita ?: "Lezione"
@@ -1124,12 +1126,14 @@ object FinestraRientro {
                 val parti = classe.chiave.split("|", limit = 3)
                 val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log,
                     nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome,
-                    educazioneCivica = civica, argomento = testoArgomento, tipoAttivita = tipoAttivita)
+                    educazioneCivica = civica, argomento = testoArgomento, tipoAttivita = tipoAttivita, compresenza = compresenza)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
                 check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
-                checkNotNull(firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)) { "firma inviata ma non trovata nel registro" }
+                // una firma in compresenza può non comparire tra le mie firme: se il sito ha risposto OK vale
+                firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)
+                    ?: if (compresenza) EsitoFirma(lezione.materia) else error("firma inviata ma non trovata nel registro")
             }
             log.append(esito.fold({ "esito: firmata (${it.materia})" }, { "esito: errore ${it.message}" }))
             activity.runOnUiThread {
@@ -1143,7 +1147,7 @@ object FinestraRientro {
                     },
                     onFailure = {
                         // mostra soltanto l’esito della firma; per copresenza/sostegno anche il perché
-                        etichetta.text = if (it.message.orEmpty().contains("copresenza")) it.message else "firma non riuscita"
+                        etichetta.text = if (it.message.orEmpty().contains("sostegno")) it.message else "firma non riuscita"
                         etichetta.setTextColor(0xFFD32F2F.toInt())
                         pulsante.isEnabled = true
                         pulsante.alpha = 1f

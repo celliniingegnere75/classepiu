@@ -472,7 +472,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
      */
     fun firmaRapida(
         tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder(),
-        nomeClasse: String = "", educazioneCivica: Boolean = false, argomento: String = "",
+        nomeClasse: String = "", educazioneCivica: Boolean = false, argomento: String = "", compresenza: Boolean = false,
         /** voce del menu "tipo attività" del registro web, scritta esattamente come lì (HAR: "Lezione", "Spiegazione") */
         tipoAttivita: String = "Lezione"
     ): Pair<Int, String> {
@@ -498,6 +498,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
         // La firma passa dal registro web come fa il sito ClasseViva, richieste prese da firme vere del 29/10/2026:
         // classe intera (C, 4ETA 3ª ora) e gruppo di classe articolata (G, 5EA_AUA 1ª ora).
         // La via REST (POST lessons/sigs) resta solo per altri tipi: chiede un supplyType di cui non si conosce il valore.
+        if (compresenza) {
+            if (tipo == "C") return firmaCompresenza(classeId, "", sid.toString(), data, ora, argomento, log)
+            if (tipo == "G" && nomeClasse.isNotBlank()) return firmaCompresenza("", nomeClasse, sid.toString(), data, ora, argomento, log)
+            return 422 to "compresenza non disponibile per questo tipo di classe"
+        }
         if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, argomento, tipoAttivita)
         if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, argomento, tipoAttivita)
         val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
@@ -601,6 +606,48 @@ class ClasseViva(private val utente: String, private val password: String, priva
             return Regex("<option\\s+value=\"([^\"]*)\"").findAll(html.substring(inizio, fine))
                 .map { android.text.Html.fromHtml(it.groupValues[1], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim() }
                 .filter { it.isNotEmpty() }.distinct().toList()
+        } finally {
+            web.close()
+        }
+    }
+
+    /**
+     * Firma in compresenza dal registro web (regclasse_conpresenza.php, HAR del 31/10/2026): il secondo docente si
+     * autentica con le sue credenziali, che sono quelle dell'app. Passi: ARG_FIRMA (argomento già scritto dal primo
+     * docente per quell'ora), AUTH, INSERT con tipo_attivita "Compresenza". Se il primo docente non ha scritto
+     * nessun argomento si usa [argomentoPredefinito]. Nel log non finiscono mai le credenziali.
+     */
+    private fun firmaCompresenza(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, argomentoPredefinito: String, log: StringBuilder): Pair<Int, String> {
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
+        val idClasse = if (gruppo.isEmpty()) classeId else ""
+        val idGruppo = gruppo
+        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse_conpresenza.php?corsoextra=0&oreCP1=&oreCP2=&ultimaorafirmata=0&classe_id=${enc(idClasse)}&data=$giorno&gruppo_id=${enc(idGruppo)}"
+        val io = "https://web.spaggiari.eu/cvv/app/default/regclasse_conpresenza.php"
+        val istante = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.ROOT).parse("$giorno 23:59:00")!!
+        fun invia(web: WebNascosto, campi: List<Pair<String, String>>, nascondi: Boolean = false): Pair<Int, String> {
+            val corpo = campi.joinToString("&") { (k, v) -> "$k=${enc(v)}" }
+            val (codice, testo) = web.chiama(io, corpo, referer = pagina)
+            val mostrato = campi.joinToString("&") { (k, v) -> if (k == "login" || k == "password") "$k=***" else "$k=${enc(v)}" }
+            log.append("POST regclasse_conpresenza.php ${campi.first().second}: $mostrato -> HTTP $codice, ${if (nascondi) "(risposta omessa)" else testo.take(200)}\n")
+            return codice to testo.trim()
+        }
+        val web = sessioneWeb()
+        try {
+            val (codicePagina, _) = web.chiama(pagina)
+            log.append("GET regclasse_conpresenza.php (web) -> HTTP $codicePagina\n")
+            val letto = invia(web, listOf("action" to "ARG_FIRMA", "data_evento" to giorno, "classe_id" to idClasse, "gruppo_id" to idGruppo, "oreCP1" to ora.toString()))
+            val argomentoCopiato = letto.second.takeIf { letto.first in 200..299 && it.isNotBlank() && !it.startsWith("<") }
+            log.append(if (argomentoCopiato != null) "argomento copiato dalla firma del primo docente\n" else "nessuna firma da copiare: argomento delle opzioni\n")
+            val auth = invia(web, listOf("action" to "AUTH", "login" to utente, "password" to password))
+            if (auth.second != "OK") return 422 to "accesso compresenza non riuscito: ${auth.second.take(120)}"
+            val risposta = invia(web, listOf(
+                "action" to "INSERT", "data" to "$giorno 23:59:00", "dataora" to (istante.time / 1000).toString(),
+                "classe_id" to idClasse, "gruppo_id" to idGruppo, "peso_ora" to "1", "login" to utente, "password" to password,
+                "output" to "", "conpresenza" to "CP1", "usacurrent" to "false", "ora_posizione" to ora.toString(),
+                "numero_ore" to "1 ora", "materia" to materiaId, "text_nota" to (argomentoCopiato ?: argomentoPredefinito).trim(),
+                "tipo_attivita" to "Compresenza"))
+            return (if (risposta.second == "OK") 200 else if (risposta.first in 200..299) 422 else risposta.first) to risposta.second.take(300)
         } finally {
             web.close()
         }
