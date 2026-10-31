@@ -28,7 +28,12 @@ class ListaScheda : Scheda() {
     private var classeId = ""
     /** Lezioni: striscia dei giorni come nell'elenco degli alunni; il giorno scelto è quello al centro. */
     private var striscia: StrisciaGiorni? = null
-    private val giorno: Calendar get() = striscia?.selezionato ?: Calendar.getInstance()
+    private val giorno: Calendar get() =
+        if (incorporata) (parentFragment as? StudentiScheda)?.giornoSelezionato() ?: Calendar.getInstance()
+        else striscia?.selezionato ?: Calendar.getInstance()
+    /** Lezioni mostrate sotto le linguette della scheda classe: niente barra né striscia, usa quelle della scheda che la contiene. */
+    private var incorporata = false
+    fun ricarica() { if (view != null) carica() }
     private var mioId = ""
     private var nome = ""
     /** Classe articolata: gli alunni del mio gruppo, per mostrare solo le firme della mia metà (vuoto = tutte). */
@@ -48,6 +53,7 @@ class ListaScheda : Scheda() {
         nome = intent.getStringExtra("nome") ?: ""
         soloMie = intent.getBooleanExtra("solomie", false)
         tutteLezioni = intent.getBooleanExtra("tutte", false)
+        incorporata = intent.getBooleanExtra("incorporata", false)
         gruppo = intent.getStringExtra("gruppo") ?: ""
         val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
@@ -66,6 +72,12 @@ class ListaScheda : Scheda() {
             addView(lista)
             background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); val r = dp(28).toFloat(); cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f) }
             clipToOutline = true
+        }
+        if (incorporata) {
+            pannello.background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()) }
+            setContentView(pannello)
+            carica()
+            return
         }
         if (cosa == "lezioni") striscia = StrisciaGiorni(ctx) { carica() }
         setContentView(LinearLayout(ctx).apply {

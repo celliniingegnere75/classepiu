@@ -76,17 +76,19 @@ class StudentiScheda : Scheda() {
             addView(View(ctx), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
 
-        // Linguette della scheda classe, a "cartella": la linguetta attiva si fonde con il pannello grigio sotto.
+        // Linguette della scheda classe, sempre visibili sotto la data: cambia solo il pannello sotto di loro.
         val linguette = LinguetteView(ctx, outfitRegular, listOf("alunni", "le mie lezioni", "tutte le lezioni"), 0, colorePannello) { i ->
-            val extra: Array<Pair<String, Any?>> = if (i == 1) arrayOf("solomie" to soloMieLezioni) else arrayOf("tutte" to true)
-            (requireActivity() as MainActivity).apri(ListaScheda(),
-                "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
-                *extra, "gruppo" to gruppo)
+            linguettaAttiva = i
+            mostraLinguetta()
+            // tornando agli alunni il giorno può essere cambiato: si rileggono i dati
+            if (i == 0) { caricaStato(); ridisegna() }
         }
 
         val giorni = StrisciaGiorni(ctx) {
-            caricaStato()
-            ridisegna()
+            if (linguettaAttiva == 0) {
+                caricaStato()
+                ridisegna()
+            } else (childFragmentManager.findFragmentById(idLezioni) as? ListaScheda)?.ricarica()
         }
         striscia = giorni
 
@@ -101,15 +103,50 @@ class StudentiScheda : Scheda() {
             }
             clipToOutline = true
         }
+        pannelloAlunni = pannello
+        contenitoreLezioni = android.widget.FrameLayout(ctx).apply { id = idLezioni; visibility = View.GONE }
         setContentView(LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(azzurro)
             addView(barra)
-            addView(linguette, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             giorni.aggiungiA(this)
-            addView(pannello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+            addView(linguette, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            addView(android.widget.FrameLayout(ctx).apply {
+                addView(pannello, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+                addView(contenitoreLezioni, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         })
+        mostraLinguetta()
         carica()
+    }
+
+    private val idLezioni = View.generateViewId()
+    private var linguettaAttiva = 0
+    private var pannelloAlunni: View? = null
+    private var contenitoreLezioni: View? = null
+
+    /** Il giorno scelto nella striscia, usato anche dalle lezioni incorporate. */
+    fun giornoSelezionato(): Calendar = striscia.selezionato
+
+    /** Mostra sotto le linguette gli alunni oppure le lezioni (mie o tutte); data e linguette restano ferme. */
+    private fun mostraLinguetta() {
+        val fm = childFragmentManager
+        if (fm.isStateSaved) return
+        val vecchio = fm.findFragmentById(idLezioni)
+        if (linguettaAttiva == 0) {
+            pannelloAlunni?.visibility = View.VISIBLE
+            contenitoreLezioni?.visibility = View.GONE
+            if (vecchio != null) fm.beginTransaction().remove(vecchio).commitNowAllowingStateLoss()
+            return
+        }
+        pannelloAlunni?.visibility = View.GONE
+        contenitoreLezioni?.visibility = View.VISIBLE
+        val nuovo = ListaScheda().apply {
+            arguments = androidx.core.os.bundleOf(
+                "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome, "gruppo" to gruppo, "incorporata" to true,
+                if (linguettaAttiva == 1) "solomie" to soloMieLezioni else "tutte" to true)
+        }
+        fm.beginTransaction().replace(idLezioni, nuovo).commitNowAllowingStateLoss()
     }
 
     /** Ultimi dati del giorno selezionato, ridisegnati quando arriva l'elenco studenti o gli orari del popup. */
@@ -583,10 +620,11 @@ class LinguetteView(
     ctx: android.content.Context,
     private val font: Typeface,
     private val voci: List<String>,
-    private val attiva: Int,
+    attivaIniziale: Int,
     private val colorePannello: Int,
     private val alTocco: (Int) -> Unit,
 ) : View(ctx) {
+    private var attiva = attivaIniziale
     private val d = ctx.resources.displayMetrics.density
     private val pennaFondo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC4C4C4.toInt() }
     private val pennaAttiva = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = colorePannello }
@@ -628,7 +666,7 @@ class LinguetteView(
     override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
         if (e.action == android.view.MotionEvent.ACTION_UP) {
             val i = (e.x / larghezza(0)).toInt().coerceIn(0, voci.size - 1)
-            if (i != attiva) alTocco(i)
+            if (i != attiva) { attiva = i; invalidate(); alTocco(i) }
         }
         return true
     }
