@@ -57,11 +57,12 @@ class CampanellaSwipateView(context: Context) : View(context) {
         canvas.drawArc(17f, 0f, 31f, 14f, 205f, 130f, false, pennello)
         canvas.drawArc(17f, 35f, 31f, 49f, 0f, 180f, false, pennello)
 
-        // Due onde sonore per lato, aperte verso l'esterno.
-        canvas.drawArc(-1f, 9f, 13f, 39f, 105f, 150f, false, pennello)
-        canvas.drawArc(35f, 9f, 49f, 39f, -75f, 150f, false, pennello)
-        canvas.drawArc(3f, 16f, 16f, 34f, 105f, 150f, false, pennello)
-        canvas.drawArc(32f, 16f, 45f, 34f, -75f, 150f, false, pennello)
+        // Due onde sonore per lato, sulle spalle della campana: archi concentrici attorno al suo centro (24, 20),
+        // staccati dal profilo e più lunghi verso l'esterno, come il suono che si allarga.
+        for (raggio in floatArrayOf(18f, 24f)) {
+            canvas.drawArc(24f - raggio, 20f - raggio, 24f + raggio, 20f + raggio, 190f, 45f, false, pennello)
+            canvas.drawArc(24f - raggio, 20f - raggio, 24f + raggio, 20f + raggio, -55f, 45f, false, pennello)
+        }
 
         canvas.restore()
     }
