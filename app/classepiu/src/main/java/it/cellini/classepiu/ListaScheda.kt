@@ -35,6 +35,8 @@ class ListaScheda : Scheda() {
     private var mieiAlunni: Set<String> = emptySet()
     /** Da "le mie lezioni": solo le mie firme e le mie compresenze. */
     private var soloMie = false
+    /** Da "tutti i registri": l'altra metà di una classe articolata (es. 5EA senza il mio 5EA_AUA). */
+    private var altraMeta = false
 
     override fun crea(savedInstanceState: Bundle?) {
         cosa = intent.getStringExtra("cosa") ?: "note"
@@ -42,6 +44,7 @@ class ListaScheda : Scheda() {
         classeId = intent.getStringExtra("id") ?: ""
         nome = intent.getStringExtra("nome") ?: ""
         soloMie = intent.getBooleanExtra("solomie", false)
+        altraMeta = intent.getBooleanExtra("altra", false)
         val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
@@ -88,7 +91,7 @@ class ListaScheda : Scheda() {
                     }
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
                     else {
-                        mieiAlunni = FiltroArticolate.mieiAlunni(c, requireContext().filesDir, tipo, classeId, nome)
+                        mieiAlunni = FiltroArticolate.alunniRegistro(c, requireContext().filesDir, tipo, classeId, nome, altraMeta)
                         c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time))
                     }
                 }
@@ -185,10 +188,10 @@ class ListaScheda : Scheda() {
         }
         cammina(radice, 0)
         if (cosa != "lezioni") return out.sortedByDescending { it.data }
-        // classe articolata: solo le firme della mia metà (le mie, quelle con i miei alunni e le loro compresenze)
+        // classe articolata: solo le firme della metà aperta (quelle con i suoi alunni e le loro compresenze); la classe intera tutte
         val firme = out.filter { it.firma != null }
         val vedi = if (soloMie) FiltroArticolate.mieECompresenze(firme.map { it.firma!! }, mioId)
-            else FiltroArticolate.visibili(firme.map { it.firma!! }, mioId, mieiAlunni)
+            else FiltroArticolate.visibili(firme.map { it.firma!! }, if (altraMeta) "" else mioId, mieiAlunni)
         val nascoste = firme.filterIndexed { i, _ -> !vedi[i] }.toSet()
         return out.filter { it !in nascoste }.sortedBy { it.ordine }
     }

@@ -208,7 +208,7 @@ class RegistroFragment : Fragment() {
         val base = if (mie) datiMie else datiTutte
         // In "le mie classi", prima le classi previste oggi nell'orario personale,
         // nell'ordine della prima ora; tutte le altre restano in ordine alfabetico.
-        val ordinate = if (!mie) base else {
+        val ordinate = if (!mie) conMeta(base) else {
             val giornoOggi = when (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)) {
                 java.util.Calendar.MONDAY -> 1
                 java.util.Calendar.TUESDAY -> 2
@@ -246,6 +246,21 @@ class RegistroFragment : Fragment() {
         vuoto.text = testo
         vuoto.visibility = if (testo.isEmpty()) View.GONE else View.VISIBLE
         dettagli.visibility = if (base.isEmpty() && ultimaRisposta.isNotEmpty()) View.VISIBLE else View.GONE
+    }
+
+    /**
+     * Tutti i registri: dopo una classe articolata per me (es. 5EA) metto il mio gruppo (5EA_AUA) e l'altra metà,
+     * così 5EA resta la classe intera (supplenza su tutti) e le due metà si aprono a parte.
+     */
+    private fun conMeta(tutte: List<Classe>): List<Classe> {
+        val gruppi = datiMie.filter { it.chiave.substringBefore('|').equals("G", true) && it.nome.contains('_') }
+        if (gruppi.isEmpty()) return tutte
+        return tutte.flatMap { c ->
+            val tipo = c.chiave.substringBefore('|')
+            val miei = if (tipo.equals("G", true)) emptyList() else gruppi.filter { it.nome.substringBefore('_') == c.nome }
+            if (miei.isEmpty()) listOf(c)
+            else listOf(c) + miei + c.copy(descrizione = "ALTRA METÀ", codice = "", altraMeta = true)
+        }
     }
 
     private fun mostraRisposta() {
@@ -369,6 +384,8 @@ class RegistroFragment : Fragment() {
             return t.drop(p.length).trimStart(' ', '-', ':', '–', '—')
         }
 
+        private fun nomeScheda(c: Classe) = if (c.altraMeta) "${c.nome} altra metà" else c.nome
+
         override fun onBindViewHolder(h: VH, pos: Int) {
             val c = dati[pos]
             h.nome.text = c.nome
@@ -381,7 +398,8 @@ class RegistroFragment : Fragment() {
             val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 (requireActivity() as MainActivity).apri(StudentiScheda(),
-                    "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome, "descrizione" to c.descrizione)
+                    "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to nomeScheda(c), "descrizione" to c.descrizione,
+                    "altra" to c.altraMeta)
             }
             h.tessera.setOnClickListener(apriStudenti)
             h.sopra.setOnClickListener(apriStudenti)
@@ -399,8 +417,8 @@ class RegistroFragment : Fragment() {
                 t.setOnClickListener {
                     val p = c.chiave.split("|", limit = 3)
                     (requireActivity() as MainActivity).apri(ListaScheda(),
-                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome,
-                        "solomie" to (mie && cosa == "lezioni"))
+                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to nomeScheda(c),
+                        "solomie" to (mie && cosa == "lezioni"), "altra" to c.altraMeta)
                 }
             }
         }

@@ -37,6 +37,8 @@ class StudentiScheda : Scheda() {
     private var tipo = ""
     private var classeId = ""
     private var nome = ""
+    /** Da "tutti i registri": l'altra metà di una classe articolata (es. 5EA senza il mio 5EA_AUA). */
+    private var altraMeta = false
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
 
     // Colori della scheda e degli indicatori.
@@ -49,6 +51,7 @@ class StudentiScheda : Scheda() {
 
     override fun crea(savedInstanceState: Bundle?) {
         nome = intent.getStringExtra("nome") ?: ""
+        altraMeta = intent.getBooleanExtra("altra", false)
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         val ctx = requireContext()
@@ -122,8 +125,8 @@ class StudentiScheda : Scheda() {
         else mostra(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
     }
 
-    /** Classe articolata (es. 5AN = 5AN_CAA + 5AN_CNA) aperta intera: gli alunni del mio gruppo, salvati per l'avvio veloce. */
-    private fun fileMiei() = java.io.File(requireContext().filesDir, "miei_${classeId.replace(Regex("[^A-Za-z0-9_-]"), "_")}.txt")
+    /** Altra metà di una classe articolata (es. 5AN senza il mio 5AN_CAA): i suoi alunni, salvati per l'avvio veloce. */
+    private fun fileMiei() = java.io.File(requireContext().filesDir, "altra_meta_${classeId.replace(Regex("[^A-Za-z0-9_-]"), "_")}.txt")
 
     private fun soloMiei(lista: List<Studente>, miei: Set<String>) = if (miei.isEmpty()) lista else lista.filter { it.id in miei }
 
@@ -132,16 +135,16 @@ class StudentiScheda : Scheda() {
      * in parallelo: prima si aspettava l'elenco e solo dopo partivano le presenze.
      */
     private fun carica() {
-        val mieiSalvati = runCatching { fileMiei().readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
+        val mieiSalvati = if (!altraMeta) emptySet() else runCatching { fileMiei().readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
         studenti = soloMiei(runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList()), mieiSalvati)
         if (studenti.isEmpty()) testo("carico gli studenti…") else ridisegna()
         caricaStato()
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val miei = if (tipo.equals("G", true)) emptySet()
-                        else FiltroArticolate.mieiAlunni(client, requireContext().filesDir, tipo, classeId, nome)
-                    runCatching { fileMiei().writeText(miei.joinToString("\n")) }
+                    val miei = if (!altraMeta) emptySet()
+                        else FiltroArticolate.alunniRegistro(client, requireContext().filesDir, tipo, classeId, nome, true)
+                    if (altraMeta) runCatching { fileMiei().writeText(miei.joinToString("\n")) }
                     client.studentiGrezzi(tipo, classeId) to miei
                 }
             }

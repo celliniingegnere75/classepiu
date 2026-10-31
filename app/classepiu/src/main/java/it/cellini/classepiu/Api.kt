@@ -985,7 +985,7 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
 /** Componenti dei voti: tipo della pagina -> nome e posizione come li dà classeviva. */
 
 /** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */
-data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String)
+data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String, val altraMeta: Boolean = false)
 
 /**
  * Legge l'elenco delle classi dalla risposta di ClasseViva. Prova più nomi di campo possibili,

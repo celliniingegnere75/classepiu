@@ -39,6 +39,18 @@ object FiltroArticolate {
     }
 
     /**
+     * Gli alunni da mostrare in un registro di "tutti i registri": il gruppo (es. 5EA_AUA) ha i suoi alunni, l'altra metà
+     * di una classe articolata quelli della classe che non sono nei miei gruppi; vuoto = tutta la classe, nessun filtro.
+     */
+    fun alunniRegistro(c: ClasseViva, filesDir: File, tipo: String, classeId: String, nome: String, altraMeta: Boolean): Set<String> {
+        if (!altraMeta) return if (tipo.equals("G", true)) mieiAlunni(c, filesDir, tipo, classeId, nome) else emptySet()
+        val miei = mieiAlunni(c, filesDir, tipo, classeId, nome)
+        if (miei.isEmpty()) return emptySet()
+        val tutti = runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second).map { it.id } }.getOrDefault(emptyList())
+        return tutti.toSet() - miei
+    }
+
+    /**
      * Gli alunni "miei" del registro aperto: se è un gruppo (es. 5EA_AUA) i suoi alunni; se è la classe intera,
      * quelli dei miei gruppi della stessa classe (dalla cache di "i miei registri"). Vuoto se la classe non è articolata per me.
      */
