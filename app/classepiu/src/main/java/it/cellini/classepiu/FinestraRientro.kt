@@ -1253,6 +1253,28 @@ object FinestraRientro {
             }
             return ""
         }
+        fun alunniDi(v: org.json.JSONObject): Set<String> {
+            val stati = v.optJSONArray("studentStatus") ?: return emptySet()
+            return (0 until stati.length()).mapNotNull { stati.optJSONObject(it)?.optString("studentId")?.takeIf { id -> id.isNotEmpty() } }.toSet()
+        }
+        // le compresenze non hanno alunni: prendono quelli del titolare della stessa materia nella stessa ora (come FiltroArticolate)
+        val titolari = HashMap<String, MutableSet<String>>()
+        fun raccogli(v: Any?, livello: Int = 0) {
+            if (livello > 7) return
+            when (v) {
+                is org.json.JSONArray -> for (i in 0 until v.length()) raccogli(v.opt(i), livello + 1)
+                is org.json.JSONObject -> {
+                    val ora = testo(v, "evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
+                    val alunni = alunniDi(v)
+                    if (ora != null && alunni.isNotEmpty() && testo(v, "evtDate", "lessonDate", "date").take(10).replace("-", "") == data) {
+                        val durata = (testo(v, "evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
+                        val materia = testo(v, "subjectDesc", "subjectName", "subject").uppercase(java.util.Locale.ROOT)
+                        for (h in ora until ora + durata) titolari.getOrPut("$h|$materia") { HashSet() }.addAll(alunni)
+                    } else for (k in v.keys()) raccogli(v.opt(k), livello + 1)
+                }
+            }
+        }
+        if (gruppo != null) raccogli(radice)
         fun cerca(v: Any?, livello: Int = 0): EsitoFirma? {
             if (livello > 7) return null
             when (v) {
@@ -1270,9 +1292,10 @@ object FinestraRientro {
                     val tipoGiusto = if (compresenza) eCompresenza else soloLezione
                     val autoreGiusto = autore.isNotBlank() && (if (mie) autore == mioId else autore != mioId)
                     // firma di un altro gruppo della stessa classe (5EA_ENA mentre io sono su 5EA_AUA): non è sovrapposizione
-                    val stati = v.optJSONArray("studentStatus")
-                    val alunniFirma = stati?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("studentId")?.takeIf { id -> id.isNotEmpty() } } }.orEmpty()
-                    val altroGruppo = gruppo != null && alunniFirma.none { it in gruppo }
+                    // le mie firme sono del mio gruppo per forza (una mia compresenza non ha alunni e non va scartata)
+                    val altroGruppo = gruppo != null && !mie && alunniDi(v)
+                        .ifEmpty { titolari["${lezione.ora}|${testo(v, "subjectDesc", "subjectName", "subject").uppercase(java.util.Locale.ROOT)}"].orEmpty() }
+                        .none { it in gruppo }
                     if (dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) && autoreGiusto && tipoGiusto && !altroGruppo) {
                         if (mie) return EsitoFirma(testo(v, "subjectDesc", "subjectName", "subject").ifEmpty { lezione.materia })
                         val docente = testo(v, "authorName", "teacherName", "signedBy")
