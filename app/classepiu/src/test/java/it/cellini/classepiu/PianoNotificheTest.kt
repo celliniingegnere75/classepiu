@@ -120,8 +120,9 @@ class PianoNotificheTest {
         )
         assertEquals(listOf(3 to E), piano(9, 50, fasce, listOf(3)))
         assertEquals(listOf(3 to R), piano(10, 50, fasce, listOf(3)))
-        assertEquals(listOf(3 to R), piano(11, 50, fasce, listOf(3))) // scade alle 11:55
-        assertEquals(emptyList<Pair<Int, StatoNotifica>>(), piano(11, 55, fasce, listOf(3)))
+        // ultima ora con lezione: scade 15 minuti dopo la fine della 3ª (11:00), cioè alle 11:15
+        assertEquals(listOf(3 to R), piano(11, 10, fasce, listOf(3)))
+        assertEquals(emptyList<Pair<Int, StatoNotifica>>(), piano(11, 15, fasce, listOf(3)))
     }
 
     @Test
