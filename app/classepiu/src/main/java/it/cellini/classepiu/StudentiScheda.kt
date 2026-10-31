@@ -77,7 +77,8 @@ class StudentiScheda : Scheda() {
         }
 
         // Linguette della scheda classe, sempre visibili sotto la data: cambia solo il pannello sotto di loro.
-        val linguette = LinguetteView(ctx, outfitRegular, listOf("alunni", "le mie lezioni", "tutte le lezioni"), 0, colorePannello) { i ->
+        val linguette = LinguetteView(ctx, outfitRegular, nomiLinguette(), 0, colorePannello) { pos ->
+            val i = idLinguette()[pos]
             linguettaAttiva = i
             mostraLinguetta()
             // tornando agli alunni il giorno può essere cambiato: si rileggono i dati
@@ -116,11 +117,34 @@ class StudentiScheda : Scheda() {
                 addView(contenitoreLezioni, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         })
+        linguetteView = linguette
         mostraLinguetta()
+        // "le mie lezioni" solo per le mie classi: si parte dalla copia salvata, poi si controlla su classeviva
+        verificaMiaClasse()
         carica()
     }
 
     private val idLezioni = View.generateViewId()
+    private var linguetteView: LinguetteView? = null
+    /** Vero se la classe è tra le mie (classes/mine); finché non si sa si mostra "le mie lezioni". */
+    private var miaClasse = true
+
+    /** Id delle linguette mostrate: 0 alunni, 1 le mie lezioni (solo per le mie classi), 2 tutte le lezioni. */
+    private fun idLinguette() = if (miaClasse) listOf(0, 1, 2) else listOf(0, 2)
+    private fun nomiLinguette() = idLinguette().map { listOf("alunni", "le mie lezioni", "tutte le lezioni")[it] }
+
+    private fun verificaMiaClasse() {
+        val files = requireContext().filesDir
+        miaClasse = FiltroArticolate.eMiaClasseDaCopia(files, tipo, classeId, nome, gruppo) ?: true
+        linguetteView?.impostaVoci(nomiLinguette(), idLinguette().indexOf(linguettaAttiva).coerceAtLeast(0))
+        lifecycleScope.launch {
+            val mia = withContext(Dispatchers.IO) { runCatching { FiltroArticolate.eMiaClasse(client, files, tipo, classeId, nome, gruppo) }.getOrNull() } ?: return@launch
+            if (mia == miaClasse) return@launch
+            miaClasse = mia
+            if (!mia && linguettaAttiva == 1) { linguettaAttiva = 0; mostraLinguetta(); caricaStato(); ridisegna() }
+            linguetteView?.impostaVoci(nomiLinguette(), idLinguette().indexOf(linguettaAttiva).coerceAtLeast(0))
+        }
+    }
     private var linguettaAttiva = 0
     private var pannelloAlunni: View? = null
     private var contenitoreLezioni: View? = null
@@ -615,11 +639,14 @@ class StudentiScheda : Scheda() {
     }
 }
 
-/** Striscia di linguette a cartella: sfondo grigio con angoli alti arrotondati, linguetta attiva con il colore del pannello e fianco inclinato. */
+/**
+ * Striscia di linguette a cartella: sfondo grigio con gli angoli alti arrotondati, bordi tra le linguette inclinati a "/" con una curva a S,
+ * linguetta attiva dello stesso colore del pannello sotto (così le due si fondono).
+ */
 class LinguetteView(
     ctx: android.content.Context,
     private val font: Typeface,
-    private val voci: List<String>,
+    private var voci: List<String>,
     attivaIniziale: Int,
     private val colorePannello: Int,
     private val alTocco: (Int) -> Unit,
@@ -628,44 +655,62 @@ class LinguetteView(
     private val d = ctx.resources.displayMetrics.density
     private val pennaFondo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC4C4C4.toInt() }
     private val pennaAttiva = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = colorePannello }
+    private val pennaBordo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFFA9A9A9.toInt(); style = android.graphics.Paint.Style.STROKE; strokeWidth = 1f * d
+    }
     private val pennaTesto = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFF111111.toInt(); typeface = font; textSize = 15f * d; textAlign = android.graphics.Paint.Align.CENTER
     }
     private val r = 18f * d
-    private val pendenza = 16f * d
-
-    init { minimumHeight = (40 * d).toInt() }
+    private val rt = 12f * d
+    private val p = 10f * d
 
     override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(MeasureSpec.getSize(w), (40 * d).toInt())
 
-    private fun larghezza(i: Int) = width.toFloat() / voci.size
+    /** Cambia le voci mostrate (es. togliere "le mie lezioni"); [attivaNuova] è la posizione della linguetta attiva. */
+    fun impostaVoci(nuove: List<String>, attivaNuova: Int) { voci = nuove; attiva = attivaNuova.coerceIn(0, nuove.size - 1); invalidate() }
+
+    private fun larghezza() = width.toFloat() / voci.size
+
+    /** Bordo inclinato tra due linguette in [xb]: dal basso (xb - p) all'alto (xb + p), con tangenti verticali agli estremi. */
+    private fun android.graphics.Path.bordoSu(xb: Float, h: Float) {
+        cubicTo(xb - p, h * 0.55f, xb + p, h * 0.45f + rt, xb + p, rt)
+    }
+
+    private fun android.graphics.Path.bordoGiu(xb: Float, h: Float) {
+        cubicTo(xb + p, h * 0.45f + rt, xb - p, h * 0.55f, xb - p, h)
+    }
 
     override fun onDraw(c: android.graphics.Canvas) {
         val w = width.toFloat(); val h = height.toFloat()
+        val lw = larghezza()
         // fondo grigio con i due angoli alti arrotondati
         val fondo = android.graphics.Path().apply {
             addRoundRect(0f, 0f, w, h + r, floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f), android.graphics.Path.Direction.CW)
         }
         c.save(); c.clipRect(0f, 0f, w, h); c.drawPath(fondo, pennaFondo); c.restore()
-        // linguetta attiva: parte dal bordo sinistro (o r prima) e scende inclinata a destra
-        val x0 = larghezza(attiva) * attiva
-        val x1 = x0 + larghezza(attiva)
-        val p = android.graphics.Path().apply {
-            moveTo(x0, h)
-            if (attiva == 0) { lineTo(x0, r); quadTo(x0, 0f, x0 + r, 0f) }
-            else { lineTo(x0 - pendenza * 0.4f, h); cubicTo(x0 + pendenza * 0.1f, h, x0 + pendenza * 0.2f, 0f, x0 + r + pendenza * 0.4f, 0f) }
-            lineTo(x1 - pendenza - r * 0.5f, 0f)
-            cubicTo(x1 - pendenza, 0f, x1 - pendenza * 0.6f, h, x1 + pendenza * 0.2f, h)
+        // bordi tra le linguette
+        for (k in 1 until voci.size) {
+            val xb = lw * k
+            c.drawPath(android.graphics.Path().apply { moveTo(xb - p, h); bordoSu(xb, h); quadTo(xb + p, 0f, xb + p + rt, 0f) }, pennaBordo)
+        }
+        // linguetta attiva
+        val xl = lw * attiva; val xr = xl + lw
+        val a = android.graphics.Path().apply {
+            if (attiva == 0) { moveTo(0f, h); lineTo(0f, r); quadTo(0f, 0f, r, 0f) }
+            else { moveTo(xl - p, h); bordoSu(xl, h); quadTo(xl + p, 0f, xl + p + rt, 0f) }
+            if (attiva == voci.size - 1) { lineTo(w - r, 0f); quadTo(w, 0f, w, r); lineTo(w, h) }
+            else { lineTo(xr + p - rt, 0f); quadTo(xr + p, 0f, xr + p, rt); bordoGiu(xr, h) }
             close()
         }
-        c.drawPath(p, pennaAttiva)
+        c.drawPath(a, pennaAttiva)
         val y = h / 2f - (pennaTesto.ascent() + pennaTesto.descent()) / 2f
-        voci.forEachIndexed { i, t -> c.drawText(t, larghezza(i) * i + larghezza(i) / 2f, y, pennaTesto) }
+        voci.forEachIndexed { i, t -> c.drawText(t, lw * i + lw / 2f, y, pennaTesto) }
     }
 
     override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
         if (e.action == android.view.MotionEvent.ACTION_UP) {
-            val i = (e.x / larghezza(0)).toInt().coerceIn(0, voci.size - 1)
+            val i = (e.x / larghezza()).toInt().coerceIn(0, voci.size - 1)
             if (i != attiva) { attiva = i; invalidate(); alTocco(i) }
         }
         return true

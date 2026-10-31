@@ -92,4 +92,34 @@ object FiltroArticolate {
             .flatMap { (p, _) -> alunni(p[0], p.getOrElse(1) { "" }) }
             .toSet()
     }
+
+    private fun mieDaCopia(filesDir: File): List<Classe> =
+        runCatching { leggiClassi(File(filesDir, "classi_mie.json").readText()) }.getOrDefault(emptyList())
+
+    /** Ho questa classe tra le mie (classes/mine)? Un gruppo (es. 5EA_ENA) conta solo se è proprio il mio; la classe intera conta se insegno nella classe o in un suo gruppo. */
+    private fun contiene(mie: List<Classe>, classeId: String, nome: String, gruppo: String): Boolean {
+        val ids = mie.map { it.chiave.split("|", limit = 3).getOrElse(1) { "" } }
+        val nomi = mie.map { it.nome.uppercase() }
+        if (gruppo.isNotEmpty()) return gruppo.uppercase() in nomi || classeId in ids
+        if (classeId in ids) return true
+        val sigla = nome.trim().uppercase().substringBefore(' ').substringBefore('_')
+        val eGruppo = nome.contains('_')
+        return !eGruppo && nomi.any { it.contains('_') && it.substringBefore('_') == sigla }
+    }
+
+    /** Solo dalla copia salvata di "i miei registri": null se non c'è ancora. */
+    fun eMiaClasseDaCopia(filesDir: File, tipo: String, classeId: String, nome: String, gruppo: String): Boolean? =
+        mieDaCopia(filesDir).takeIf { it.isNotEmpty() }?.let { contiene(it, classeId, nome, gruppo) }
+
+    /** Come [eMiaClasseDaCopia], ma se manca la copia legge classes/mine da classeviva (la stessa lista della tendina). */
+    fun eMiaClasse(c: ClasseViva, filesDir: File, tipo: String, classeId: String, nome: String, gruppo: String): Boolean? {
+        val fileMie = File(filesDir, "classi_mie.json")
+        val mie = mieDaCopia(filesDir).ifEmpty {
+            runCatching {
+                val (codice, testo) = c.classiGrezze(false)
+                if (codice == 200) leggiClassi(testo).also { if (it.isNotEmpty()) fileMie.writeText(testo) } else emptyList()
+            }.getOrDefault(emptyList())
+        }
+        return mie.takeIf { it.isNotEmpty() }?.let { contiene(it, classeId, nome, gruppo) }
+    }
 }
