@@ -292,6 +292,12 @@ class Orario(ctx: Context) {
     fun imposta(giorno: Int, ora: Int, valore: Insegnamento?) =
         cambia(giorno, ora) { it.copy(classe = valore?.classe.orEmpty(), materia = valore?.materia.orEmpty()) }
 
+    /** Svuota una sola casella: classe, materia e aula (la fascia oraria dell'ora è comune a tutti i giorni e resta). */
+    fun svuota(giorno: Int, ora: Int) {
+        celle[i(giorno, ora)] = null
+        salva()
+    }
+
     /** Sigla dell'aula dell'ora (fino a 5 caratteri), indipendente da classe e materia. */
     fun aula(giorno: Int, ora: Int): String = celle[i(giorno, ora)]?.aula.orEmpty()
 

@@ -945,7 +945,7 @@ class ImpostazioniFragment : Fragment() {
                 aggiornaOrario()
                 d.dismiss()
             }
-            .setNeutralButton("svuota") { _, _ -> orario.imposta(giorno, ora, null); aggiornaOrario() }
+            .setNeutralButton("svuota") { _, _ -> orario.svuota(giorno, ora); aggiornaOrario() }
             .setNegativeButton("annulla", null)
             .show()
     }

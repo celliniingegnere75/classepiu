@@ -64,11 +64,12 @@ class PianoNotificheTest {
 
     @Test
     fun ultimaFasciaSenzaSuccessiva() {
-        // lezione nell'ultima fascia: scade alla fine della sua fascia, dopo 15 minuti ridotta
+        // lezione nell'ultima fascia: scade 15 minuti dopo la fine della sua fascia (13:45), dopo 15 minuti ridotta
         val p = piano(13, 20, ore = listOf(6))
         assertEquals(listOf(6 to R), p)
-        assertEquals(s(13, 30), PianoNotifiche.calcola(fasceMercoledi, listOf(6), s(13, 20)).single().scadenza)
-        assertEquals(emptyList<Pair<Int, StatoNotifica>>(), piano(13, 30, ore = listOf(6)))
+        assertEquals(s(13, 45), PianoNotifiche.calcola(fasceMercoledi, listOf(6), s(13, 20)).single().scadenza)
+        assertEquals(listOf(6 to R), piano(13, 30, ore = listOf(6)))
+        assertEquals(emptyList<Pair<Int, StatoNotifica>>(), piano(13, 45, ore = listOf(6)))
     }
 
     @Test

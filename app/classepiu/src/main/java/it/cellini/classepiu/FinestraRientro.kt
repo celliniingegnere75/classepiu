@@ -635,14 +635,7 @@ object FinestraRientro {
                 leftMargin = activity.dp(10)
                 topMargin = activity.dp(4)
             })
-            // X stilizzata in un cerchio semitrasparente, sempre in alto a destra
-            addView(chiudi.apply {
-                // la X chiude solo questa notifica
-                setOnClickListener { gestore.interagita(avviso); registraCancellazione(activity, avviso.notifica); gestore.chiudi(avviso) } // MODIFICA
-            }, FrameLayout.LayoutParams(activity.dp(38), activity.dp(38), Gravity.TOP or Gravity.END).apply {
-                rightMargin = activity.dp(10)
-                topMargin = activity.dp(4)
-            })
+            // la X è stata tolta: si cancella con lo swipe a sinistra, si rinvia con quello a destra
         }
         radice.addView(intestazione, LinearLayout.LayoutParams(-1, -2))
         // Riga superiore come il disegno di Cristian: "aula" e il suo codice a sinistra, "classe" e il suo codice a destra;
@@ -788,18 +781,6 @@ object FinestraRientro {
                 addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)))
                 addView(firmaOrdinaria, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)).apply { leftMargin = activity.dp(22) })
             }, LinearLayout.LayoutParams(-2, -2))
-            addView(TextView(activity).apply {
-                val frecce = "‹‹‹"
-                text = android.text.SpannableString("$frecce  swipe a sinistra per non firmare").apply {
-                    setSpan(android.text.style.ForegroundColorSpan(azzurro), 0, frecce.length, 0)
-                    setSpan(android.text.style.StyleSpan(Typeface.BOLD), 0, frecce.length, 0)
-                }
-                textSize = 12f
-                typeface = outfitRegular
-                setTextColor(0xFF888888.toInt())
-                gravity = Gravity.CENTER
-                includeFontPadding = false
-            }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(8) })
         }
         val chiaveNonFirmo = "non_firmo_${java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
         val preferenzeNonFirmo = activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
@@ -889,6 +870,25 @@ object FinestraRientro {
             }
             override fun afterTextChanged(s: android.text.Editable?) {}
         })
+        // in fondo, sempre: le due indicazioni degli swipe, una sotto l'altra
+        radice.addView(LinearLayout(activity).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            fun riga(testo: String, frecce: String, prima: Boolean) = TextView(activity).apply {
+                text = android.text.SpannableString(if (prima) "$frecce  $testo" else "$testo  $frecce").apply {
+                    val da = if (prima) 0 else length - frecce.length
+                    setSpan(android.text.style.ForegroundColorSpan(azzurro), da, da + frecce.length, 0)
+                    setSpan(android.text.style.StyleSpan(Typeface.BOLD), da, da + frecce.length, 0)
+                }
+                textSize = 12f
+                typeface = outfitRegular
+                setTextColor(0xFF888888.toInt())
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+            }
+            addView(riga("swipe a sinistra per cancellare", "<<", true), LinearLayout.LayoutParams(-2, -2))
+            addView(riga("swipe a destra per rinviare", ">>", false), LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(4) })
+        }, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = activity.dp(14) })
         val contenitore = FrameLayout(activity).apply {
             addView(radice, FrameLayout.LayoutParams(-1, -2))
             addView(sintesi, FrameLayout.LayoutParams(-1, -2))
