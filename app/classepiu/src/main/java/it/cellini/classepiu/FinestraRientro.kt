@@ -1296,10 +1296,8 @@ object FinestraRientro {
                     val ora = testo(v, "evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
                     val durata = (testo(v, "evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
                     val autore = testo(v, "authorId", "teacherId", "teacher_id")
-                    val soloLezione = v.keys().asSequence().none { k ->
-                        (v.opt(k) as? String)?.let { it.contains("compresenza", true) || it.contains("sostegno", true) } == true
-                    }
-                    val eCompresenza = v.keys().asSequence().any { k -> (v.opt(k) as? String)?.contains("compresenza", true) == true }
+                    val soloLezione = !tipoFirma(v, "compresenza") && !tipoFirma(v, "sostegno")
+                    val eCompresenza = tipoFirma(v, "compresenza")
                     // compresenza=false: firma teorica di un altro docente; compresenza=true: firma in compresenza (mia se mie, altrui altrimenti)
                     val tipoGiusto = if (compresenza) eCompresenza else soloLezione
                     val autoreGiusto = autore.isNotBlank() && (if (mie) autore == mioId else autore != mioId)
@@ -1324,6 +1322,16 @@ object FinestraRientro {
         }
         return cerca(radice)
     }
+
+    /**
+     * Tipo della firma (es. lessonType "Compresenza"): si guardano solo i campi del tipo di attività, mai l'argomento,
+     * altrimenti una firma teorica con la parola "compresenza" nell'argomento passerebbe per compresenza.
+     */
+    private fun tipoFirma(v: org.json.JSONObject, parola: String): Boolean =
+        v.keys().asSequence().filter { k ->
+            val n = k.lowercase(java.util.Locale.ROOT)
+            n.contains("type") || n.contains("tipo") || n == "evtcode"
+        }.any { k -> (v.opt(k) as? String)?.contains(parola, ignoreCase = true) == true }
 
     /** Firma in compresenza già inviata per quest'ora (ricordata qui: il registro può non mostrarla tra le mie firme). */
     private fun chiaveCompresenza(data: String, lezione: Lezione) =
@@ -1376,7 +1384,7 @@ object FinestraRientro {
                     val firmaQuestaOra = dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
                         (mioId.isBlank() || autore == mioId) && stessaClasse
                     // in modalità compresenza si riconosce la firma dalla parola "compresenza" in uno qualsiasi dei suoi campi
-                    val eCompresenza = !soloCompresenza || v.keys().asSequence().any { k -> (v.opt(k) as? String)?.contains("compresenza", ignoreCase = true) == true }
+                    val eCompresenza = !soloCompresenza || tipoFirma(v, "compresenza")
                     if (firmaQuestaOra && eCompresenza) {
                         val materia = testo(v, "subjectDesc", "subjectName", "subjectDescription", "subject")
                             .ifEmpty {
