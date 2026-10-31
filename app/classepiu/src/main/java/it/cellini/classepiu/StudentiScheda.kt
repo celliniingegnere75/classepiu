@@ -703,6 +703,10 @@ class LinguetteView(
             close()
         }
         c.drawPath(a, pennaAttiva)
+        // stesso carattere per tutte le voci: il più grande (fino a 19) in cui la voce più lunga sta nella sua linguetta
+        var dimensione = 19f
+        pennaTesto.textSize = dimensione * d
+        while (dimensione > 11f && voci.maxOf { pennaTesto.measureText(it) } > lw - 20f * d) { dimensione -= 0.5f; pennaTesto.textSize = dimensione * d }
         val y = h / 2f - (pennaTesto.ascent() + pennaTesto.descent()) / 2f
         voci.forEachIndexed { i, t -> c.drawText(t, lw * i + lw / 2f, y, pennaTesto) }
     }
