@@ -37,8 +37,8 @@ class StudentiScheda : Scheda() {
     private var tipo = ""
     private var classeId = ""
     private var nome = ""
-    /** Da "tutti i registri": l'altra metà di una classe articolata (es. 5EA senza il mio 5EA_AUA). */
-    private var altraMeta = false
+    /** Da "tutti i registri": un gruppo di classe articolata (es. 5EA_ENA) aperto sulla classe intera. */
+    private var gruppo = ""
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
 
     // Colori della scheda e degli indicatori.
@@ -51,7 +51,7 @@ class StudentiScheda : Scheda() {
 
     override fun crea(savedInstanceState: Bundle?) {
         nome = intent.getStringExtra("nome") ?: ""
-        altraMeta = intent.getBooleanExtra("altra", false)
+        gruppo = intent.getStringExtra("gruppo") ?: ""
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         val ctx = requireContext()
@@ -125,9 +125,6 @@ class StudentiScheda : Scheda() {
         else mostra(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
     }
 
-    /** Altra metà di una classe articolata (es. 5AN senza il mio 5AN_CAA): i suoi alunni, salvati per l'avvio veloce. */
-    private fun fileMiei() = java.io.File(requireContext().filesDir, "altra_meta_${classeId.replace(Regex("[^A-Za-z0-9_-]"), "_")}.txt")
-
     private fun soloMiei(lista: List<Studente>, miei: Set<String>) = if (miei.isEmpty()) lista else lista.filter { it.id in miei }
 
     /**
@@ -135,21 +132,25 @@ class StudentiScheda : Scheda() {
      * in parallelo: prima si aspettava l'elenco e solo dopo partivano le presenze.
      */
     private fun carica() {
-        val mieiSalvati = if (!altraMeta) emptySet() else runCatching { fileMiei().readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
-        studenti = soloMiei(runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList()), mieiSalvati)
+        val mieiSalvati = if (gruppo.isEmpty()) emptySet()
+            else runCatching { FiltroArticolate.fileGruppo(requireContext().filesDir, gruppo).readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
+        // un gruppo senza alunni salvati non mostra la classe intera nell'attesa
+        studenti = if (gruppo.isNotEmpty() && mieiSalvati.isEmpty()) emptyList()
+            else soloMiei(runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList()), mieiSalvati)
         if (studenti.isEmpty()) testo("carico gli studenti…") else ridisegna()
         caricaStato()
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 runCatching {
-                    val miei = if (!altraMeta) emptySet()
-                        else FiltroArticolate.alunniRegistro(client, requireContext().filesDir, tipo, classeId, nome, true)
-                    if (altraMeta) runCatching { fileMiei().writeText(miei.joinToString("\n")) }
+                    val (miei, errore) = if (gruppo.isEmpty()) emptySet<String>() to ""
+                        else FiltroArticolate.alunniGruppo(client, requireContext().filesDir, tipo, classeId, gruppo)
+                    if (gruppo.isNotEmpty() && miei.isEmpty()) throw ClasseVivaException("non riesco a leggere gli alunni del gruppo $gruppo.\n$errore")
                     client.studentiGrezzi(tipo, classeId) to miei
                 }
             }
             val (risposta, miei) = r.getOrElse {
-                if (studenti.isEmpty()) testo("non riuscito: ${it.message}")
+                val m = it.message.orEmpty()
+                if (studenti.isEmpty()) testo("non riuscito: ${m.substringBefore('\n')}", 0, m.substringAfter('\n', ""))
                 return@launch
             }
             val (codice, corpo) = risposta

@@ -38,16 +38,35 @@ object FiltroArticolate {
         }
     }
 
+    /** Gruppi delle classi articolate della scuola (sigla classe -> codici), salvati per un giorno. */
+    fun gruppiScuola(c: ClasseViva, filesDir: File, forza: Boolean = false): Map<String, List<String>> {
+        val f = File(filesDir, "gruppi_scuola.txt")
+        fun leggi() = runCatching { f.readLines().filter { '=' in it }.associate { r -> r.substringBefore('=') to r.substringAfter('=').split(',').filter { it.isNotBlank() } } }.getOrDefault(emptyMap())
+        val salvati = leggi()
+        if (!forza && salvati.isNotEmpty() && System.currentTimeMillis() - f.lastModified() < 24 * 3600_000L) return salvati
+        val nuovi = runCatching { c.gruppiScuolaWeb().let { (codice, html) -> if (codice in 200..299) leggiGruppiScuola(html) else emptyMap() } }.getOrDefault(emptyMap())
+        if (nuovi.isEmpty()) return salvati
+        runCatching { f.writeText(nuovi.entries.joinToString("\n") { "${it.key}=${it.value.joinToString(",")}" }) }
+        return nuovi
+    }
+
+    fun fileGruppo(filesDir: File, gruppo: String) = File(filesDir, "gruppo_${gruppo.replace(Regex("[^A-Za-z0-9_-]"), "_")}.txt")
+
     /**
-     * Gli alunni da mostrare in un registro di "tutti i registri": il gruppo (es. 5EA_AUA) ha i suoi alunni, l'altra metà
-     * di una classe articolata quelli della classe che non sono nei miei gruppi; vuoto = tutta la classe, nessun filtro.
+     * Alunni di un gruppo (es. 5EA_ENA) della classe [tipo]/[classeId]: gli alunni della classe intera che compaiono nella
+     * pagina web del registro del gruppo. Salvati per una settimana. Se non riesce: insieme vuoto e la pagina letta, per capire.
      */
-    fun alunniRegistro(c: ClasseViva, filesDir: File, tipo: String, classeId: String, nome: String, altraMeta: Boolean): Set<String> {
-        if (!altraMeta) return if (tipo.equals("G", true)) mieiAlunni(c, filesDir, tipo, classeId, nome) else emptySet()
-        val miei = mieiAlunni(c, filesDir, tipo, classeId, nome)
-        if (miei.isEmpty()) return emptySet()
-        val tutti = runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second).map { it.id } }.getOrDefault(emptyList())
-        return tutti.toSet() - miei
+    fun alunniGruppo(c: ClasseViva, filesDir: File, tipo: String, classeId: String, gruppo: String): Pair<Set<String>, String> {
+        val f = fileGruppo(filesDir, gruppo)
+        val salvati = runCatching { f.readLines().filter { it.isNotBlank() }.toSet() }.getOrDefault(emptySet())
+        if (salvati.isNotEmpty() && System.currentTimeMillis() - f.lastModified() < 7 * 24 * 3600_000L) return salvati to ""
+        return runCatching {
+            val classe = leggiStudenti(c.studentiGrezzi(tipo, classeId).second).map { it.id }.toSet()
+            val (codice, html) = c.paginaGruppoWeb(gruppo)
+            val alunni = if (codice in 200..299) alunniInPagina(html, classe) else emptySet()
+            if (alunni.isNotEmpty() && alunni.size < classe.size) { f.writeText(alunni.joinToString("\n")); alunni to "" }
+            else salvati to "gruppo $gruppo: http $codice, ${alunni.size} alunni su ${classe.size} della classe\n" + html.take(4000)
+        }.getOrElse { salvati to "gruppo $gruppo: ${it.message}" }
     }
 
     /**

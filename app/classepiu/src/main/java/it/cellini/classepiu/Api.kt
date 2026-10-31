@@ -709,6 +709,14 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * con attributi studente_id, evento_id, mydata, voto (vedi loadPopup in regvoti.js). Restituisce (evento_id, casella tipo "S1_3_1").
      * Prima per evento_id uguale all'evtId delle API, poi per studente + data + voto mostrato. Se non lo trova non si manda niente.
      */
+    /** Pagina web "Tutti i gruppi" dell'istituto (selezione_gruppi.php), da leggere con [leggiGruppiScuola]. */
+    fun gruppiScuolaWeb(): Pair<Int, String> =
+        sessioneWeb().use { it.chiama("https://web.spaggiari.eu/cvv/app/default/selezione_gruppi.php") }
+
+    /** Pagina web del registro di un gruppo (es. 5EA_ENA): contiene i codici dei suoi alunni (vedi [alunniInPagina]). */
+    fun paginaGruppoWeb(gruppo: String): Pair<Int, String> =
+        sessioneWeb().use { it.chiama("https://web.spaggiari.eu/cvv/app/default/regclasse.php?corsoextra=0&gruppo_id=${java.net.URLEncoder.encode(gruppo, "UTF-8")}") }
+
     /** Gruppo (classType G) oppure classId non numerico come "5EA_AUA": i voti di grades2 non portano classType. */
     private fun eGruppo(o: JSONObject): Boolean {
         val tipo = o.optString("classType")
@@ -985,7 +993,21 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
 /** Componenti dei voti: tipo della pagina -> nome e posizione come li dà classeviva. */
 
 /** Una classe, come nell'elenco dell'app ufficiale (senza le materie). */
-data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String, val altraMeta: Boolean = false)
+data class Classe(val chiave: String, val nome: String, val descrizione: String, val codice: String, val gruppo: String = "")
+
+/**
+ * Gruppi delle classi articolate dalla pagina web "Tutti i gruppi" (selezione_gruppi.php): sigla della classe -> codici
+ * dei gruppi, es. 5EA -> [5EA_AUA, 5EA_ENA]. I codici sono quelli dei link gruppo_id=... e del testo della pagina.
+ */
+fun leggiGruppiScuola(html: String): Map<String, List<String>> =
+    Regex("""\b(\d[A-Z]{1,4})_[A-Z0-9]{1,8}\b""").findAll(html).map { it.value }.distinct()
+        .groupBy { it.substringBefore('_') }
+        .filterValues { it.size >= 2 }
+        .mapValues { it.value.sorted() }
+
+/** Alunni di un gruppo: i codici della classe intera che compaiono nella pagina del registro del gruppo. */
+fun alunniInPagina(html: String, alunniClasse: Set<String>): Set<String> =
+    Regex("\\d{5,}").findAll(html).map { it.value }.filter { it in alunniClasse }.toSet()
 
 /**
  * Legge l'elenco delle classi dalla risposta di ClasseViva. Prova più nomi di campo possibili,

@@ -144,6 +144,10 @@ class RegistroFragment : Fragment() {
 
         datiMie = leggiCache(true)
         datiTutte = leggiCache(false)
+        gruppiScuola = runCatching {
+            File(ctx.filesDir, "gruppi_scuola.txt").readLines().filter { '=' in it }
+                .associate { r -> r.substringBefore('=') to r.substringAfter('=').split(',').filter { it.isNotBlank() } }
+        }.getOrDefault(emptyMap())
         aggiornaSchede()
         mostra()
         carica(true, forza = false)
@@ -193,7 +197,7 @@ class RegistroFragment : Fragment() {
                 if (codice == 200) {
                     val classi = leggiClassi(testo)
                     if (classi.isNotEmpty()) runCatching { fileCache(mieClassi).writeText(testo) }
-                    if (mieClassi) datiMie = classi else { datiTutte = classi; caricateTutte = true }
+                    if (mieClassi) datiMie = classi else { datiTutte = classi; caricateTutte = true; caricaGruppi(forza) }
                 } else if (!mieClassi) caricateTutte = true
                 mostra(errore = if (codice == 200) null else "classeviva ha risposto con un errore (http $codice).")
             }.onFailure { e ->
@@ -203,12 +207,23 @@ class RegistroFragment : Fragment() {
         }
     }
 
+    /** I gruppi delle articolate si leggono dal sito (più lento): a parte, una volta al giorno o col trascinamento. */
+    private fun caricaGruppi(forza: Boolean) {
+        val ctx = context ?: return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val g = withContext(Dispatchers.IO) {
+                runCatching { FiltroArticolate.gruppiScuola(Impostazioni(ctx).client(), ctx.filesDir, forza) }.getOrNull()
+            }
+            if (g != null && g != gruppiScuola) { gruppiScuola = g; mostra() }
+        }
+    }
+
     private fun mostra(errore: String? = null) {
         val q = cerca.trim().lowercase()
         val base = if (mie) datiMie else datiTutte
         // In "le mie classi", prima le classi previste oggi nell'orario personale,
         // nell'ordine della prima ora; tutte le altre restano in ordine alfabetico.
-        val ordinate = if (!mie) conMeta(base) else {
+        val ordinate = if (!mie) conGruppi(base) else {
             val giornoOggi = when (java.util.Calendar.getInstance().get(java.util.Calendar.DAY_OF_WEEK)) {
                 java.util.Calendar.MONDAY -> 1
                 java.util.Calendar.TUESDAY -> 2
@@ -248,19 +263,17 @@ class RegistroFragment : Fragment() {
         dettagli.visibility = if (base.isEmpty() && ultimaRisposta.isNotEmpty()) View.VISIBLE else View.GONE
     }
 
+    /** Gruppi delle classi articolate della scuola (sigla -> codici), dalla pagina web "Tutti i gruppi". */
+    private var gruppiScuola: Map<String, List<String>> = emptyMap()
+
     /**
-     * Tutti i registri: dopo una classe articolata per me (es. 5EA) metto il mio gruppo (5EA_AUA) e l'altra metà,
-     * così 5EA resta la classe intera (supplenza su tutti) e le due metà si aprono a parte.
+     * Tutti i registri: dopo ogni classe articolata (es. 5EA, classe intera per le supplenze su tutti) i suoi gruppi
+     * (5EA_AUA, 5EA_ENA), che si aprono sulla classe intera filtrata sugli alunni del gruppo.
      */
-    private fun conMeta(tutte: List<Classe>): List<Classe> {
-        val gruppi = datiMie.filter { it.chiave.substringBefore('|').equals("G", true) && it.nome.contains('_') }
-        if (gruppi.isEmpty()) return tutte
-        return tutte.flatMap { c ->
-            val tipo = c.chiave.substringBefore('|')
-            val miei = if (tipo.equals("G", true)) emptyList() else gruppi.filter { it.nome.substringBefore('_') == c.nome }
-            if (miei.isEmpty()) listOf(c)
-            else listOf(c) + miei + c.copy(descrizione = "ALTRA METÀ", codice = "", altraMeta = true)
-        }
+    private fun conGruppi(tutte: List<Classe>): List<Classe> = tutte.flatMap { c ->
+        val tipo = c.chiave.substringBefore('|')
+        val gruppi = if (tipo.equals("G", true)) emptyList() else gruppiScuola[c.nome].orEmpty()
+        listOf(c) + gruppi.map { g -> c.copy(nome = g, descrizione = "", codice = "", gruppo = g) }
     }
 
     private fun mostraRisposta() {
@@ -384,8 +397,6 @@ class RegistroFragment : Fragment() {
             return t.drop(p.length).trimStart(' ', '-', ':', '–', '—')
         }
 
-        private fun nomeScheda(c: Classe) = if (c.altraMeta) "${c.nome} altra metà" else c.nome
-
         override fun onBindViewHolder(h: VH, pos: Int) {
             val c = dati[pos]
             h.nome.text = c.nome
@@ -398,8 +409,8 @@ class RegistroFragment : Fragment() {
             val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 (requireActivity() as MainActivity).apri(StudentiScheda(),
-                    "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to nomeScheda(c), "descrizione" to c.descrizione,
-                    "altra" to c.altraMeta)
+                    "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome, "descrizione" to c.descrizione,
+                    "gruppo" to c.gruppo)
             }
             h.tessera.setOnClickListener(apriStudenti)
             h.sopra.setOnClickListener(apriStudenti)
@@ -417,8 +428,8 @@ class RegistroFragment : Fragment() {
                 t.setOnClickListener {
                     val p = c.chiave.split("|", limit = 3)
                     (requireActivity() as MainActivity).apri(ListaScheda(),
-                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to nomeScheda(c),
-                        "solomie" to (mie && cosa == "lezioni"), "altra" to c.altraMeta)
+                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome,
+                        "solomie" to (mie && cosa == "lezioni"), "gruppo" to c.gruppo)
                 }
             }
         }

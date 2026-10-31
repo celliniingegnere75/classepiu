@@ -35,8 +35,9 @@ class ListaScheda : Scheda() {
     private var mieiAlunni: Set<String> = emptySet()
     /** Da "le mie lezioni": solo le mie firme e le mie compresenze. */
     private var soloMie = false
-    /** Da "tutti i registri": l'altra metà di una classe articolata (es. 5EA senza il mio 5EA_AUA). */
-    private var altraMeta = false
+    /** Da "tutti i registri": un gruppo di classe articolata (es. 5EA_ENA) aperto sulla classe intera. */
+    private var gruppo = ""
+    private var erroreGruppo = ""
 
     override fun crea(savedInstanceState: Bundle?) {
         cosa = intent.getStringExtra("cosa") ?: "note"
@@ -44,7 +45,7 @@ class ListaScheda : Scheda() {
         classeId = intent.getStringExtra("id") ?: ""
         nome = intent.getStringExtra("nome") ?: ""
         soloMie = intent.getBooleanExtra("solomie", false)
-        altraMeta = intent.getBooleanExtra("altra", false)
+        gruppo = intent.getStringExtra("gruppo") ?: ""
         val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
@@ -75,6 +76,7 @@ class ListaScheda : Scheda() {
     }
 
     private fun carica() {
+        erroreGruppo = ""
         testo("carico $cosa…")
         val f = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
         val oggi = Calendar.getInstance()
@@ -86,17 +88,26 @@ class ListaScheda : Scheda() {
                     mioId = c.idDocente()
                     // grandezza della classe: serve a riconoscere le note di classe (uguali per quasi tutti gli alunni)
                     // le note arrivano con l'id dell'alunno: i nomi vengono dall'elenco studenti
-                    if (cosa == "note") runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second) }.getOrDefault(emptyList()).let { st ->
+                    if (cosa == "note") runCatching { leggiStudenti(c.studentiGrezzi(tipo, classeId).second) }.getOrDefault(emptyList()).let { tutti ->
+                        // gruppo di classe articolata: solo i suoi alunni (e quindi solo le loro note)
+                        val delGruppo = if (gruppo.isEmpty()) emptySet()
+                            else FiltroArticolate.alunniGruppo(c, requireContext().filesDir, tipo, classeId, gruppo).also { if (it.first.isEmpty()) erroreGruppo = it.second.ifEmpty { "nessun alunno trovato" } }.first
+                        val st = if (delGruppo.isEmpty()) tutti else tutti.filter { it.id in delGruppo }
                         dimClasse = st.size; nomi = st.associate { it.id to it.nome }
                     }
                     if (cosa == "note") c.noteGrezze(tipo, classeId, f.format(inizio.time), f.format(oggi.time))
                     else {
-                        mieiAlunni = FiltroArticolate.alunniRegistro(c, requireContext().filesDir, tipo, classeId, nome, altraMeta)
+                        mieiAlunni = when {
+                            gruppo.isNotEmpty() -> FiltroArticolate.alunniGruppo(c, requireContext().filesDir, tipo, classeId, gruppo).also { if (it.first.isEmpty()) erroreGruppo = it.second.ifEmpty { "nessun alunno trovato" } }.first
+                            tipo.equals("G", true) -> FiltroArticolate.mieiAlunni(c, requireContext().filesDir, tipo, classeId, nome)
+                            else -> emptySet()
+                        }
                         c.lezioniClasseGrezze(tipo, classeId, f.format(giorno.time))
                     }
                 }
             }
             val (codice, corpo) = r.getOrElse { testo("non riuscito: ${it.message}"); return@launch }
+            if (erroreGruppo.isNotEmpty()) { testo("non riesco a leggere gli alunni del gruppo $gruppo.", erroreGruppo); return@launch }
             if (codice != 200) { testo("classeviva ha risposto con un errore (http $codice).", corpo); return@launch }
             grezzo = corpo
             val voci = leggiVoci(corpo)
@@ -191,7 +202,7 @@ class ListaScheda : Scheda() {
         // classe articolata: solo le firme della metà aperta (quelle con i suoi alunni e le loro compresenze); la classe intera tutte
         val firme = out.filter { it.firma != null }
         val vedi = if (soloMie) FiltroArticolate.mieECompresenze(firme.map { it.firma!! }, mioId)
-            else FiltroArticolate.visibili(firme.map { it.firma!! }, if (altraMeta) "" else mioId, mieiAlunni)
+            else FiltroArticolate.visibili(firme.map { it.firma!! }, if (gruppo.isNotEmpty()) "" else mioId, mieiAlunni)
         val nascoste = firme.filterIndexed { i, _ -> !vedi[i] }.toSet()
         return out.filter { it !in nascoste }.sortedBy { it.ordine }
     }
