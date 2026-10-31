@@ -31,7 +31,9 @@ class ControlloNotificaRiducibile(
     /** MODIFICA: riavvia la dissolvenza quando l'utente tocca questa notifica. */
     private val alInterazione: () -> Unit = {},
     /** MODIFICA: distingue lo swipe recuperabile dalla cancellazione definitiva con X. */
-    private val allaSwipe: () -> Unit = allaChiusura
+    private val allaSwipe: () -> Unit = allaChiusura,
+    /** Swipe verso sinistra: la notifica si cancella senza firmare. */
+    private val allaSwipeSinistra: () -> Unit = allaChiusura
 ) {
     private var inizioX = 0f
     private var inizioY = 0f
@@ -66,6 +68,13 @@ class ControlloNotificaRiducibile(
                             .alpha(0f)
                             .setDuration(240)
                             .withEndAction { allaSwipe() }
+                            .start()
+                    } else if (-dx > ctx.dp(72) && -dx > kotlin.math.abs(dy) * 1.25f) {
+                        v.animate()
+                            .translationX(-v.width.toFloat().coerceAtLeast(ctx.dp(120).toFloat()))
+                            .alpha(0f)
+                            .setDuration(240)
+                            .withEndAction { allaSwipeSinistra() }
                             .start()
                     } else {
                         v.performClick()

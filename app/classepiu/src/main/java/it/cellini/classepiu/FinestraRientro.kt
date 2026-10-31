@@ -650,8 +650,8 @@ object FinestraRientro {
             setPadding(activity.dp(20), 0, activity.dp(20), 0)
             // al centro "ora" e sotto il suo numero, come "classe" e il codice. Tre colonne: le due laterali uguali,
             // così l'ora resta esattamente al centro e non toglie spazio alla classe.
-            if (lezione.aula.isNotBlank()) addView(blocco("aula", lezione.aula, Gravity.START), LinearLayout.LayoutParams(0, -2, 2f))
-            else addView(View(activity), LinearLayout.LayoutParams(0, 0, 2f))
+            // l'aula c'è sempre; se nell'orario non è stata inserita compare una lineetta
+            addView(blocco("aula", lezione.aula.ifBlank { "—" }, Gravity.START), LinearLayout.LayoutParams(0, -2, 2f))
             addView(blocco("ora", "${lezione.ora}°", Gravity.CENTER_HORIZONTAL), LinearLayout.LayoutParams(0, -2, 1f))
             addView(blocco("classe", lezione.classe, Gravity.END), LinearLayout.LayoutParams(0, -2, 2f))
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(14) })
@@ -726,31 +726,48 @@ object FinestraRientro {
             isFocusable = true
             visibility = View.GONE
         }
-        // Pulsante alternativo: per questa lezione indica che non si vuole firmare e nasconde entrambi i pulsanti.
-        val nonFirmo = TextView(activity).apply {
-            text = "NON\nfirmo"
+        // Secondo pulsante: "firma ordinaria" (la funzione arriverà dopo). Per non firmare si fa lo swipe a sinistra.
+        val firmaOrdinaria = TextView(activity).apply {
+            text = "firma\nordinaria"
             textSize = 14.3f
             typeface = outfitBold
-            setTextColor(0xFF880E4F.toInt())
+            setTextColor(azzurro)
             gravity = Gravity.CENTER
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             includeFontPadding = false
             setLineSpacing(0f, 0.9f)
             setPadding(activity.dp(8), activity.dp(6), activity.dp(8), activity.dp(6))
-            // Pulsante secondario rosa, con le due righe centrate.
+            // Pulsante secondario bianco col bordo azzurro, con le due righe centrate.
             background = GradientDrawable().apply {
-                setColor(0xFFFFF7FA.toInt())
+                setColor(Color.WHITE)
                 cornerRadius = activity.dp(22).toFloat()
-                setStroke(activity.dp(1), 0xFFFFD6E2.toInt())
+                setStroke(activity.dp(1), azzurro)
             }
             isClickable = true
             isFocusable = true
         }
+        // pulsanti affiancati e sotto, piccola, l'indicazione dello swipe a sinistra con le freccette
         val rigaPulsanti = LinearLayout(activity).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER
-            addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)))
-            addView(nonFirmo, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)).apply { leftMargin = activity.dp(22) })
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            addView(LinearLayout(activity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER
+                addView(firmaRapida, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)))
+                addView(firmaOrdinaria, LinearLayout.LayoutParams(activity.dp(150), activity.dp(60)).apply { leftMargin = activity.dp(22) })
+            }, LinearLayout.LayoutParams(-2, -2))
+            addView(TextView(activity).apply {
+                val frecce = "‹‹‹"
+                text = android.text.SpannableString("$frecce  swipe a sinistra per non firmare").apply {
+                    setSpan(android.text.style.ForegroundColorSpan(azzurro), 0, frecce.length, 0)
+                    setSpan(android.text.style.StyleSpan(Typeface.BOLD), 0, frecce.length, 0)
+                }
+                textSize = 12f
+                typeface = outfitRegular
+                setTextColor(0xFF888888.toInt())
+                gravity = Gravity.CENTER
+                includeFontPadding = false
+            }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(8) })
         }
         val chiaveNonFirmo = "non_firmo_${java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
         val preferenzeNonFirmo = activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
@@ -760,10 +777,9 @@ object FinestraRientro {
         firmaRapida.visibility = View.GONE
         firmaRapida.isEnabled = false
         firmaRapida.alpha = .5f
-        nonFirmo.setOnClickListener {
-            gestore.interagita(avviso) // MODIFICA
-            preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
-            rigaPulsanti.visibility = View.INVISIBLE
+        firmaOrdinaria.setOnClickListener {
+            gestore.interagita(avviso)
+            android.widget.Toast.makeText(activity, "firma ordinaria: in arrivo", android.widget.Toast.LENGTH_SHORT).show()
         }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
@@ -852,7 +868,13 @@ object FinestraRientro {
             allaSwipe = {
                 registraSwipe(activity, avviso.notifica)
                 gestore.chiudi(avviso)
-            }) // MODIFICA
+            }, // MODIFICA
+            // swipe a sinistra: non firmo questa ora, la notifica si cancella come con la X e non si firma nulla
+            allaSwipeSinistra = {
+                preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
+                registraCancellazione(activity, avviso.notifica)
+                gestore.chiudi(avviso)
+            })
         avviso.applicaVerifica = { esito ->
             mostraVerifica(activity, avviso, esito, statoFirma, materiaFirma, firmaRapida, rigaPulsanti, chiaveNonFirmo, preferenzeNonFirmo)
         }
