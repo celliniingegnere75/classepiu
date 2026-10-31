@@ -382,7 +382,7 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(18).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
-                addView(tessera, LinearLayout.LayoutParams(ctx.dp(110), ctx.dp(116)))
+                addView(tessera, LinearLayout.LayoutParams(ctx.dp(99), ctx.dp(116)))
                 addView(testi, LinearLayout.LayoutParams(0, ctx.dp(116), 1f).apply { leftMargin = ctx.dp(14) })
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, ctx.dp(6), 0, ctx.dp(6))
