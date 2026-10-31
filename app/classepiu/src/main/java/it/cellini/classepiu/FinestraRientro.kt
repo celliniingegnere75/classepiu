@@ -70,6 +70,11 @@ object FinestraRientro {
     private val scorrimentiSchede = java.util.WeakHashMap<View, android.animation.Animator>()
     /** Scorrimento in corso dell'intera colonna dopo che una scheda è stata tolta. */
     private var animazioneColonna: android.animation.Animator? = null
+    /**
+     * Notifiche sparite da sole a fine tempo ("ora:comparsa:scadenza"): accendono la campanella ma, a differenza dello
+     * swipe, al risveglio successivo ricompaiono da sole. Solo in memoria: valgono fino al prossimo rientro.
+     */
+    private val dissolte = mutableSetOf<String>()
     private var preferenzeCompatte: android.content.SharedPreferences? = null
     private var posizioneCompatta = false
     private val aggiornaDopoRiduzione = Runnable { applicaDisposizioneCompatta(animate = true) }
@@ -94,8 +99,8 @@ object FinestraRientro {
             scheda.animate().alpha(0f).scaleX(.96f).scaleY(.96f)
                 .setDuration(GestoreNotifiche.DISSOLVENZA_MS)
                 .withEndAction {
-                    // sparita da sola (o col tocco fuori): resta recuperabile con la campanella, come con lo swipe
-                    attivitaNotifiche?.get()?.takeIf { !it.isFinishing && !it.isDestroyed }?.let { registraSwipe(it, notifica) }
+                    // sparita da sola: recuperabile con la campanella e di nuovo visibile al prossimo risveglio
+                    attivitaNotifiche?.get()?.takeIf { !it.isFinishing && !it.isDestroyed }?.let { registraDissolta(it, notifica) }
                     fatto()
                 }
                 .start()
@@ -345,6 +350,11 @@ object FinestraRientro {
         programmaScadenzaSwippate(activity)
     }
 
+    private fun registraDissolta(activity: Activity, notifica: NotificaPianificata) {
+        dissolte.add("${notifica.ora}:${notifica.comparsa}:${notifica.scadenza}")
+        aggiornaIndicatore(activity)
+    }
+
     /** MODIFICA: fa sparire la campanella automaticamente alla scadenza dell'ultima notifica nascosta. */
     private fun programmaScadenzaSwippate(activity: Activity) {
         scadenzaSwippateProgrammata?.let { handler.removeCallbacks(it) }
@@ -425,6 +435,7 @@ object FinestraRientro {
 
     /** Primo avvio dell'app: le notifiche compaiono tutte, quindi si dimenticano quelle nascoste con lo swipe e la campanella è spenta. */
     fun azzeraSwippate(activity: Activity) {
+        dissolte.clear()
         activity.getSharedPreferences(PREFERENZE_SWIPATE, Activity.MODE_PRIVATE).edit().remove(chiaveSwipate()).apply()
         scadenzaSwippateProgrammata?.let { handler.removeCallbacks(it) }
         scadenzaSwippateProgrammata = null
@@ -434,7 +445,8 @@ object FinestraRientro {
     fun haNotificheSwippate(activity: Activity): Boolean {
         val adesso = Calendar.getInstance()
         val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
-        val presenti = leggiSwippate(activity, secondi).isNotEmpty()
+        dissolte.removeAll { voce -> voce.split(':').getOrNull(2)?.toIntOrNull()?.let { it <= secondi } != false }
+        val presenti = leggiSwippate(activity, secondi).isNotEmpty() || dissolte.isNotEmpty()
         if (presenti && scadenzaSwippateProgrammata == null) programmaScadenzaSwippate(activity)
         return presenti
     }
@@ -450,6 +462,8 @@ object FinestraRientro {
 
     fun mostra(activity: Activity, ripristinaSwippate: Boolean = false) {
         chiudiTutto()
+        // le notifiche sparite a fine tempo tornano a ogni risveglio (e col tocco sulla campanella)
+        dissolte.clear()
         if (activity.isFinishing || activity.isDestroyed) return
         val gen = generazione
         val adesso = Calendar.getInstance()
