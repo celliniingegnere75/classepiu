@@ -35,6 +35,8 @@ class ListaScheda : Scheda() {
     private var mieiAlunni: Set<String> = emptySet()
     /** Da "le mie lezioni": solo le mie firme e le mie compresenze. */
     private var soloMie = false
+    /** Mostra ogni firma della classe, indipendentemente dal docente o dal gruppo. */
+    private var tutteLezioni = false
     /** Da "tutti i registri": un gruppo di classe articolata (es. 5EA_ENA) aperto sulla classe intera. */
     private var gruppo = ""
     private var erroreGruppo = ""
@@ -45,6 +47,7 @@ class ListaScheda : Scheda() {
         classeId = intent.getStringExtra("id") ?: ""
         nome = intent.getStringExtra("nome") ?: ""
         soloMie = intent.getBooleanExtra("solomie", false)
+        tutteLezioni = intent.getBooleanExtra("tutte", false)
         gruppo = intent.getStringExtra("gruppo") ?: ""
         val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
@@ -201,8 +204,11 @@ class ListaScheda : Scheda() {
         if (cosa != "lezioni") return out.sortedByDescending { it.data }
         // classe articolata: solo le firme della metà aperta (quelle con i suoi alunni e le loro compresenze); la classe intera tutte
         val firme = out.filter { it.firma != null }
-        val vedi = if (soloMie) FiltroArticolate.mieECompresenze(firme.map { it.firma!! }, mioId)
-            else FiltroArticolate.visibili(firme.map { it.firma!! }, if (gruppo.isNotEmpty()) "" else mioId, mieiAlunni)
+        val vedi = when {
+            tutteLezioni -> List(firme.size) { true }
+            soloMie -> FiltroArticolate.mieECompresenze(firme.map { it.firma!! }, mioId)
+            else -> FiltroArticolate.visibili(firme.map { it.firma!! }, if (gruppo.isNotEmpty()) "" else mioId, mieiAlunni)
+        }
         val nascoste = firme.filterIndexed { i, _ -> !vedi[i] }.toSet()
         return out.filter { it !in nascoste }.sortedBy { it.ordine }
     }
