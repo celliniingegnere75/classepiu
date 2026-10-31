@@ -124,12 +124,24 @@ object FinestraRientro {
             if (colonna != null && posizioni != null) ricomponiSenzaScatti(colonna, posizioni)
             aggiornaOmbra()
             programmaAggiornamentoDisposizione() // MODIFICA: se restano solo schede ridotte, compatta il gruppo.
+            programmaRiverifica() // ogni movimento delle notifiche: si ricontrollano le firme delle rimaste
         }
+    }
+
+    private val riverifica = Runnable {
+        val activity = attivitaNotifiche?.get()?.takeIf { !it.isFinishing && !it.isDestroyed } ?: return@Runnable
+        if (gestore.finestre.isNotEmpty()) verificaFirme(activity, generazione, gestore.finestre)
+    }
+
+    private fun programmaRiverifica() {
+        handler.removeCallbacks(riverifica)
+        handler.postDelayed(riverifica, 600)
     }
 
     /** Chiude subito tutte le notifiche e i loro timer (rientro nuovo, Activity in background o distrutta). */
     fun chiudiTutto() {
         handler.removeCallbacks(aggiornaDopoRiduzione) // MODIFICA
+        handler.removeCallbacks(riverifica)
         generazione++
         gestore.chiudiTutto()
         togliContenitore()
@@ -890,7 +902,6 @@ object FinestraRientro {
             }, // MODIFICA
             // swipe a sinistra: non firmo questa ora, la notifica si cancella come con la X e non si firma nulla
             allaSwipeSinistra = {
-                preferenzeNonFirmo.edit().putBoolean(chiaveNonFirmo, true).apply()
                 registraCancellazione(activity, avviso.notifica)
                 gestore.chiudi(avviso)
             })
@@ -925,19 +936,28 @@ object FinestraRientro {
             // Compresenza spenta = sono il teorico: se un altro docente ha già firmato quell'ora per la stessa classe non
             // si può firmare sopra. Le mie firme (lessons/mine) non bastano: si leggono le firme di tutta la classe
             // (lessons2). Le classi articolate si saltano: lì due docenti firmano la stessa ora per metà classe ciascuno.
+            // Compresenza accesa = sono il pratico: conta la mia firma in compresenza (verde); se per quell'ora c'è la
+            // compresenza di un altro docente, giallo. Anche qui si legge la classe intera (lessons2).
             val altriDocenti = HashMap<Avviso, EsitoFirma>()
+            val miaCompresenzaClasse = HashMap<Avviso, EsitoFirma>()
+            val classeLetta = HashSet<Avviso>() // avvisi per cui le firme della classe sono state lette davvero
             val compresenzaAttiva = Impostazioni(activity).firmaCopresenza
             firme.getOrNull()?.let { f ->
-                if (compresenzaAttiva) return@let
                 for (a in avvisi) {
-                    if (firmaCorrispondente(f.grezzo, f.mioId, data, a.lezione, f.nomi) != null) continue
+                    if (firmaCorrispondente(f.grezzo, f.mioId, data, a.lezione, f.nomi, soloCompresenza = compresenzaAttiva) != null) continue
                     val sigla = siglaClasse(a.lezione.classe)
                     val classe = f.classi.firstOrNull { it.nome.equals(sigla, ignoreCase = true) } ?: continue
                     val parti = classe.chiave.split("|", limit = 3)
                     if (parti.getOrNull(0) != "C" || f.classi.any { it.nome.startsWith(sigla + "_", ignoreCase = true) } || sigla.contains('_')) continue
                     val grezzoClasse = runCatching { f.client.lezioniClasseGrezze("C", parti.getOrElse(1) { "" }, data) }.getOrNull()
                         ?.takeIf { it.first == 200 }?.second ?: continue
-                    firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione)?.let { altriDocenti[a] = it }
+                    classeLetta.add(a)
+                    if (compresenzaAttiva) {
+                        firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, compresenza = true, mie = true)?.let { miaCompresenzaClasse[a] = it }
+                            ?: firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, compresenza = true)?.let { altriDocenti[a] = it }
+                    } else {
+                        firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione)?.let { altriDocenti[a] = it }
+                    }
                 }
             }
             activity.runOnUiThread {
@@ -947,9 +967,11 @@ object FinestraRientro {
                     // con Compresenza attiva la firma del teorico non conta: i pulsanti restano finché non c'è la mia compresenza
                     val compresenza = Impostazioni(activity).firmaCopresenza
                     a.applicaVerifica(firme.mapCatching {
-                        if (compresenza && compresenzaGiaFirmata(activity, data, a.lezione)) EsitoFirma(a.lezione.materia)
-                        else firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi, soloCompresenza = compresenza)
+                        firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi, soloCompresenza = compresenza)
+                            ?: miaCompresenzaClasse[a]
                             ?: altriDocenti[a]
+                            // il segno locale vale solo se le firme della classe non si sono potute leggere (mai se sono state lette e non c'è nulla)
+                            ?: if (compresenza && a !in classeLetta && compresenzaGiaFirmata(activity, data, a.lezione)) EsitoFirma(a.lezione.materia) else null
                     })
                 }
             }
@@ -974,12 +996,12 @@ object FinestraRientro {
                 if (risultato == null) {
                     etichetta.text = "ora non firmata"
                     etichetta.setTextColor(0xFFD32F2F.toInt())
-                    if (!preferenzeNonFirmo.getBoolean(chiaveNonFirmo, false)) {
-                        pulsante.visibility = View.VISIBLE
-                        pulsante.isEnabled = true
-                        pulsante.alpha = 1f
-                        rigaPulsanti.visibility = View.VISIBLE
-                    }
+                    materia.visibility = View.GONE
+                    // i pulsanti spariscono solo se per quest'ora c'è davvero una firma: swipe e X non li tolgono
+                    pulsante.visibility = View.VISIBLE
+                    pulsante.isEnabled = true
+                    pulsante.alpha = 1f
+                    rigaPulsanti.visibility = View.VISIBLE
                     pulsante.setOnClickListener { firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante) }
                 } else if (risultato.altroDocente) {
                     // firma di un altro docente: avviso giallo e niente pulsanti
@@ -1154,8 +1176,7 @@ object FinestraRientro {
                 // se nel frattempo l'ora è stata firmata non si firma due volte
                 val (codicePrima, grezzoPrima) = client.lezioniGrezze(data, data)
                 check(codicePrima == 200) { "firme di oggi non disponibili (HTTP $codicePrima)" }
-                (if (compresenza && compresenzaGiaFirmata(activity, data, lezione)) EsitoFirma(lezione.materia)
-                    else firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi, soloCompresenza = compresenza))
+                firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi, soloCompresenza = compresenza)
                     ?.let { log.append("ora già firmata, non firmo\n"); return@runCatching it }
                 val classe = checkNotNull(classi.firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) }) {
                     "${lezione.classe} non è tra le tue classi"
@@ -1205,7 +1226,10 @@ object FinestraRientro {
      * Firma di un altro docente (teorica, non in compresenza) per l'ora di [lezione] nelle firme di tutta la classe
      * (lessons2/students). Restituisce la riga da mostrare, "firmata da <docente> · <materia>".
      */
-    private fun firmaAltroDocente(grezzo: String, mioId: String, data: String, lezione: Lezione): EsitoFirma? {
+    private fun firmaAltroDocente(
+        grezzo: String, mioId: String, data: String, lezione: Lezione,
+        compresenza: Boolean = false, mie: Boolean = false
+    ): EsitoFirma? {
         val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return null
         fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
             for (k in chiavi) {
@@ -1229,8 +1253,12 @@ object FinestraRientro {
                     val soloLezione = v.keys().asSequence().none { k ->
                         (v.opt(k) as? String)?.let { it.contains("compresenza", true) || it.contains("sostegno", true) } == true
                     }
-                    if (dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
-                        autore.isNotBlank() && autore != mioId && soloLezione) {
+                    val eCompresenza = v.keys().asSequence().any { k -> (v.opt(k) as? String)?.contains("compresenza", true) == true }
+                    // compresenza=false: firma teorica di un altro docente; compresenza=true: firma in compresenza (mia se mie, altrui altrimenti)
+                    val tipoGiusto = if (compresenza) eCompresenza else soloLezione
+                    val autoreGiusto = autore.isNotBlank() && (if (mie) autore == mioId else autore != mioId)
+                    if (dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) && autoreGiusto && tipoGiusto) {
+                        if (mie) return EsitoFirma(testo(v, "subjectDesc", "subjectName", "subject").ifEmpty { lezione.materia })
                         val docente = testo(v, "authorName", "teacherName", "signedBy")
                             .ifEmpty { (v.optJSONObject("author") ?: v.optJSONObject("teacher"))?.let { testo(it, "name", "fullName", "teacherName") }.orEmpty() }
                         val materia = testo(v, "subjectDesc", "subjectName", "subject")
