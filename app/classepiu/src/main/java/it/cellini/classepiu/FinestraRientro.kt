@@ -1319,7 +1319,7 @@ object FinestraRientro {
 
     private fun compresenzaGiaFirmata(activity: Activity, data: String, lezione: Lezione) =
         activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE).getLong(chiaveCompresenza(data, lezione), 0L)
-            .let { System.currentTimeMillis() - it < 3 * 60_000L } // solo per il ritardo del sito subito dopo la firma
+            .let { System.currentTimeMillis() - it < 10_000L } // 10 secondi: solo per il ritardo del sito subito dopo la firma
 
     /**
      * [soloCompresenza]: con l'interruttore Compresenza attivo la firma del teorico (anche se è la mia) non conta come
