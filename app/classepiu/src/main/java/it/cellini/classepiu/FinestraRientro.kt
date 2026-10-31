@@ -991,13 +991,22 @@ object FinestraRientro {
         gestore.trattieni(avviso)
         val imp = Impostazioni(activity)
         val azzurro = 0xFF69BCE8.toInt()
-        val ordinaria = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = "lezione ordinaria" }
+        // materia: quella dell'orario oppure educazione civica (sul sito è una voce del menu "Materia")
+        val ordinaria = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = lezione.materia.lowercase().ifBlank { "materia dell'orario" } }
         val civica = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = "educazione civica" }
-        val tipologia = android.widget.RadioGroup(activity).apply {
+        val sceltaMateria = android.widget.RadioGroup(activity).apply {
             orientation = android.widget.RadioGroup.VERTICAL
             addView(ordinaria)
             addView(civica)
             check(if (imp.firmaTipo.equals("Educazione civica", ignoreCase = true)) civica.id else ordinaria.id)
+        }
+        // tipo attività: solo i valori visti in firme vere (HAR del 30/10/2026), scritti come li vuole il registro web
+        val attivita = listOf("Lezione", "Spiegazione")
+        val bottoniAttivita = attivita.map { voce -> android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = voce.lowercase() } }
+        val tipologia = android.widget.RadioGroup(activity).apply {
+            orientation = android.widget.RadioGroup.HORIZONTAL
+            bottoniAttivita.forEach { addView(it) }
+            check(bottoniAttivita.first().id)
         }
         val argomento = android.widget.EditText(activity).apply {
             hint = "argomento della lezione"
@@ -1011,7 +1020,10 @@ object FinestraRientro {
         val corpo = LinearLayout(activity).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(activity.dp(22), activity.dp(8), activity.dp(22), 0)
-            addView(TextView(activity).apply { text = "tipologia"; setTextColor(azzurro); textSize = 14f })
+            addView(TextView(activity).apply { text = "materia"; setTextColor(azzurro); textSize = 14f })
+            addView(sceltaMateria)
+            addView(TextView(activity).apply { text = "tipo attività"; setTextColor(azzurro); textSize = 14f },
+                LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
             addView(tipologia)
             addView(TextView(activity).apply { text = "argomento"; setTextColor(azzurro); textSize = 14f },
                 LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
@@ -1022,16 +1034,20 @@ object FinestraRientro {
             .setView(corpo)
             .setPositiveButton("firma") { _, _ ->
                 firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
-                    scelta = (tipologia.checkedRadioButtonId == civica.id) to argomento.text.toString())
+                    scelta = SceltaFirma(sceltaMateria.checkedRadioButtonId == civica.id, argomento.text.toString(),
+                        attivita[bottoniAttivita.indexOfFirst { it.id == tipologia.checkedRadioButtonId }.coerceAtLeast(0)]))
             }
             .setNegativeButton("annulla", null)
             .show()
     }
 
-    /** [scelta] = (educazione civica, argomento) della firma ordinaria; null = firma rapida coi valori delle opzioni. */
+    /** Scelte della firma ordinaria per una sola ora. */
+    private data class SceltaFirma(val civica: Boolean, val argomento: String, val tipoAttivita: String)
+
+    /** [scelta] = valori della firma ordinaria; null = firma rapida coi valori delle opzioni ("Lezione"). */
     private fun firmaRapida(
         activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View,
-        scelta: Pair<Boolean, String>? = null
+        scelta: SceltaFirma? = null
     ) {
         // questa notifica resta aperta finché non si chiude con la X; le altre seguono i loro tempi
         gestore.interagita(avviso) // MODIFICA: registra anche la pressione di "firma rapida"
@@ -1049,9 +1065,10 @@ object FinestraRientro {
                 // copresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
                 // credenziali del secondo docente): finché non c'è una firma vera da copiare non si manda niente
                 if (scelta == null) check(!imp.firmaCopresenza && !imp.firmaSostegno) { "non firmata: copresenza/sostegno dal registro web" }
-                val civica = scelta?.first ?: imp.firmaTipo.equals("Educazione civica", ignoreCase = true)
-                val testoArgomento = scelta?.second ?: imp.firmaArgomento
-                log.append("tipologia ${if (civica) "educazione civica" else "lezione"}, argomento \"${testoArgomento.trim()}\"\n")
+                val civica = scelta?.civica ?: imp.firmaTipo.equals("Educazione civica", ignoreCase = true)
+                val testoArgomento = scelta?.argomento ?: imp.firmaArgomento
+                val tipoAttivita = scelta?.tipoAttivita ?: "Lezione"
+                log.append("materia ${if (civica) "educazione civica" else "dell'orario"}, attività $tipoAttivita, argomento \"${testoArgomento.trim()}\"\n")
                 val client = imp.client().also { it.login() }
                 val mioId = client.idDocente()
                 log.append("docente $mioId\n")
@@ -1070,7 +1087,7 @@ object FinestraRientro {
                 val parti = classe.chiave.split("|", limit = 3)
                 val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log,
                     nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome,
-                    educazioneCivica = civica, argomento = testoArgomento)
+                    educazioneCivica = civica, argomento = testoArgomento, tipoAttivita = tipoAttivita)
                 check(codice in 200..299) { "classeviva ha risposto HTTP $codice ${risposta.take(120)}" }
                 val (codiceOggi, grezzoOggi) = client.lezioniGrezze(data, data)
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")

@@ -472,7 +472,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
      */
     fun firmaRapida(
         tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder(),
-        nomeClasse: String = "", educazioneCivica: Boolean = false, argomento: String = ""
+        nomeClasse: String = "", educazioneCivica: Boolean = false, argomento: String = "",
+        /** voce del menu "tipo attività" del registro web, scritta esattamente come lì (HAR: "Lezione", "Spiegazione") */
+        tipoAttivita: String = "Lezione"
     ): Pair<Int, String> {
         assicuraLogin()
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
@@ -496,8 +498,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
         // La firma passa dal registro web come fa il sito ClasseViva, richieste prese da firme vere del 29/10/2026:
         // classe intera (C, 4ETA 3ª ora) e gruppo di classe articolata (G, 5EA_AUA 1ª ora).
         // La via REST (POST lessons/sigs) resta solo per altri tipi: chiede un supplyType di cui non si conosce il valore.
-        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, argomento)
-        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, argomento)
+        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, argomento, tipoAttivita)
+        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, argomento, tipoAttivita)
         val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
         log.append("tipi di lezione: ${tipi.joinToString { "${it.codice}=${it.nome}" }.ifEmpty { "non letti" }}\n\n")
         val lezione = tipi.firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
@@ -581,13 +583,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * che il sito manda come classe_id insieme a gruppo=1, e la pagina del registro si apre con gruppo_id.
      * Il sito risponde {"status":"OK","evento_id":...} se la firma è inserita.
      */
-    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder, argomento: String = ""): Pair<Int, String> {
+    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder, argomento: String = "", tipoAttivita: String = "Lezione"): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
         val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=${enc(gruppo)}&data_start=$giorno&corsoextra=0"
         val corpo = listOf(
             "action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno,
-            "conteggioassenze" to "conteggiaora", "materia" to materiaId, "tipo_attivita" to "Lezione",
+            "conteggioassenze" to "conteggiaora", "materia" to materiaId, "tipo_attivita" to tipoAttivita,
             "ora_posizione" to ora.toString(), "numero_ore" to "1", "uda_firma" to "", "fase_firma" to "",
             "id_progetto_set" to "", "peso_ora" to "1", "text_nota" to argomento.trim(), "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
         ).joinToString("&") { (k, v) -> "$k=${enc(v)}" }
