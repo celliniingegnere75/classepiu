@@ -78,11 +78,11 @@ class StudentiScheda : Scheda() {
         // Linguette della scheda classe: alunni (vista iniziale) e lezioni.
         fun linguetta(testo: String, attiva: Boolean, azione: () -> Unit) = TextView(ctx).apply {
             text = testo
-            textSize = 14f
+            textSize = 12f
             typeface = outfitBold
             gravity = Gravity.CENTER
             includeFontPadding = false
-            setPadding(dp(12), dp(9), dp(12), dp(9))
+            setPadding(dp(5), dp(9), dp(5), dp(9))
             background = GradientDrawable().apply {
                 cornerRadius = dp(18).toFloat()
                 setColor(if (attiva) Color.WHITE else 0x337FFFFFFF.toInt())
