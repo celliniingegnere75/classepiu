@@ -154,6 +154,15 @@ class PianoNotificheTest {
     }
 
     @Test
+    fun statiSalvatiNonRiapronoDueSchedeEstese() {
+        val piano = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35))
+        val stati = piano.associate { "${it.ora}:${it.comparsa}:${it.scadenza}" to false }
+        val ricostruito = PianoNotifiche.applicaStatiSalvati(piano, stati)
+        assertEquals(1, ricostruito.count { it.stato == E })
+        assertEquals(E, ricostruito.last().stato)
+    }
+
+    @Test
     fun swipeNascondeLaNotificaMaNeConservaLaScadenzaOriginale() {
         val piano = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35))
         val swippata = piano.single { it.ora == 5 }

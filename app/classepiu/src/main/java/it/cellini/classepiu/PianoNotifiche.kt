@@ -28,14 +28,24 @@ object PianoNotifiche {
     fun applicaModalitaCompatta(piano: List<NotificaPianificata>, compatta: Boolean): List<NotificaPianificata> =
         if (compatta) piano.map { it.copy(stato = StatoNotifica.RIDOTTA) } else piano
 
-    /** Applica le ultime scelte salvate per singola notifica; le voci assenti seguono il piano automatico. */
+    /**
+     * Applica le ultime scelte salvate per singola notifica; le voci assenti seguono il piano automatico.
+     * Resta comunque estesa al massimo una notifica, la più recente: le scelte salvate in momenti diversi
+     * potevano altrimenti riaprire due schede estese insieme.
+     */
     fun applicaStatiSalvati(
         piano: List<NotificaPianificata>,
         stati: Map<String, Boolean>
-    ): List<NotificaPianificata> = piano.map { n ->
-        val chiave = "${n.ora}:${n.comparsa}:${n.scadenza}"
-        val ridotta = stati[chiave] ?: (n.stato == StatoNotifica.RIDOTTA)
-        n.copy(stato = if (ridotta) StatoNotifica.RIDOTTA else StatoNotifica.ESTESA)
+    ): List<NotificaPianificata> {
+        val applicato = piano.map { n ->
+            val chiave = "${n.ora}:${n.comparsa}:${n.scadenza}"
+            val ridotta = stati[chiave] ?: (n.stato == StatoNotifica.RIDOTTA)
+            n.copy(stato = if (ridotta) StatoNotifica.RIDOTTA else StatoNotifica.ESTESA)
+        }
+        val ultimaEstesa = applicato.indexOfLast { it.stato == StatoNotifica.ESTESA }
+        return applicato.mapIndexed { i, n ->
+            if (n.stato == StatoNotifica.ESTESA && i != ultimaEstesa) n.copy(stato = StatoNotifica.RIDOTTA) else n
+        }
     }
 
     /** MODIFICA: esclude le notifiche swippate usando ora, comparsa e scadenza originali. */

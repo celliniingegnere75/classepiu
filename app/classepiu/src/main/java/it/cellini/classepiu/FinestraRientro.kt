@@ -361,9 +361,16 @@ object FinestraRientro {
         scadenzaSwippateProgrammata = null
         val adesso = Calendar.getInstance()
         val secondi = (adesso.get(Calendar.HOUR_OF_DAY) * 60 + adesso.get(Calendar.MINUTE)) * 60 + adesso.get(Calendar.SECOND)
-        val scadenze = leggiSwippate(activity, secondi).mapNotNull { it.split(':').getOrNull(2)?.toIntOrNull() }
+        // anche le notifiche sparite a fine tempo tengono accesa la campanella fino alla loro scadenza
+        val scadenze = (leggiSwippate(activity, secondi) + dissolte)
+            .mapNotNull { it.split(':').getOrNull(2)?.toIntOrNull() }.filter { it > secondi }
         val prossima = scadenze.minOrNull() ?: run {
-            aggiornaIndicatore(activity)
+            // niente da tenere accesa: si aggiorna la campanella una sola volta, senza richiamarsi (prima andava in loop
+            // quando c'erano solo notifiche sparite a fine tempo e l'app si chiudeva)
+            dissolte.clear()
+            (activity as? MainActivity)?.aggiornaCampanella()
+            campanellaDialog?.let { (it.parent as? ViewGroup)?.removeView(it) }
+            campanellaDialog = null
             return
         }
         val riferimento = java.lang.ref.WeakReference(activity)
