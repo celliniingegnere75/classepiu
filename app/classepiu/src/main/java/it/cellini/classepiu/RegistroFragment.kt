@@ -362,10 +362,7 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
             val voti = tasto("i miei\nvoti", 0xFFB3DDF5.toInt())
-            val lezioni = tasto("le mie\nlezioni", 0xFFD4EEFB.toInt()).also {
-                // "tutte le lezioni" accanto a "i miei voti" è stretto: il testo si rimpicciolisce invece di essere tagliato
-                androidx.core.widget.TextViewCompat.setAutoSizeTextTypeUniformWithConfiguration(it, 7, 11, 1, android.util.TypedValue.COMPLEX_UNIT_SP)
-            }
+            val lezioni = tasto("le mie\nlezioni", 0xFFD4EEFB.toInt())
             val note = tasto("note\nalunni", 0xFFC5D5F2.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -426,7 +423,10 @@ class RegistroFragment : Fragment() {
                     "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome)
             }
             // in "i miei registri" solo le mie lezioni (e le mie compresenze), in "tutti i registri" tutte
-            h.lezioni.text = if (mie) "le mie\nlezioni" else "tutte le\nlezioni"
+            // accanto a "i miei voti" il pulsante è stretto: "tutte le" più piccolo, "lezioni" come gli altri
+            h.lezioni.text = if (mie) "le mie\nlezioni" else android.text.SpannableString("tutte le\nlezioni").apply {
+                setSpan(android.text.style.RelativeSizeSpan(0.8f), 0, 8, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            }
             for ((t, cosa) in listOf(h.lezioni to "lezioni", h.note to "note")) {
                 t.setOnClickListener {
                     val p = c.chiave.split("|", limit = 3)
