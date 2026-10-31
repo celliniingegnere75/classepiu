@@ -336,7 +336,7 @@ class RegistroFragment : Fragment() {
 
             val appello = TextView(ctx).apply {
                 text = "appello veloce"
-                textSize = 12f
+                textSize = 14f
                 typeface = outfitBold
                 setTextColor(Color.WHITE)
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
@@ -361,9 +361,9 @@ class RegistroFragment : Fragment() {
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 2
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
-            val voti = tasto("i miei\nvoti", 0xFFB3DDF5.toInt())
-            val note = tasto("note\nalunni", 0xFFC5D5F2.toInt())
-            val compiti = tasto("compiti", 0xFFD4EEFB.toInt())
+            val voti = tasto("i miei\nvoti", 0xFFE1F2FA.toInt())
+            val note = tasto("note e\nrichiami", 0xFFE8EDF9.toInt())
+            val compiti = tasto("compiti", 0xFFEAF6FB.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 listOf(voti, note, compiti).forEachIndexed { i, t ->
