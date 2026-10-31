@@ -393,11 +393,14 @@ class RegistroFragment : Fragment() {
                 (requireActivity() as MainActivity).apri(VotiScheda(),
                     "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome)
             }
+            // in "i miei registri" solo le mie lezioni (e le mie compresenze), in "tutti i registri" tutte
+            h.lezioni.text = if (mie) "le mie\nlezioni" else "tutte\nle lezioni"
             for ((t, cosa) in listOf(h.lezioni to "lezioni", h.note to "note")) {
                 t.setOnClickListener {
                     val p = c.chiave.split("|", limit = 3)
                     (requireActivity() as MainActivity).apri(ListaScheda(),
-                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome)
+                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome,
+                        "solomie" to (mie && cosa == "lezioni"))
                 }
             }
         }

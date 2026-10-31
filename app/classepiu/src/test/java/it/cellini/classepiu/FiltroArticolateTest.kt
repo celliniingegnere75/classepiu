@@ -80,6 +80,18 @@ class FiltroArticolateTest {
         assertEquals(listOf(true, true, false), FiltroArticolate.visibili(firme, io, aua))
     }
 
+    /** "Le mie lezioni" del 20/10: io e Facello (mia compresenza), non Camilli né gli altri. */
+    @Test
+    fun leMieLezioniConCompresenza() {
+        val firme = listOf(
+            f(1, "IMPIANTI", "camilli", emptySet()), f(1, "SISTEMI AUTOMATICI", "faro", aua),
+            f(3, "TPSEE", "facello", emptySet()), f(3, "TPSEE", io, aua),
+            f(4, "TPSEE", "facello", emptySet()), f(4, "TPSEE", io, aua),
+            f(4, "ELETTROTECNICA ED ELETTRONICA", "stortini", emptySet()), f(5, "STORIA", "pierantozzi", aua + ena),
+        )
+        assertEquals(listOf(false, false, true, true, true, true, false, false), FiltroArticolate.mieECompresenze(firme, io))
+    }
+
     @Test
     fun classeNonArticolataMostraTutto() {
         val firme = giorno.map { it.first }

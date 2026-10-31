@@ -33,12 +33,15 @@ class ListaScheda : Scheda() {
     private var nome = ""
     /** Classe articolata: gli alunni del mio gruppo, per mostrare solo le firme della mia metà (vuoto = tutte). */
     private var mieiAlunni: Set<String> = emptySet()
+    /** Da "le mie lezioni": solo le mie firme e le mie compresenze. */
+    private var soloMie = false
 
     override fun crea(savedInstanceState: Bundle?) {
         cosa = intent.getStringExtra("cosa") ?: "note"
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         nome = intent.getStringExtra("nome") ?: ""
+        soloMie = intent.getBooleanExtra("solomie", false)
         val ctx = requireContext()
         val chiudi = TextView(ctx).apply { text = "✕"; textSize = 22f; setTextColor(Color.WHITE); gravity = Gravity.CENTER; setOnClickListener { finish() } }
         val titolo = TextView(ctx).apply {
@@ -182,7 +185,8 @@ class ListaScheda : Scheda() {
         if (cosa != "lezioni") return out.sortedByDescending { it.data }
         // classe articolata: solo le firme della mia metà (le mie, quelle con i miei alunni e le loro compresenze)
         val firme = out.filter { it.firma != null }
-        val vedi = FiltroArticolate.visibili(firme.map { it.firma!! }, mioId, mieiAlunni)
+        val vedi = if (soloMie) FiltroArticolate.mieECompresenze(firme.map { it.firma!! }, mioId)
+            else FiltroArticolate.visibili(firme.map { it.firma!! }, mioId, mieiAlunni)
         val nascoste = firme.filterIndexed { i, _ -> !vedi[i] }.toSet()
         return out.filter { it !in nascoste }.sortedBy { it.ordine }
     }

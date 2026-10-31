@@ -30,6 +30,14 @@ object FiltroArticolate {
         }
     }
 
+    /** "Le mie lezioni": le mie firme e le compresenze (firme senza alunni) nella stessa ora e materia di una mia firma. */
+    fun mieECompresenze(firme: List<Firma>, mioId: String): List<Boolean> {
+        val mie = firme.filter { mioId.isNotEmpty() && it.autoreId == mioId }
+        return firme.map { f ->
+            f in mie || (f.alunni.isEmpty() && mie.any { it.ora == f.ora && it.materia.equals(f.materia, ignoreCase = true) })
+        }
+    }
+
     /**
      * Gli alunni "miei" del registro aperto: se è un gruppo (es. 5EA_AUA) i suoi alunni; se è la classe intera,
      * quelli dei miei gruppi della stessa classe (dalla cache di "i miei registri"). Vuoto se la classe non è articolata per me.
