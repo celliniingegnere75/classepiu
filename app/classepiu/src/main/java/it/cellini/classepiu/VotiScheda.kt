@@ -164,7 +164,11 @@ class VotiScheda : Scheda() {
                 runCatching { Impostazioni(requireContext()).client().materieMie(tipo, classeId) }
                     .getOrDefault(emptyList())
             }
-            creaLinguette(materieDocente.ifEmpty { materieMie(vt.second) })
+            // Esclude sempre educazione civica, sia dall'elenco delle materie assegnate sia dal ripiego sui voti.
+            val materieVisibili = materieDocente.ifEmpty { materieMie(vt.second) }
+                .filterNot { it.contains("civic", ignoreCase = true) }
+                .distinct()
+            creaLinguette(materieVisibili)
             mostra(studenti, voti)
         }
     }
