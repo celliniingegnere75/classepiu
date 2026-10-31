@@ -624,7 +624,6 @@ class ClasseViva(private val utente: String, private val password: String, priva
         val idGruppo = gruppo
         val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse_conpresenza.php?corsoextra=0&oreCP1=&oreCP2=&ultimaorafirmata=0&classe_id=${enc(idClasse)}&data=$giorno&gruppo_id=${enc(idGruppo)}"
         val io = "https://web.spaggiari.eu/cvv/app/default/regclasse_conpresenza.php"
-        val istante = java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.ROOT).parse("$giorno 23:59:00")!!
         fun invia(web: WebNascosto, campi: List<Pair<String, String>>, nascondi: Boolean = false): Pair<Int, String> {
             val corpo = campi.joinToString("&") { (k, v) -> "$k=${enc(v)}" }
             val (codice, testo) = web.chiama(io, corpo, referer = pagina)
@@ -634,15 +633,22 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
         val web = sessioneWeb()
         try {
-            val (codicePagina, _) = web.chiama(pagina)
+            val (codicePagina, htmlPagina) = web.chiama(pagina)
             log.append("GET regclasse_conpresenza.php (web) -> HTTP $codicePagina\n")
+            // data e ora della firma le decide il sito e le mette nella pagina (campi nascosti): per un giorno passato è
+            // "aaaa-mm-gg 23:59:00" (HAR del 31/10); si rimandano come stanno, senza calcolarle qui
+            fun nascosto(id: String) = Regex("id=\"$id\"[^>]*value=\"([^\"]*)\"").find(htmlPagina)?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+            val dataSito = nascosto("conpresenza_data") ?: "$giorno 23:59:00"
+            val dataoraSito = nascosto("conpresenza_dataora")?.takeIf { it.all(Char::isDigit) }
+                ?: (java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.ROOT).parse(dataSito)!!.time / 1000).toString()
+            log.append("data della firma dal sito: $dataSito ($dataoraSito)\n")
             val letto = invia(web, listOf("action" to "ARG_FIRMA", "data_evento" to giorno, "classe_id" to idClasse, "gruppo_id" to idGruppo, "oreCP1" to ora.toString()))
             val argomentoCopiato = letto.second.takeIf { letto.first in 200..299 && it.isNotBlank() && !it.startsWith("<") }
             log.append(if (argomentoCopiato != null) "argomento copiato dalla firma del primo docente\n" else "nessuna firma da copiare: argomento delle opzioni\n")
             val auth = invia(web, listOf("action" to "AUTH", "login" to utente, "password" to password))
             if (auth.second != "OK") return 422 to "accesso compresenza non riuscito: ${auth.second.take(120)}"
             val risposta = invia(web, listOf(
-                "action" to "INSERT", "data" to "$giorno 23:59:00", "dataora" to (istante.time / 1000).toString(),
+                "action" to "INSERT", "data" to dataSito, "dataora" to dataoraSito,
                 "classe_id" to idClasse, "gruppo_id" to idGruppo, "peso_ora" to "1", "login" to utente, "password" to password,
                 "output" to "", "conpresenza" to "CP1", "usacurrent" to "false", "ora_posizione" to ora.toString(),
                 "numero_ore" to "1 ora", "materia" to materiaId, "text_nota" to (argomentoCopiato ?: argomentoPredefinito).trim(),
