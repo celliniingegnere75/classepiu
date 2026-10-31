@@ -27,6 +27,7 @@ import org.json.JSONObject
 // Build verificata: lettura dello stato giornaliero e della risposta lessons2/students.
 class StudentiScheda : Scheda() {
     private val azzurro = 0xFF69BCE8.toInt()
+    private val colorePannello = 0xFFF0F0F0.toInt()
     private lateinit var outfitRegular: Typeface
     private lateinit var outfitBold: Typeface
     private lateinit var lista: LinearLayout
@@ -75,35 +76,12 @@ class StudentiScheda : Scheda() {
             addView(View(ctx), LinearLayout.LayoutParams(dp(48), dp(48)))
         }
 
-        // Linguette della scheda classe: alunni (vista iniziale) e lezioni.
-        fun linguetta(testo: String, attiva: Boolean, azione: () -> Unit) = TextView(ctx).apply {
-            text = testo
-            textSize = 12f
-            typeface = outfitBold
-            gravity = Gravity.CENTER
-            includeFontPadding = false
-            setPadding(dp(5), dp(9), dp(5), dp(9))
-            background = GradientDrawable().apply {
-                cornerRadius = dp(18).toFloat()
-                setColor(if (attiva) Color.WHITE else 0x337FFFFFFF.toInt())
-            }
-            setTextColor(if (attiva) azzurro else Color.WHITE)
-            setOnClickListener { azione() }
-        }
-        val linguette = LinearLayout(ctx).apply {
-            orientation = LinearLayout.HORIZONTAL
-            setPadding(dp(14), dp(2), dp(14), dp(8))
-            addView(linguetta("Alunni", true) { }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { rightMargin = dp(6) })
-            addView(linguetta("Le mie lezioni", false) {
-                (requireActivity() as MainActivity).apri(ListaScheda(),
-                    "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
-                    "solomie" to soloMieLezioni, "gruppo" to gruppo)
-            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(4); rightMargin = dp(4) })
-            addView(linguetta("Tutte le lezioni", false) {
-                (requireActivity() as MainActivity).apri(ListaScheda(),
-                    "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
-                    "tutte" to true, "gruppo" to gruppo)
-            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(4) })
+        // Linguette della scheda classe, a "cartella": la linguetta attiva si fonde con il pannello grigio sotto.
+        val linguette = LinguetteView(ctx, outfitRegular, listOf("alunni", "le mie lezioni", "tutte le lezioni"), 0, colorePannello) { i ->
+            val extra: Array<Pair<String, Any?>> = if (i == 1) arrayOf("solomie" to soloMieLezioni) else arrayOf("tutte" to true)
+            (requireActivity() as MainActivity).apri(ListaScheda(),
+                "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
+                *extra, "gruppo" to gruppo)
         }
 
         val giorni = StrisciaGiorni(ctx) {
@@ -119,9 +97,7 @@ class StudentiScheda : Scheda() {
         val pannello = ScrollView(ctx).apply {
             addView(lista)
             background = GradientDrawable().apply {
-                setColor(0xFFF0F0F0.toInt())
-                val r = dp(28).toFloat()
-                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+                setColor(colorePannello)
             }
             clipToOutline = true
         }
@@ -599,5 +575,61 @@ class StudentiScheda : Scheda() {
                 android.widget.Toast.makeText(context, "copiata.", android.widget.Toast.LENGTH_SHORT).show()
             }
         })
+    }
+}
+
+/** Striscia di linguette a cartella: sfondo grigio con angoli alti arrotondati, linguetta attiva con il colore del pannello e fianco inclinato. */
+class LinguetteView(
+    ctx: android.content.Context,
+    private val font: Typeface,
+    private val voci: List<String>,
+    private val attiva: Int,
+    private val colorePannello: Int,
+    private val alTocco: (Int) -> Unit,
+) : View(ctx) {
+    private val d = ctx.resources.displayMetrics.density
+    private val pennaFondo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = 0xFFC4C4C4.toInt() }
+    private val pennaAttiva = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = colorePannello }
+    private val pennaTesto = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+        color = 0xFF111111.toInt(); typeface = font; textSize = 15f * d; textAlign = android.graphics.Paint.Align.CENTER
+    }
+    private val r = 18f * d
+    private val pendenza = 16f * d
+
+    init { minimumHeight = (40 * d).toInt() }
+
+    override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(MeasureSpec.getSize(w), (40 * d).toInt())
+
+    private fun larghezza(i: Int) = width.toFloat() / voci.size
+
+    override fun onDraw(c: android.graphics.Canvas) {
+        val w = width.toFloat(); val h = height.toFloat()
+        // fondo grigio con i due angoli alti arrotondati
+        val fondo = android.graphics.Path().apply {
+            addRoundRect(0f, 0f, w, h + r, floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f), android.graphics.Path.Direction.CW)
+        }
+        c.save(); c.clipRect(0f, 0f, w, h); c.drawPath(fondo, pennaFondo); c.restore()
+        // linguetta attiva: parte dal bordo sinistro (o r prima) e scende inclinata a destra
+        val x0 = larghezza(attiva) * attiva
+        val x1 = x0 + larghezza(attiva)
+        val p = android.graphics.Path().apply {
+            moveTo(x0, h)
+            if (attiva == 0) { lineTo(x0, r); quadTo(x0, 0f, x0 + r, 0f) }
+            else { lineTo(x0 - pendenza * 0.4f, h); cubicTo(x0 + pendenza * 0.1f, h, x0 + pendenza * 0.2f, 0f, x0 + r + pendenza * 0.4f, 0f) }
+            lineTo(x1 - pendenza - r * 0.5f, 0f)
+            cubicTo(x1 - pendenza, 0f, x1 - pendenza * 0.6f, h, x1 + pendenza * 0.2f, h)
+            close()
+        }
+        c.drawPath(p, pennaAttiva)
+        val y = h / 2f - (pennaTesto.ascent() + pennaTesto.descent()) / 2f
+        voci.forEachIndexed { i, t -> c.drawText(t, larghezza(i) * i + larghezza(i) / 2f, y, pennaTesto) }
+    }
+
+    override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
+        if (e.action == android.view.MotionEvent.ACTION_UP) {
+            val i = (e.x / larghezza(0)).toInt().coerceIn(0, voci.size - 1)
+            if (i != attiva) alTocco(i)
+        }
+        return true
     }
 }
