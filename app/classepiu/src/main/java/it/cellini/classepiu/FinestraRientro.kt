@@ -1384,7 +1384,8 @@ object FinestraRientro {
                     val firmaQuestaOra = dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
                         (mioId.isBlank() || autore == mioId) && stessaClasse
                     // in modalità compresenza si riconosce la firma dalla parola "compresenza" in uno qualsiasi dei suoi campi
-                    val eCompresenza = !soloCompresenza || tipoFirma(v, "compresenza")
+                    // compresenza accesa: vale solo una mia compresenza; spenta (teorico): vale solo una mia firma che NON è compresenza
+                    val eCompresenza = if (soloCompresenza) tipoFirma(v, "compresenza") else !tipoFirma(v, "compresenza")
                     if (firmaQuestaOra && eCompresenza) {
                         val materia = testo(v, "subjectDesc", "subjectName", "subjectDescription", "subject")
                             .ifEmpty {
