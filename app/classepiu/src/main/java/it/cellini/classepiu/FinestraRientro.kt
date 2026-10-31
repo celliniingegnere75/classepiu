@@ -93,7 +93,11 @@ object FinestraRientro {
             scheda.animate().cancel()
             scheda.animate().alpha(0f).scaleX(.96f).scaleY(.96f)
                 .setDuration(GestoreNotifiche.DISSOLVENZA_MS)
-                .withEndAction { fatto() }
+                .withEndAction {
+                    // sparita da sola (o col tocco fuori): resta recuperabile con la campanella, come con lo swipe
+                    attivitaNotifiche?.get()?.takeIf { !it.isFinishing && !it.isDestroyed }?.let { registraSwipe(it, notifica) }
+                    fatto()
+                }
                 .start()
         }
 
@@ -611,10 +615,12 @@ object FinestraRientro {
         // Riga superiore come il disegno di Cristian: "aula" e il suo codice a sinistra, "classe" e il suo codice a destra;
         // etichette in azzurro chiaro e codici in grassetto più scuri, così si distinguono.
         fun blocco(etichetta: String, valore: String, allineamento: Int) = LinearLayout(activity).apply {
+            // ogni blocco ha la sua colonna di larghezza fissa: il codice si rimpicciolisce invece di essere tagliato
             orientation = LinearLayout.VERTICAL
             gravity = allineamento
             addView(TextView(activity).apply {
                 text = etichetta
+                gravity = allineamento
                 textSize = 16f
                 typeface = outfitRegular
                 setTextColor(azzurro)
@@ -628,24 +634,26 @@ object FinestraRientro {
                 setTextColor(celesteClasse)
                 includeFontPadding = false
                 setSingleLine(true)
-            }, LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(2) })
+                gravity = allineamento
+                addOnLayoutChangeListener { v, l, _, r, _, _, _, _, _ ->
+                    val t = v as TextView
+                    val spazio = (r - l - t.paddingLeft - t.paddingRight).toFloat()
+                    if (spazio > 0 && t.paint.measureText(t.text.toString()) > spazio && t.textSize > activity.dp(10)) {
+                        t.post { t.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, t.textSize * .9f) }
+                    }
+                }
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(2) })
         }
         radice.addView(LinearLayout(activity).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             setPadding(activity.dp(20), 0, activity.dp(20), 0)
-            // al centro "ora" e sotto il suo numero, come "classe" e il codice
-            if (lezione.aula.isNotBlank()) {
-                addView(blocco("aula", lezione.aula, Gravity.START))
-                addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
-                addView(blocco("ora", "${lezione.ora}°", Gravity.CENTER_HORIZONTAL))
-                addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
-                addView(blocco("classe", lezione.classe, Gravity.END))
-            } else {
-                addView(blocco("ora", "${lezione.ora}°", Gravity.START))
-                addView(View(activity), LinearLayout.LayoutParams(0, 0, 1f))
-                addView(blocco("classe", lezione.classe, Gravity.END))
-            }
+            // al centro "ora" e sotto il suo numero, come "classe" e il codice. Tre colonne: le due laterali uguali,
+            // così l'ora resta esattamente al centro e non toglie spazio alla classe.
+            if (lezione.aula.isNotBlank()) addView(blocco("aula", lezione.aula, Gravity.START), LinearLayout.LayoutParams(0, -2, 2f))
+            else addView(View(activity), LinearLayout.LayoutParams(0, 0, 2f))
+            addView(blocco("ora", "${lezione.ora}°", Gravity.CENTER_HORIZONTAL), LinearLayout.LayoutParams(0, -2, 1f))
+            addView(blocco("classe", lezione.classe, Gravity.END), LinearLayout.LayoutParams(0, -2, 2f))
         }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = activity.dp(14) })
 
         // Materia dell'ora subito sotto aula e classe: una sola riga, puntini se troppo lunga.

@@ -79,7 +79,7 @@ class MainActivity : AppCompatActivity() {
             // Rialza leggermente la campanella rispetto al centro geometrico della fascia.
             indicatore.translationY = -dp(5).toFloat()
             addView(indicatore, FrameLayout.LayoutParams(dp(26), dp(26), Gravity.CENTER).apply {
-                leftMargin = dp(93)
+                leftMargin = dp(98)
             })
             // La campanella deve restare sopra al logo e agli elementi della fascia.
             indicatore.bringToFront()
