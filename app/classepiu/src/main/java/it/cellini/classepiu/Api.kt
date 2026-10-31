@@ -642,6 +642,10 @@ class ClasseViva(private val utente: String, private val password: String, priva
             val dataoraSito = nascosto("conpresenza_dataora")?.takeIf { it.all(Char::isDigit) }
                 ?: (java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.ROOT).parse(dataSito)!!.time / 1000).toString()
             log.append("data della firma dal sito: $dataSito ($dataoraSito)\n")
+            // come il browser, nello stesso ordine dell'HAR: prima le materie del secondo docente (CLASSI_MATERIE_CP), poi
+            // "copia firma"; se il sito tiene il docente in sessione, senza questo passo ARG_FIRMA risponde vuoto
+            invia(web, listOf("action" to "CLASSI_MATERIE_CP", "login" to utente, "password" to password,
+                "gruppo_id" to idGruppo, "classe_id" to idClasse, "conpresenza" to "CP1"))
             val letto = invia(web, listOf("action" to "ARG_FIRMA", "data_evento" to giorno, "classe_id" to idClasse, "gruppo_id" to idGruppo, "oreCP1" to ora.toString()))
             val argomentoCopiato = letto.second.takeIf { letto.first in 200..299 && it.isNotBlank() && !it.startsWith("<") }
             log.append(if (argomentoCopiato != null) "argomento copiato dalla firma del primo docente\n" else "nessuna firma da copiare: argomento delle opzioni\n")
@@ -653,7 +657,10 @@ class ClasseViva(private val utente: String, private val password: String, priva
                 "output" to "", "conpresenza" to "CP1", "usacurrent" to "false", "ora_posizione" to ora.toString(),
                 "numero_ore" to "1 ora", "materia" to materiaId, "text_nota" to (argomentoCopiato ?: argomentoPredefinito).trim(),
                 "tipo_attivita" to "Compresenza"))
-            return (if (risposta.second == "OK") 200 else if (risposta.first in 200..299) 422 else risposta.first) to risposta.second.take(300)
+            // dopo "OK" una nota breve su da dove viene l'argomento: la notifica la mostra, così si vede se "copia firma" ha trovato qualcosa
+            val nota = if (argomentoCopiato != null) "argomento copiato" else "argomento delle opzioni (copia firma: \"${letto.second.take(40)}\", HTTP ${letto.first})"
+            return (if (risposta.second == "OK") 200 else if (risposta.first in 200..299) 422 else risposta.first) to
+                (if (risposta.second == "OK") "OK · $nota" else risposta.second.take(300))
         } finally {
             web.close()
         }

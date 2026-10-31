@@ -1134,8 +1134,10 @@ object FinestraRientro {
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
                 check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
                 // una firma in compresenza può non comparire tra le mie firme: se il sito ha risposto OK vale
-                firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)
+                val trovata = firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)
                     ?: if (compresenza) EsitoFirma(lezione.materia) else error("firma inviata ma non trovata nel registro")
+                // compresenza: sotto "ora firmata" si legge anche se l'argomento è stato copiato o è quello delle opzioni
+                if (compresenza && risposta.contains("·")) EsitoFirma("${risposta.substringAfter("·").trim()} · ${trovata.materia}") else trovata
             }
             log.append(esito.fold({ "esito: firmata (${it.materia})" }, { "esito: errore ${it.message}" }))
             activity.runOnUiThread {
