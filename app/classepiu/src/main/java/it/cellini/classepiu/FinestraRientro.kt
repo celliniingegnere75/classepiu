@@ -752,17 +752,16 @@ object FinestraRientro {
             text = "firma\nordinaria"
             textSize = 14.3f
             typeface = outfitBold
-            setTextColor(azzurro)
+            setTextColor(Color.WHITE)
             gravity = Gravity.CENTER
             textAlignment = View.TEXT_ALIGNMENT_CENTER
             includeFontPadding = false
             setLineSpacing(0f, 0.9f)
             setPadding(activity.dp(8), activity.dp(6), activity.dp(8), activity.dp(6))
-            // Pulsante secondario bianco col bordo azzurro, con le due righe centrate.
+            // Stesso fondo di "firma rapida", un pelo più scuro, scritta bianca e due righe centrate.
             background = GradientDrawable().apply {
-                setColor(Color.WHITE)
+                setColor(0xFF5AAAD0.toInt())
                 cornerRadius = activity.dp(22).toFloat()
-                setStroke(activity.dp(1), azzurro)
             }
             isClickable = true
             isFocusable = true
