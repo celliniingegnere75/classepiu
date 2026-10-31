@@ -797,7 +797,9 @@ object FinestraRientro {
         firmaRapida.visibility = View.GONE
         firmaRapida.isEnabled = false
         firmaRapida.alpha = .5f
-        firmaOrdinaria.setOnClickListener { apriFirmaOrdinaria(activity, avviso, lezione, statoFirma, materiaFirma, firmaRapida) }
+        // per ora "firma ordinaria" non fa nulla (conta solo come tocco: il tempo della notifica riparte);
+        // la finestra con materia e tipo attività è pronta in apriFirmaOrdinaria, da collegare quando serve
+        firmaOrdinaria.setOnClickListener { gestore.interagita(avviso) }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
 
