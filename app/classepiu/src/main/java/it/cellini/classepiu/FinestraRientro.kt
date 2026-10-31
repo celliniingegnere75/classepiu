@@ -900,7 +900,7 @@ object FinestraRientro {
         return avviso
     }
 
-    private class FirmeOggi(val grezzo: String, val mioId: String, val nomi: Map<String, String>)
+    private class FirmeOggi(val grezzo: String, val mioId: String, val nomi: Map<String, String>, val classi: List<Classe>, val client: ClasseViva)
 
     /**
      * Controlla le firme del docente nell'endpoint lessons/mine per la data odierna, una sola volta per tutte le notifiche.
@@ -916,10 +916,29 @@ object FinestraRientro {
                 val client = imp.client().also { it.login() }
                 val (codiceClassi, classiGrezze) = client.classiGrezze(false)
                 check(codiceClassi == 200) { "Classi non disponibili (HTTP $codiceClassi)" }
-                val nomi = OrarioDalleFirme.nomiClassi(leggiClassi(classiGrezze))
+                val classiMie = leggiClassi(classiGrezze)
+                val nomi = OrarioDalleFirme.nomiClassi(classiMie)
                 val (codice, grezzo) = client.lezioniGrezze(data, data)
                 check(codice == 200) { "Firme non disponibili (HTTP $codice)" }
-                FirmeOggi(grezzo, client.idDocente(), nomi)
+                FirmeOggi(grezzo, client.idDocente(), nomi, classiMie, client)
+            }
+            // Compresenza spenta = sono il teorico: se un altro docente ha già firmato quell'ora per la stessa classe non
+            // si può firmare sopra. Le mie firme (lessons/mine) non bastano: si leggono le firme di tutta la classe
+            // (lessons2). Le classi articolate si saltano: lì due docenti firmano la stessa ora per metà classe ciascuno.
+            val altriDocenti = HashMap<Avviso, EsitoFirma>()
+            val compresenzaAttiva = Impostazioni(activity).firmaCopresenza
+            firme.getOrNull()?.let { f ->
+                if (compresenzaAttiva) return@let
+                for (a in avvisi) {
+                    if (firmaCorrispondente(f.grezzo, f.mioId, data, a.lezione, f.nomi) != null) continue
+                    val sigla = siglaClasse(a.lezione.classe)
+                    val classe = f.classi.firstOrNull { it.nome.equals(sigla, ignoreCase = true) } ?: continue
+                    val parti = classe.chiave.split("|", limit = 3)
+                    if (parti.getOrNull(0) != "C" || f.classi.any { it.nome.startsWith(sigla + "_", ignoreCase = true) } || sigla.contains('_')) continue
+                    val grezzoClasse = runCatching { f.client.lezioniClasseGrezze("C", parti.getOrElse(1) { "" }, data) }.getOrNull()
+                        ?.takeIf { it.first == 200 }?.second ?: continue
+                    firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione)?.let { altriDocenti[a] = it }
+                }
             }
             activity.runOnUiThread {
                 if (gen != generazione || activity.isFinishing || activity.isDestroyed) return@runOnUiThread
@@ -930,6 +949,7 @@ object FinestraRientro {
                     a.applicaVerifica(firme.mapCatching {
                         if (compresenza && compresenzaGiaFirmata(activity, data, a.lezione)) EsitoFirma(a.lezione.materia)
                         else firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi, soloCompresenza = compresenza)
+                            ?: altriDocenti[a]
                     })
                 }
             }
@@ -961,6 +981,14 @@ object FinestraRientro {
                         rigaPulsanti.visibility = View.VISIBLE
                     }
                     pulsante.setOnClickListener { firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante) }
+                } else if (risultato.altroDocente) {
+                    // firma di un altro docente: avviso giallo e niente pulsanti
+                    etichetta.text = "ora già firmata"
+                    etichetta.setTextColor(0xFFB7791F.toInt())
+                    materia.text = risultato.materia
+                    materia.setTextColor(0xFFB7791F.toInt())
+                    materia.visibility = if (risultato.materia.isNotBlank()) View.VISIBLE else View.GONE
+                    rigaPulsanti.visibility = View.INVISIBLE
                 } else {
                     mostraFirmata(etichetta, materia, risultato)
                     rigaPulsanti.visibility = View.INVISIBLE
@@ -1170,7 +1198,53 @@ object FinestraRientro {
         }.start()
     }
 
-    private data class EsitoFirma(val materia: String)
+    /** [altroDocente]: l'ora risulta già firmata da un altro docente come teorico; [materia] è allora la riga da mostrare. */
+    private data class EsitoFirma(val materia: String, val altroDocente: Boolean = false)
+
+    /**
+     * Firma di un altro docente (teorica, non in compresenza) per l'ora di [lezione] nelle firme di tutta la classe
+     * (lessons2/students). Restituisce la riga da mostrare, "firmata da <docente> · <materia>".
+     */
+    private fun firmaAltroDocente(grezzo: String, mioId: String, data: String, lezione: Lezione): EsitoFirma? {
+        val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return null
+        fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
+            for (k in chiavi) {
+                val v = o.opt(k)
+                if (v != null && v != org.json.JSONObject.NULL && v !is org.json.JSONObject && v !is org.json.JSONArray) {
+                    val t = v.toString().trim()
+                    if (t.isNotEmpty()) return t
+                }
+            }
+            return ""
+        }
+        fun cerca(v: Any?, livello: Int = 0): EsitoFirma? {
+            if (livello > 7) return null
+            when (v) {
+                is org.json.JSONArray -> for (i in 0 until v.length()) cerca(v.opt(i), livello + 1)?.let { return it }
+                is org.json.JSONObject -> {
+                    val dataFirma = testo(v, "evtDate", "lessonDate", "date").take(10).replace("-", "")
+                    val ora = testo(v, "evtHPos", "hourPos", "evtHour", "hour").toDoubleOrNull()?.toInt()
+                    val durata = (testo(v, "evtDuration", "evtNumH", "duration", "hours").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
+                    val autore = testo(v, "authorId", "teacherId", "teacher_id")
+                    val soloLezione = v.keys().asSequence().none { k ->
+                        (v.opt(k) as? String)?.let { it.contains("compresenza", true) || it.contains("sostegno", true) } == true
+                    }
+                    if (dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
+                        autore.isNotBlank() && autore != mioId && soloLezione) {
+                        val docente = testo(v, "authorName", "teacherName", "signedBy")
+                            .ifEmpty { (v.optJSONObject("author") ?: v.optJSONObject("teacher"))?.let { testo(it, "name", "fullName", "teacherName") }.orEmpty() }
+                        val materia = testo(v, "subjectDesc", "subjectName", "subject")
+                        val riga = listOf(if (docente.isNotEmpty()) "firmata da ${docente.lowercase().replaceFirstChar { it.uppercase() }}" else "firmata da un altro docente", materia)
+                            .filter { it.isNotEmpty() }.joinToString(" · ")
+                        return EsitoFirma(riga, altroDocente = true)
+                    }
+                    for (k in v.keys()) cerca(v.opt(k), livello + 1)?.let { return it }
+                }
+            }
+            return null
+        }
+        return cerca(radice)
+    }
 
     /** Firma in compresenza già inviata per quest'ora (ricordata qui: il registro può non mostrarla tra le mie firme). */
     private fun chiaveCompresenza(data: String, lezione: Lezione) =
