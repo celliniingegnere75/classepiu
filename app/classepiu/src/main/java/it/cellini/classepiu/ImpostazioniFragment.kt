@@ -120,28 +120,27 @@ class ImpostazioniFragment : Fragment() {
         }
 
         // --- interruttori (si salvano da soli)
-        invioMailRow = riga(ctx, col, "invia per mail le circolari nuove", imp.invioMail, ctx.dp(28), true) { on ->
+        invioMailRow = riga(ctx, col, "invia per email le circolari nuove", imp.invioMail, ctx.dp(28), true) { on ->
             imp.invioMail = on
-            messaggio(if (on) "invio mail attivato." else "invio mail disattivato.")
+            // il controllo periodico della bacheca segue questo interruttore: acceso con l'invio, spento senza
+            imp.controlloAutomatico = on
+            Controllo.pianifica(ctx)
+            messaggio(if (on) "invio per email attivato." else "invio per email disattivato.")
             aggiornaVisibilitaControlli()
         } as View
         segnaLetteRow = riga(ctx, col, "segna come lette quelle inviate", imp.segnaLette, ctx.dp(12), true) { on ->
             imp.segnaLette = on
             messaggio(if (on) "le circolari inviate verranno segnate come lette." else "le circolari inviate resteranno da leggere.")
         } as View
-        controlloPeriodicoRow = riga(ctx, col, "controllo periodico della bacheca ogni:", imp.controlloAutomatico, ctx.dp(10), true) { on ->
-            imp.controlloAutomatico = on
-            Controllo.pianifica(ctx)
-            aggiornaOre(on)
-            messaggio(if (on) "controllo periodico attivato." else "controllo periodico disattivato.")
-        } as View
-
+        // senza interruttore: il controllo periodico c'è finché è acceso "invia per email le circolari nuove"
+        controlloPeriodicoRow = TextView(ctx).apply { text = "controllo periodico della bacheca ogni:"; textSize = 16f; setTextColor(nero) }
+            .also { col.addView(it, piena().apply { topMargin = ctx.dp(10) }) }
         // --- intervallo: 2, 4, 8, 24 ore (grigio e non selezionabile se il controllo periodico è spento)
         // scelte disegnate a mano (cerchio, punto, scritta) con spazi flessibili tra l'una e l'altra:
         // nessuna larghezza fissa, così "24 ore" non viene mai tagliato
         val gruppo = LinearLayout(ctx).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
         var oreScelte = if (imp.oreIntervallo in ORE) imp.oreIntervallo else 2
-        var oreAttive = imp.controlloAutomatico
+        var oreAttive = true // l'intervallo si sceglie sempre: 2, 4, 8 o 24 ore
         val voci = ArrayList<Triple<Int, View, TextView>>() // ore, punto interno, scritta
         val cerchi = ArrayList<GradientDrawable>()
         fun ridisegna() {
@@ -182,7 +181,9 @@ class ImpostazioniFragment : Fragment() {
         aggiornaOre = { acceso -> oreAttive = acceso; ridisegna() }
         gruppoIntervallo = gruppo
         col.addView(gruppo, piena().apply { topMargin = ctx.dp(4) })
-        aggiornaOre(imp.controlloAutomatico)
+        aggiornaOre(true)
+        // il controllo segue l'invio per email (anche per chi aveva i due interruttori discordi)
+        if (imp.invioMail && !imp.controlloAutomatico && imp.googleAccount.contains('@')) { imp.controlloAutomatico = true; Controllo.pianifica(ctx) }
         aggiornaVisibilitaControlli()
 
         // Navigazione a linguette: icona e testo, con indicatore azzurro sulla scheda attiva.
