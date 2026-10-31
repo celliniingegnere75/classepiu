@@ -171,7 +171,7 @@ class ListaScheda : Scheda() {
                         val sid = v.t("studentId", "student_id")
                         val alunno = nomi[sid] ?: v.t("studentName", "fullName", "completeName").ifEmpty {
                             listOf(v.t("studentLastName", "lastName", "surname"), v.t("studentFirstName", "firstName", "name")).filter { it.isNotEmpty() }.joinToString(" ")
-                        }.ifEmpty { sid }
+                        }.ifEmpty { if (sid.isNotEmpty()) "alunno non in elenco ($sid)" else "" }
                         // tipo come lo chiama classeviva (nota insegnante, nota nel registro, richiamo…), con autore, materia e motivo
                         val descrizione = v.t("noteTypeDesc", "noteType", "typeDesc", "evtDesc", "eventDesc", "kind", "evtCode").replaceFirstChar { it.uppercase() }
                         val dettagli = listOf(v.t("warningType"), v.t("subjectDesc")).filter { it.isNotEmpty() }.joinToString(", ")
