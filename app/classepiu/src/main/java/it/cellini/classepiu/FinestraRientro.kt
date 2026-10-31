@@ -946,17 +946,28 @@ object FinestraRientro {
                 for (a in avvisi) {
                     if (firmaCorrispondente(f.grezzo, f.mioId, data, a.lezione, f.nomi, soloCompresenza = compresenzaAttiva) != null) continue
                     val sigla = siglaClasse(a.lezione.classe)
-                    val classe = f.classi.firstOrNull { it.nome.equals(sigla, ignoreCase = true) } ?: continue
+                    // gruppo (5EA_AUA): si guardano le firme della classe intera 5EA, dove firma anche chi ha entrambi i gruppi
+                    // (es. matematica), ma si scartano quelle dell'altro gruppo (5EA_ENA)
+                    val eGruppo = sigla.contains('_')
+                    val base = if (eGruppo) sigla.substringBefore('_') else sigla
+                    val classe = f.classi.firstOrNull { it.nome.equals(base, ignoreCase = true) } ?: continue
                     val parti = classe.chiave.split("|", limit = 3)
-                    if (parti.getOrNull(0) != "C" || f.classi.any { it.nome.startsWith(sigla + "_", ignoreCase = true) } || sigla.contains('_')) continue
+                    if (parti.getOrNull(0) != "C") continue
+                    // classe intera con gruppi: le firme dei gruppi sono di metà classe, nessun controllo
+                    if (!eGruppo && f.classi.any { it.nome.startsWith(sigla + "_", ignoreCase = true) }) continue
+                    // alunni del mio gruppo: servono per distinguere le firme dell'altro gruppo (le firme non hanno il campo gruppo)
+                    val gruppo: Set<String>? = if (eGruppo) {
+                        runCatching { FiltroArticolate.alunniGruppo(f.client, activity.filesDir, "C", parti.getOrElse(1) { "" }, sigla).first }
+                            .getOrNull()?.takeIf { it.isNotEmpty() } ?: continue
+                    } else null
                     val grezzoClasse = runCatching { f.client.lezioniClasseGrezze("C", parti.getOrElse(1) { "" }, data) }.getOrNull()
                         ?.takeIf { it.first == 200 }?.second ?: continue
                     classeLetta.add(a)
                     if (compresenzaAttiva) {
-                        firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, compresenza = true, mie = true)?.let { miaCompresenzaClasse[a] = it }
-                            ?: firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, compresenza = true)?.let { altriDocenti[a] = it }
+                        firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, compresenza = true, mie = true, gruppo = gruppo)?.let { miaCompresenzaClasse[a] = it }
+                            ?: firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, compresenza = true, gruppo = gruppo)?.let { altriDocenti[a] = it }
                     } else {
-                        firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione)?.let { altriDocenti[a] = it }
+                        firmaAltroDocente(grezzoClasse, f.mioId, data, a.lezione, gruppo = gruppo)?.let { altriDocenti[a] = it }
                     }
                 }
             }
@@ -1228,7 +1239,7 @@ object FinestraRientro {
      */
     private fun firmaAltroDocente(
         grezzo: String, mioId: String, data: String, lezione: Lezione,
-        compresenza: Boolean = false, mie: Boolean = false
+        compresenza: Boolean = false, mie: Boolean = false, gruppo: Set<String>? = null
     ): EsitoFirma? {
         val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return null
         fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
@@ -1257,7 +1268,11 @@ object FinestraRientro {
                     // compresenza=false: firma teorica di un altro docente; compresenza=true: firma in compresenza (mia se mie, altrui altrimenti)
                     val tipoGiusto = if (compresenza) eCompresenza else soloLezione
                     val autoreGiusto = autore.isNotBlank() && (if (mie) autore == mioId else autore != mioId)
-                    if (dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) && autoreGiusto && tipoGiusto) {
+                    // firma di un altro gruppo della stessa classe (5EA_ENA mentre io sono su 5EA_AUA): non è sovrapposizione
+                    val stati = v.optJSONArray("studentStatus")
+                    val alunniFirma = stati?.let { a -> (0 until a.length()).mapNotNull { a.optJSONObject(it)?.optString("studentId")?.takeIf { id -> id.isNotEmpty() } } }.orEmpty()
+                    val altroGruppo = gruppo != null && alunniFirma.none { it in gruppo }
+                    if (dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) && autoreGiusto && tipoGiusto && !altroGruppo) {
                         if (mie) return EsitoFirma(testo(v, "subjectDesc", "subjectName", "subject").ifEmpty { lezione.materia })
                         val docente = testo(v, "authorName", "teacherName", "signedBy")
                             .ifEmpty { (v.optJSONObject("author") ?: v.optJSONObject("teacher"))?.let { testo(it, "name", "fullName", "teacherName") }.orEmpty() }
