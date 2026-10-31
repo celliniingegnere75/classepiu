@@ -1007,7 +1007,8 @@ object FinestraRientro {
                 if (risultato == null) {
                     etichetta.text = "ora non firmata"
                     etichetta.setTextColor(0xFFD32F2F.toInt())
-                    materia.visibility = View.GONE
+                    // INVISIBLE e non GONE: la riga della materia fa spazio ai pulsanti che la sormontano di 37 dp
+                    materia.visibility = View.INVISIBLE
                     // i pulsanti spariscono solo se per quest'ora c'è davvero una firma: swipe e X non li tolgono
                     pulsante.visibility = View.VISIBLE
                     pulsante.isEnabled = true
@@ -1202,7 +1203,7 @@ object FinestraRientro {
                 check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
                 // una firma in compresenza può non comparire tra le mie firme: se il sito ha risposto OK vale
                 if (compresenza) activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
-                    .edit().putBoolean(chiaveCompresenza(data, lezione), true).apply()
+                    .edit().putLong(chiaveCompresenza(data, lezione), System.currentTimeMillis()).apply()
                 val trovata = firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi, soloCompresenza = compresenza)
                     ?: if (compresenza) EsitoFirma(lezione.materia) else error("firma inviata ma non trovata nel registro")
                 // compresenza: sotto "ora firmata" si legge anche se l'argomento è stato copiato o è quello delle opzioni
@@ -1291,10 +1292,11 @@ object FinestraRientro {
 
     /** Firma in compresenza già inviata per quest'ora (ricordata qui: il registro può non mostrarla tra le mie firme). */
     private fun chiaveCompresenza(data: String, lezione: Lezione) =
-        "compresenza_${data}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
+        "cp2_${data}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
 
     private fun compresenzaGiaFirmata(activity: Activity, data: String, lezione: Lezione) =
-        activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE).getBoolean(chiaveCompresenza(data, lezione), false)
+        activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE).getLong(chiaveCompresenza(data, lezione), 0L)
+            .let { System.currentTimeMillis() - it < 3 * 60_000L } // solo per il ritardo del sito subito dopo la firma
 
     /**
      * [soloCompresenza]: con l'interruttore Compresenza attivo la firma del teorico (anche se è la mia) non conta come
