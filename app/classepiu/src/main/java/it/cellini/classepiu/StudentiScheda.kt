@@ -85,7 +85,7 @@ class StudentiScheda : Scheda() {
             setPadding(dp(12), dp(9), dp(12), dp(9))
             background = GradientDrawable().apply {
                 cornerRadius = dp(18).toFloat()
-                setColor(if (attiva) Color.WHITE else 0x337FFFFFFF)
+                setColor(if (attiva) Color.WHITE else 0x337FFFFFFF.toInt())
             }
             setTextColor(if (attiva) azzurro else Color.WHITE)
             setOnClickListener { azione() }
