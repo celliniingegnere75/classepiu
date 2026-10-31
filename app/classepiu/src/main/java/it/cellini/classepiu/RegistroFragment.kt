@@ -303,7 +303,7 @@ class RegistroFragment : Fragment() {
 
         inner class VH(
             val box: View, val tessera: View, val sopra: View, val nome: TextView, val descrizioneClasse: TextView,
-            val appello: TextView, val codice: TextView, val voti: TextView, val lezioni: TextView, val note: TextView
+            val appello: TextView, val codice: TextView, val voti: TextView, val note: TextView, val compiti: TextView
         ) : RecyclerView.ViewHolder(box)
 
         override fun getItemCount() = dati.size
@@ -362,11 +362,11 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
             val voti = tasto("i miei\nvoti", 0xFFB3DDF5.toInt())
-            val lezioni = tasto("le mie\nlezioni", 0xFFD4EEFB.toInt())
             val note = tasto("note\nalunni", 0xFFC5D5F2.toInt())
+            val compiti = tasto("compiti", 0xFFD4EEFB.toInt())
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
-                listOf(lezioni, voti, note).forEachIndexed { i, t ->
+                listOf(voti, note, compiti).forEachIndexed { i, t ->
                     addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { if (i > 0) leftMargin = ctx.dp(6) })
                 }
             }
@@ -388,7 +388,7 @@ class RegistroFragment : Fragment() {
                     setMargins(0, ctx.dp(6), 0, ctx.dp(6))
                 }
             }
-            return VH(riga, tessera, sopra, nome, descrizioneClasse, appello, codice, voti, lezioni, note)
+            return VH(riga, tessera, sopra, nome, descrizioneClasse, appello, codice, voti, note, compiti)
         }
 
         private fun senzaPrefisso(testo: String, vararg prefissi: String): String {
@@ -410,7 +410,7 @@ class RegistroFragment : Fragment() {
                 val p = c.chiave.split("|", limit = 3)
                 (requireActivity() as MainActivity).apri(StudentiScheda(),
                     "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome, "descrizione" to c.descrizione,
-                    "gruppo" to c.gruppo)
+                    "gruppo" to c.gruppo, "solomie" to mie)
             }
             h.tessera.setOnClickListener(apriStudenti)
             h.sopra.setOnClickListener(apriStudenti)
