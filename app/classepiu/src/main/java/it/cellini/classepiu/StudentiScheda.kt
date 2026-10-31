@@ -94,11 +94,16 @@ class StudentiScheda : Scheda() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(14), dp(2), dp(14), dp(8))
             addView(linguetta("Alunni", true) { }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { rightMargin = dp(6) })
-            addView(linguetta("Lezioni", false) {
+            addView(linguetta("Le mie lezioni", false) {
                 (requireActivity() as MainActivity).apri(ListaScheda(),
                     "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
                     "solomie" to soloMieLezioni, "gruppo" to gruppo)
-            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(6) })
+            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(4); rightMargin = dp(4) })
+            addView(linguetta("Tutte le lezioni", false) {
+                (requireActivity() as MainActivity).apri(ListaScheda(),
+                    "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
+                    "tutte" to true, "gruppo" to gruppo)
+            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(4) })
         }
 
         val giorni = StrisciaGiorni(ctx) {
