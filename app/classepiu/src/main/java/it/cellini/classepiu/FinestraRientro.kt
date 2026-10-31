@@ -1000,14 +1000,22 @@ object FinestraRientro {
             addView(civica)
             check(if (imp.firmaTipo.equals("Educazione civica", ignoreCase = true)) civica.id else ordinaria.id)
         }
-        // tipo attività: le voci del menu della finestra "Nuova lezione" del registro web (schermata di Cristian del
-        // 31/10/2026), scritte come lì; "Lezione" e "Spiegazione" confermate da firme vere (HAR del 30/10/2026)
+        // tipo attività: le 43 voci del menu della finestra "Nuova lezione" del registro web, lette dalla pagina
+        // regclasse.php (HAR del 31/10/2026): il valore inviato è identico al testo della voce
         val attivita = listOf(
-            "Lezione", "Spiegazione", "Interrogazione", "Interrogazione e spiegazione", "Prova pratica",
-            "Compito in classe", "Verifica scritta", "Verifiche orali", "Attività di laboratorio", "Orientamento",
-            "Didattica a distanza", "Video Lezione", "Video Verifica", "Video Interrogazione",
-            "Didattica a Distanza Materiale", "Didattica a Distanza Compito", "Didattica a Distanza Verifica",
-            "Video Lezione Sostegno", "Video Compresenza Sostegno"
+            "Lezione", "Spiegazione", "Interrogazione", "Interrogazione e spiegazione", "Prova pratica", "Compito in classe",
+            "Verifica scritta", "Verifiche orali", "Attività di laboratorio", "Orientamento", "Didattica a distanza",
+            "Video Lezione", "Video Verifica", "Video Interrogazione", "Didattica a Distanza Materiale", "Didattica a Distanza Compito",
+            "Didattica a Distanza Verifica", "Video Lezione Sostegno", "Video Compresenza Sostegno", "Video Compresenza ITP",
+            "Sorveglianza", "PCTO - Attività in aula", "FSL - Attività in aula", "Assemblea di classe", "Assemblea di istituto",
+            "Supplenza", "PCTO - Sicurezza", "PCTO - Orientamento", "FSL - Sicurezza", "FSL - Orientamento",
+            "Ore personalizzazione - attività di antidispersione", "Ore personalizzazione - attività di inclusione",
+            "Ore personalizzazione - attività di orientamento", "Ore personalizzazione - attività di riorientamento",
+            "Ore personalizzazione - attività di PCTO", "Ore personalizzazione - attività di apprendistato",
+            "Ore personalizzazione - attività di alfabetizzazione italiano L2", "Ore personalizzazione - attività per crediti IeFP",
+            "Ore personalizzazione - attività di recupero e consolidamento", "Ore personalizzazione - attività di potenziamento",
+            "Ore personalizzazione - attività su metodo di studio e stili di apprendimento", "Ore personalizzazione - attività di accoglienza",
+            "Ore personalizzazione - attività del bilancio personale iniziale"
         )
         val tipologia = android.widget.Spinner(activity).apply {
             adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, attivita)
