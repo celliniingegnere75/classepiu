@@ -169,9 +169,11 @@ class ListaScheda : Scheda() {
                         // gli "appunto" (NTNT) sono le autorizzazioni di entrata/uscita: per ora esclusi
                         if (cosa == "note" && v.t("evtCode") == "NTNT") return
                         val sid = v.t("studentId", "student_id")
+                        // alunni non più nell'elenco della classe (ritirati o trasferiti): le loro note non si mostrano
+                        if (cosa == "note" && sid.isNotEmpty() && nomi.isNotEmpty() && sid !in nomi) return
                         val alunno = nomi[sid] ?: v.t("studentName", "fullName", "completeName").ifEmpty {
                             listOf(v.t("studentLastName", "lastName", "surname"), v.t("studentFirstName", "firstName", "name")).filter { it.isNotEmpty() }.joinToString(" ")
-                        }.ifEmpty { if (sid.isNotEmpty()) "alunno non in elenco ($sid)" else "" }
+                        }.ifEmpty { sid }
                         // tipo come lo chiama classeviva (nota insegnante, nota nel registro, richiamo…), con autore, materia e motivo
                         val descrizione = v.t("noteTypeDesc", "noteType", "typeDesc", "evtDesc", "eventDesc", "kind", "evtCode").replaceFirstChar { it.uppercase() }
                         val dettagli = listOf(v.t("warningType"), v.t("subjectDesc")).filter { it.isNotEmpty() }.joinToString(", ")
