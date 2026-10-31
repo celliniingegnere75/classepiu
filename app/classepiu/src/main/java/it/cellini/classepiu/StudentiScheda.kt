@@ -640,7 +640,7 @@ class StudentiScheda : Scheda() {
 }
 
 /**
- * Striscia di linguette a cartella: sfondo grigio con gli angoli alti arrotondati, bordi tra le linguette inclinati a "/" con una curva a S,
+ * Striscia di linguette a cartella: sfondo grigio con gli angoli alti arrotondati, quarti di cerchio tra le linguette,
  * linguetta attiva dello stesso colore del pannello sotto (così le due si fondono).
  */
 class LinguetteView(
@@ -662,8 +662,6 @@ class LinguetteView(
         color = 0xFF111111.toInt(); typeface = font; textSize = 15f * d; textAlign = android.graphics.Paint.Align.CENTER
     }
     private val r = 18f * d
-    private val rt = 12f * d
-    private val p = 10f * d
 
     override fun onMeasure(w: Int, h: Int) = setMeasuredDimension(MeasureSpec.getSize(w), (40 * d).toInt())
 
@@ -672,13 +670,14 @@ class LinguetteView(
 
     private fun larghezza() = width.toFloat() / voci.size
 
-    /** Bordo inclinato tra due linguette in [xb]: dal basso (xb - p) all'alto (xb + p), con tangenti verticali agli estremi. */
-    private fun android.graphics.Path.bordoSu(xb: Float, h: Float) {
-        cubicTo(xb - p, h * 0.55f, xb + p, h * 0.45f + rt, xb + p, rt)
+    /** Quarto di cerchio tra due linguette in [xb]: dall'alto (xb, 0) al basso (xb - h, h), centro in (xb - h, 0), convesso verso il basso a destra. */
+    private fun android.graphics.Path.arcoGiu(xb: Float, h: Float) {
+        arcTo(android.graphics.RectF(xb - 2 * h, -h, xb, h), 0f, 90f)
     }
 
-    private fun android.graphics.Path.bordoGiu(xb: Float, h: Float) {
-        cubicTo(xb + p, h * 0.45f + rt, xb - p, h * 0.55f, xb - p, h)
+    /** Lo stesso quarto di cerchio percorso dal basso verso l'alto. */
+    private fun android.graphics.Path.arcoSu(xb: Float, h: Float) {
+        arcTo(android.graphics.RectF(xb - 2 * h, -h, xb, h), 90f, -90f)
     }
 
     override fun onDraw(c: android.graphics.Canvas) {
@@ -689,18 +688,18 @@ class LinguetteView(
             addRoundRect(0f, 0f, w, h + r, floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f), android.graphics.Path.Direction.CW)
         }
         c.save(); c.clipRect(0f, 0f, w, h); c.drawPath(fondo, pennaFondo); c.restore()
-        // bordi tra le linguette
+        // quarti di cerchio tra le linguette
         for (k in 1 until voci.size) {
             val xb = lw * k
-            c.drawPath(android.graphics.Path().apply { moveTo(xb - p, h); bordoSu(xb, h); quadTo(xb + p, 0f, xb + p + rt, 0f) }, pennaBordo)
+            c.drawPath(android.graphics.Path().apply { moveTo(xb, 0f); arcoGiu(xb, h) }, pennaBordo)
         }
         // linguetta attiva
         val xl = lw * attiva; val xr = xl + lw
         val a = android.graphics.Path().apply {
             if (attiva == 0) { moveTo(0f, h); lineTo(0f, r); quadTo(0f, 0f, r, 0f) }
-            else { moveTo(xl - p, h); bordoSu(xl, h); quadTo(xl + p, 0f, xl + p + rt, 0f) }
+            else { moveTo(xl - h, h); arcoSu(xl, h) }
             if (attiva == voci.size - 1) { lineTo(w - r, 0f); quadTo(w, 0f, w, r); lineTo(w, h) }
-            else { lineTo(xr + p - rt, 0f); quadTo(xr + p, 0f, xr + p, rt); bordoGiu(xr, h) }
+            else { lineTo(xr, 0f); arcoGiu(xr, h) }
             close()
         }
         c.drawPath(a, pennaAttiva)
