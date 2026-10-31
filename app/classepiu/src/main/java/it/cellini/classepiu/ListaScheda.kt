@@ -35,7 +35,7 @@ class ListaScheda : Scheda() {
     private var mieiAlunni: Set<String> = emptySet()
     /** Da "le mie lezioni": solo le mie firme e le mie compresenze. */
     private var soloMie = false
-    /** Mostra ogni firma della classe, indipendentemente dal docente o dal gruppo. */
+    /** Mostra le firme di tutti i docenti della classe aperta, rispettando l'articolazione (classe intera o gruppo). */
     private var tutteLezioni = false
     /** Da "tutti i registri": un gruppo di classe articolata (es. 5EA_ENA) aperto sulla classe intera. */
     private var gruppo = ""
@@ -205,7 +205,8 @@ class ListaScheda : Scheda() {
         // classe articolata: solo le firme della metà aperta (quelle con i suoi alunni e le loro compresenze); la classe intera tutte
         val firme = out.filter { it.firma != null }
         val vedi = when {
-            tutteLezioni -> List(firme.size) { true }
+            // tutte le lezioni: firme di tutti i docenti, ma solo quelle della classe aperta (classe intera = tutte; gruppo = comuni + sue di indirizzo)
+            tutteLezioni -> FiltroArticolate.visibili(firme.map { it.firma!! }, "", mieiAlunni)
             soloMie -> FiltroArticolate.mieECompresenze(firme.map { it.firma!! }, mioId)
             else -> FiltroArticolate.visibili(firme.map { it.firma!! }, if (gruppo.isNotEmpty()) "" else mioId, mieiAlunni)
         }
