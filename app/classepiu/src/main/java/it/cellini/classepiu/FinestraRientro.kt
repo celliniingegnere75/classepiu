@@ -133,9 +133,9 @@ object FinestraRientro {
         if (gestore.finestre.isNotEmpty()) verificaFirme(activity, generazione, gestore.finestre)
     }
 
-    private fun programmaRiverifica() {
+    private fun programmaRiverifica(ritardo: Long = 600) {
         handler.removeCallbacks(riverifica)
-        handler.postDelayed(riverifica, 600)
+        handler.postDelayed(riverifica, ritardo)
     }
 
     /** Chiude subito tutte le notifiche e i loro timer (rientro nuovo, Activity in background o distrutta). */
@@ -869,6 +869,14 @@ object FinestraRientro {
                         statoCompatto.text = "senza firma"
                         statoCompatto.setTextColor(0xFFD32F2F.toInt())
                     }
+                    testo.contains("in attesa") -> {
+                        statoCompatto.text = "in attesa"
+                        statoCompatto.setTextColor(0xFF8A6D00.toInt())
+                    }
+                    testo.contains("già firmata") -> {
+                        statoCompatto.text = "già firmata"
+                        statoCompatto.setTextColor(0xFFB7791F.toInt())
+                    }
                     testo.contains("firmata") -> {
                         statoCompatto.text = "firmato"
                         statoCompatto.setTextColor(0xFF16803C.toInt())
@@ -981,8 +989,8 @@ object FinestraRientro {
                         firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi, soloCompresenza = compresenza)
                             ?: miaCompresenzaClasse[a]
                             ?: altriDocenti[a]
-                            // il segno locale vale solo se le firme della classe non si sono potute leggere (mai se sono state lette e non c'è nulla)
-                            ?: if (compresenza && a !in classeLetta && compresenzaGiaFirmata(activity, data, a.lezione)) EsitoFirma(a.lezione.materia) else null
+                            // compresenza appena inviata ma non ancora nel registro: "in attesa del registro", si riprova tra poco
+                            ?: if (compresenza && compresenzaGiaFirmata(activity, data, a.lezione)) EsitoFirma(a.lezione.materia, inAttesa = true) else null
                     })
                 }
             }
@@ -1036,8 +1044,12 @@ object FinestraRientro {
     }
 
     private fun mostraFirmata(etichetta: TextView, materia: TextView, risultato: EsitoFirma) {
-        etichetta.text = "ora firmata"
-        etichetta.setTextColor(0xFF16803C.toInt())
+        // compresenza inviata ma non ancora visibile nel registro: niente verde finché il registro non la conferma
+        val colore = if (risultato.inAttesa) 0xFF8A6D00.toInt() else 0xFF16803C.toInt()
+        etichetta.text = if (risultato.inAttesa) "in attesa del registro" else "ora firmata"
+        etichetta.setTextColor(colore)
+        materia.setTextColor(colore)
+        if (risultato.inAttesa) programmaRiverifica(5000)
         materia.text = risultato.materia
         materia.visibility = if (risultato.materia.isNotBlank()) View.VISIBLE else View.GONE
     }
@@ -1205,9 +1217,9 @@ object FinestraRientro {
                 if (compresenza) activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
                     .edit().putLong(chiaveCompresenza(data, lezione), System.currentTimeMillis()).apply()
                 val trovata = firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi, soloCompresenza = compresenza)
-                    ?: if (compresenza) EsitoFirma(lezione.materia) else error("firma inviata ma non trovata nel registro")
+                    ?: if (compresenza) EsitoFirma(lezione.materia, inAttesa = true) else error("firma inviata ma non trovata nel registro")
                 // compresenza: sotto "ora firmata" si legge anche se l'argomento è stato copiato o è quello delle opzioni
-                if (compresenza && risposta.contains("·")) EsitoFirma("${risposta.substringAfter("·").trim()} · ${trovata.materia}") else trovata
+                if (compresenza && risposta.contains("·")) trovata.copy(materia = "${risposta.substringAfter("·").trim()} · ${trovata.materia}") else trovata
             }
             log.append(esito.fold({ "esito: firmata (${it.materia})" }, { "esito: errore ${it.message}" }))
             activity.runOnUiThread {
@@ -1232,7 +1244,7 @@ object FinestraRientro {
     }
 
     /** [altroDocente]: l'ora risulta già firmata da un altro docente come teorico; [materia] è allora la riga da mostrare. */
-    private data class EsitoFirma(val materia: String, val altroDocente: Boolean = false)
+    private data class EsitoFirma(val materia: String, val altroDocente: Boolean = false, val inAttesa: Boolean = false)
 
     /**
      * Firma di un altro docente (teorica, non in compresenza) per l'ora di [lezione] nelle firme di tutta la classe
@@ -1319,7 +1331,7 @@ object FinestraRientro {
 
     private fun compresenzaGiaFirmata(activity: Activity, data: String, lezione: Lezione) =
         activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE).getLong(chiaveCompresenza(data, lezione), 0L)
-            .let { System.currentTimeMillis() - it < 10_000L } // 10 secondi: solo per il ritardo del sito subito dopo la firma
+            .let { System.currentTimeMillis() - it < 60_000L } // per un minuto dopo la firma: "in attesa del registro", poi conta solo il registro
 
     /**
      * [soloCompresenza]: con l'interruttore Compresenza attivo la firma del teorico (anche se è la mia) non conta come
