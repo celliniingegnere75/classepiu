@@ -78,11 +78,11 @@ class StudentiScheda : Scheda() {
         // Linguette della scheda classe: alunni (vista iniziale) e lezioni.
         fun linguetta(testo: String, attiva: Boolean, azione: () -> Unit) = TextView(ctx).apply {
             text = testo
-            textSize = 14f
+            textSize = 12f
             typeface = outfitBold
             gravity = Gravity.CENTER
             includeFontPadding = false
-            setPadding(dp(12), dp(9), dp(12), dp(9))
+            setPadding(dp(5), dp(9), dp(5), dp(9))
             background = GradientDrawable().apply {
                 cornerRadius = dp(18).toFloat()
                 setColor(if (attiva) Color.WHITE else 0x337FFFFFFF.toInt())
@@ -94,11 +94,16 @@ class StudentiScheda : Scheda() {
             orientation = LinearLayout.HORIZONTAL
             setPadding(dp(14), dp(2), dp(14), dp(8))
             addView(linguetta("Alunni", true) { }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { rightMargin = dp(6) })
-            addView(linguetta("Lezioni", false) {
+            addView(linguetta("Le mie lezioni", false) {
                 (requireActivity() as MainActivity).apri(ListaScheda(),
                     "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
                     "solomie" to soloMieLezioni, "gruppo" to gruppo)
-            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(6) })
+            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(4); rightMargin = dp(4) })
+            addView(linguetta("Tutte le lezioni", false) {
+                (requireActivity() as MainActivity).apri(ListaScheda(),
+                    "cosa" to "lezioni", "tipo" to tipo, "id" to classeId, "nome" to nome,
+                    "tutte" to true, "gruppo" to gruppo)
+            }, LinearLayout.LayoutParams(0, dp(38), 1f).apply { leftMargin = dp(4) })
         }
 
         val giorni = StrisciaGiorni(ctx) {

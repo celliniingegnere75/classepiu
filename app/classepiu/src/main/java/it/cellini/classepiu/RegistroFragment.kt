@@ -357,7 +357,7 @@ class RegistroFragment : Fragment() {
             fun tasto(testo: String, colore: Int) = TextView(ctx).apply {
                 text = testo; textSize = 11f
                 typeface = outfitRegular
-                setTextColor(celesteTesto)
+                setTextColor(0xFF496477.toInt())
                 gravity = Gravity.CENTER; includeFontPadding = false; maxLines = 2
                 background = GradientDrawable().apply { setColor(colore); cornerRadius = ctx.dp(8).toFloat() }
             }
