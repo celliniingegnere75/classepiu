@@ -93,7 +93,8 @@ class BachecaFragment : Fragment() {
             addView(vuoto)
         }
         val fab = ExtendedFloatingActionButton(ctx).apply {
-            text = "invia email"
+            fabInvia = this
+            text = "invia per email"
             setIconResource(android.R.drawable.ic_dialog_email)
             backgroundTintList = android.content.res.ColorStateList.valueOf(celeste)
             setTextColor(0xFFFFFFFF.toInt())
@@ -111,13 +112,28 @@ class BachecaFragment : Fragment() {
             android.view.Gravity.BOTTOM or android.view.Gravity.END).apply { setMargins(0, 0, ctx.dp(16), ctx.dp(ALTEZZA_BARRA + ALZO_BARRA + SOMBRA_BARRA + 12)) }) // sopra la barra delle pagine
 
         tutte = leggiCache()
+        aggiornaPulsante()
         mostra()
         carica()
         return radice
     }
 
+    private var fabInvia: View? = null
+
+    /** Il pulsante "invia per email" c'è solo se non è acceso "invia per email le circolari nuove" nelle opzioni. */
+    private fun aggiornaPulsante() {
+        val ctx = context ?: return
+        fabInvia?.visibility = if (Impostazioni(ctx).invioMail) View.GONE else View.VISIBLE
+    }
+
+    override fun onResume() {
+        super.onResume()
+        aggiornaPulsante()
+    }
+
     override fun onHiddenChanged(hidden: Boolean) {
         super.onHiddenChanged(hidden)
+        if (!hidden) aggiornaPulsante()
         if (!hidden && tutte.isEmpty()) carica()
     }
 
