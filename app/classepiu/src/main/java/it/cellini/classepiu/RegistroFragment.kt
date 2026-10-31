@@ -342,6 +342,7 @@ class RegistroFragment : Fragment() {
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
                 background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
+                minHeight = ctx.dp(38) // più alto, così il bordo superiore sta in linea con quello della scheda classe
             }
             val codice = TextView(ctx).apply {
                 textSize = 10.5f; typeface = outfitRegular; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
@@ -349,7 +350,7 @@ class RegistroFragment : Fragment() {
             }
             val sopra = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                gravity = Gravity.CENTER_VERTICAL
+                gravity = Gravity.TOP
                 addView(appello, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(codice, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
             }
@@ -382,7 +383,7 @@ class RegistroFragment : Fragment() {
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(18).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
-                addView(tessera, LinearLayout.LayoutParams(ctx.dp(99), ctx.dp(116)))
+                addView(tessera, LinearLayout.LayoutParams(ctx.dp(94), ctx.dp(116)))
                 addView(testi, LinearLayout.LayoutParams(0, ctx.dp(116), 1f).apply { leftMargin = ctx.dp(14) })
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, ctx.dp(6), 0, ctx.dp(6))
