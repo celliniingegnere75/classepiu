@@ -530,7 +530,7 @@ class ImpostazioniFragment : Fragment() {
                     setOnClickListener { sw.toggle() }
                 }, piena().apply { topMargin = ctx.dp(3); bottomMargin = ctx.dp(3) })
             }
-            interruttore("Copresenza", imp.firmaCopresenza) { imp.firmaCopresenza = it }
+            interruttore("Compresenza", imp.firmaCopresenza) { imp.firmaCopresenza = it }
             addView(View(ctx).apply { setBackgroundColor(bordo) }, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(1)
             ).apply { topMargin = ctx.dp(4); bottomMargin = ctx.dp(4) })
@@ -562,7 +562,7 @@ class ImpostazioniFragment : Fragment() {
             override fun afterTextChanged(s: android.text.Editable?) { imp.firmaArgomento = s?.toString().orEmpty() }
         })
         colonna.addView(TextView(ctx).apply {
-            text = "La firma rapida usa questi valori: educazione civica firma con la materia educazione civica della classe, l'argomento finisce nel registro. Con copresenza o sostegno attivi la firma rapida non firma: per ora quelle ore si firmano dal registro web."
+            text = "La firma rapida usa questi valori: educazione civica firma con la materia educazione civica della classe, l'argomento finisce nel registro. Con compresenza attiva la firma rapida firma in compresenza: copia l'argomento del docente teorico e, se non lo trova, usa quello scritto qui. Con sostegno attivo la firma rapida non firma: per ora quelle ore si firmano dal registro web."
             textSize = 12f
             setTextColor(grigio)
         }, piena().apply { topMargin = ctx.dp(12) })

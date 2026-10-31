@@ -925,7 +925,12 @@ object FinestraRientro {
                 if (gen != generazione || activity.isFinishing || activity.isDestroyed) return@runOnUiThread
                 for (a in avvisi) {
                     if (!a.scheda.isAttachedToWindow) continue
-                    a.applicaVerifica(firme.mapCatching { firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi) })
+                    // con Compresenza attiva la firma del teorico non conta: i pulsanti restano finché non c'è la mia compresenza
+                    val compresenza = Impostazioni(activity).firmaCopresenza
+                    a.applicaVerifica(firme.mapCatching {
+                        if (compresenza && compresenzaGiaFirmata(activity, data, a.lezione)) EsitoFirma(a.lezione.materia)
+                        else firmaCorrispondente(it.grezzo, it.mioId, data, a.lezione, it.nomi, soloCompresenza = compresenza)
+                    })
                 }
             }
         }.start()
@@ -1101,7 +1106,7 @@ object FinestraRientro {
         Thread {
             val esito = runCatching {
                 val imp = Impostazioni(activity)
-                // copresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
+                // compresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
                 // credenziali del secondo docente): finché non c'è una firma vera da copiare non si manda niente
                 // il sostegno sul sito è un'altra finestra, di cui manca ancora una firma vera da copiare
                 if (scelta == null) check(!imp.firmaSostegno) { "non firmata: sostegno dal registro web" }
@@ -1121,7 +1126,9 @@ object FinestraRientro {
                 // se nel frattempo l'ora è stata firmata non si firma due volte
                 val (codicePrima, grezzoPrima) = client.lezioniGrezze(data, data)
                 check(codicePrima == 200) { "firme di oggi non disponibili (HTTP $codicePrima)" }
-                firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi)?.let { log.append("ora già firmata, non firmo\n"); return@runCatching it }
+                (if (compresenza && compresenzaGiaFirmata(activity, data, lezione)) EsitoFirma(lezione.materia)
+                    else firmaCorrispondente(grezzoPrima, mioId, data, lezione, nomi, soloCompresenza = compresenza))
+                    ?.let { log.append("ora già firmata, non firmo\n"); return@runCatching it }
                 val classe = checkNotNull(classi.firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) }) {
                     "${lezione.classe} non è tra le tue classi"
                 }
@@ -1134,7 +1141,9 @@ object FinestraRientro {
                 log.append("GET lessons/mine/$data/$data -> HTTP $codiceOggi\n${grezzoOggi.take(3000)}\n\n")
                 check(codiceOggi == 200) { "firma inviata, verifica non riuscita (HTTP $codiceOggi)" }
                 // una firma in compresenza può non comparire tra le mie firme: se il sito ha risposto OK vale
-                val trovata = firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi)
+                if (compresenza) activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE)
+                    .edit().putBoolean(chiaveCompresenza(data, lezione), true).apply()
+                val trovata = firmaCorrispondente(grezzoOggi, mioId, data, lezione, nomi, soloCompresenza = compresenza)
                     ?: if (compresenza) EsitoFirma(lezione.materia) else error("firma inviata ma non trovata nel registro")
                 // compresenza: sotto "ora firmata" si legge anche se l'argomento è stato copiato o è quello delle opzioni
                 if (compresenza && risposta.contains("·")) EsitoFirma("${risposta.substringAfter("·").trim()} · ${trovata.materia}") else trovata
@@ -1150,7 +1159,7 @@ object FinestraRientro {
                         ((pulsante.parent as? View)?.parent as? View)?.visibility = View.INVISIBLE
                     },
                     onFailure = {
-                        // mostra soltanto l’esito della firma; per copresenza/sostegno anche il perché
+                        // mostra soltanto l’esito della firma; per il sostegno anche il perché
                         etichetta.text = if (it.message.orEmpty().contains("sostegno")) it.message else "firma non riuscita"
                         etichetta.setTextColor(0xFFD32F2F.toInt())
                         pulsante.isEnabled = true
@@ -1163,12 +1172,24 @@ object FinestraRientro {
 
     private data class EsitoFirma(val materia: String)
 
+    /** Firma in compresenza già inviata per quest'ora (ricordata qui: il registro può non mostrarla tra le mie firme). */
+    private fun chiaveCompresenza(data: String, lezione: Lezione) =
+        "compresenza_${data}_${lezione.ora}_${lezione.classe.trim().replace(Regex("\\s+"), "_")}"
+
+    private fun compresenzaGiaFirmata(activity: Activity, data: String, lezione: Lezione) =
+        activity.getSharedPreferences("classepiu_firma_rapida", Activity.MODE_PRIVATE).getBoolean(chiaveCompresenza(data, lezione), false)
+
+    /**
+     * [soloCompresenza]: con l'interruttore Compresenza attivo la firma del teorico (anche se è la mia) non conta come
+     * "ora firmata": vale solo una mia firma in compresenza.
+     */
     private fun firmaCorrispondente(
         grezzo: String,
         mioId: String,
         data: String,
         lezione: Lezione,
-        nomiClassi: Map<String, String>
+        nomiClassi: Map<String, String>,
+        soloCompresenza: Boolean = false
     ): EsitoFirma? {
         val radice = org.json.JSONTokener(grezzo).nextValue()
         fun testo(o: org.json.JSONObject, vararg chiavi: String): String {
@@ -1200,7 +1221,9 @@ object FinestraRientro {
                     val stessaClasse = classeFirmata.isBlank() || normalizza(classeFirmata) == normalizza(lezione.classe)
                     val firmaQuestaOra = dataFirma == data && ora != null && lezione.ora in ora until (ora + durata) &&
                         (mioId.isBlank() || autore == mioId) && stessaClasse
-                    if (firmaQuestaOra) {
+                    // in modalità compresenza si riconosce la firma dalla parola "compresenza" in uno qualsiasi dei suoi campi
+                    val eCompresenza = !soloCompresenza || v.keys().asSequence().any { k -> (v.opt(k) as? String)?.contains("compresenza", ignoreCase = true) == true }
+                    if (firmaQuestaOra && eCompresenza) {
                         val materia = testo(v, "subjectDesc", "subjectName", "subjectDescription", "subject")
                             .ifEmpty {
                                 val oggettoMateria = v.optJSONObject("subject")
