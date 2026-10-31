@@ -136,9 +136,10 @@ class RegistroFragment : Fragment() {
         val col = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
-            setPadding(ctx.dp(14), ctx.dp(6), ctx.dp(14), 0)
-            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = ctx.dp(8) })
-            addView(rigaCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            // le caselle delle classi arrivano a 6 dp dai bordi dello schermo; le schede e la ricerca restano a 14 dp
+            setPadding(ctx.dp(6), ctx.dp(6), ctx.dp(6), 0)
+            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = ctx.dp(8); leftMargin = ctx.dp(8); rightMargin = ctx.dp(8) })
+            addView(rigaCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(8); rightMargin = ctx.dp(8) })
             addView(corpo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
