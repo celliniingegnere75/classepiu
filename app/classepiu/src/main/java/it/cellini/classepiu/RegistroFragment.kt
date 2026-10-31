@@ -422,18 +422,13 @@ class RegistroFragment : Fragment() {
                 (requireActivity() as MainActivity).apri(VotiScheda(),
                     "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome)
             }
-            // in "i miei registri" solo le mie lezioni (e le mie compresenze), in "tutti i registri" tutte
-            // accanto a "i miei voti" il pulsante è stretto: "tutte le" più piccolo, "lezioni" come gli altri
-            h.lezioni.text = if (mie) "le mie\nlezioni" else android.text.SpannableString("tutte le\nlezioni").apply {
-                setSpan(android.text.style.RelativeSizeSpan(0.8f), 0, 8, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
-            }
-            for ((t, cosa) in listOf(h.lezioni to "lezioni", h.note to "note")) {
-                t.setOnClickListener {
-                    val p = c.chiave.split("|", limit = 3)
-                    (requireActivity() as MainActivity).apri(ListaScheda(),
-                        "cosa" to cosa, "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome,
-                        "solomie" to (mie && cosa == "lezioni"), "gruppo" to c.gruppo)
-                }
+            // Lezioni si aprono dalla linguetta dedicata nella scheda della classe.
+            h.compiti.setOnClickListener { /* funzione Compiti non ancora attiva */ }
+            h.note.setOnClickListener {
+                val p = c.chiave.split("|", limit = 3)
+                (requireActivity() as MainActivity).apri(ListaScheda(),
+                    "cosa" to "note", "tipo" to p.getOrElse(0) { "" }, "id" to p.getOrElse(1) { "" }, "nome" to c.nome,
+                    "gruppo" to c.gruppo)
             }
         }
     }
