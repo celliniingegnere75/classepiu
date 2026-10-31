@@ -583,6 +583,29 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * che il sito manda come classe_id insieme a gruppo=1, e la pagina del registro si apre con gruppo_id.
      * Il sito risponde {"status":"OK","evento_id":...} se la firma è inserita.
      */
+    /**
+     * Voci del menu "tipo attività" della finestra "Nuova lezione", lette dalla pagina del registro web (regclasse.php,
+     * <select id="tipo_attivita">): il valore da inviare è uguale al testo di ogni voce. Lista vuota se la pagina non si legge.
+     */
+    fun tipiAttivita(classeId: String, gruppo: String, data: String, log: StringBuilder = StringBuilder()): List<String> {
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
+        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=${enc(gruppo)}&data_start=$giorno&corsoextra=0"
+        val web = sessioneWeb()
+        try {
+            val (codice, html) = web.chiama(pagina)
+            log.append("GET regclasse.php (tipi attività) -> HTTP $codice, ${html.length} caratteri\n")
+            val inizio = html.indexOf("id=\"tipo_attivita\"")
+            if (codice !in 200..299 || inizio < 0) return emptyList()
+            val fine = html.indexOf("</select>", inizio).takeIf { it > 0 } ?: html.length
+            return Regex("<option\\s+value=\"([^\"]*)\"").findAll(html.substring(inizio, fine))
+                .map { android.text.Html.fromHtml(it.groupValues[1], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim() }
+                .filter { it.isNotEmpty() }.distinct().toList()
+        } finally {
+            web.close()
+        }
+    }
+
     private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder, argomento: String = "", tipoAttivita: String = "Lezione"): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"

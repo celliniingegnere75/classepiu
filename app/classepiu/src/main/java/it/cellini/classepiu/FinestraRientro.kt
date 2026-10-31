@@ -1000,8 +1000,8 @@ object FinestraRientro {
             addView(civica)
             check(if (imp.firmaTipo.equals("Educazione civica", ignoreCase = true)) civica.id else ordinaria.id)
         }
-        // tipo attività: le 43 voci del menu della finestra "Nuova lezione" del registro web, lette dalla pagina
-        // regclasse.php (HAR del 31/10/2026): il valore inviato è identico al testo della voce
+        // tipo attività, elenco di riserva: le 43 voci del menu "Nuova lezione" del registro web, lette dalla pagina
+        // regclasse.php (HAR del 31/10/2026), usato finché il sito non risponde con le sue (il valore inviato è il testo)
         val attivita = listOf(
             "Lezione", "Spiegazione", "Interrogazione", "Interrogazione e spiegazione", "Prova pratica", "Compito in classe",
             "Verifica scritta", "Verifiche orali", "Attività di laboratorio", "Orientamento", "Didattica a distanza",
@@ -1017,10 +1017,31 @@ object FinestraRientro {
             "Ore personalizzazione - attività su metodo di studio e stili di apprendimento", "Ore personalizzazione - attività di accoglienza",
             "Ore personalizzazione - attività del bilancio personale iniziale"
         )
+        // si apre subito con l'elenco di riserva; appena il sito risponde la tendina si aggiorna con le sue voci
+        var voci: List<String> = tipiAttivitaSito ?: attivita
         val tipologia = android.widget.Spinner(activity).apply {
-            adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, attivita)
+            adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, voci)
             setSelection(0)
         }
+        if (tipiAttivitaSito == null) Thread {
+            val dalSito = runCatching {
+                val client = imp.client().also { it.login() }
+                val classe = leggiClassi(client.classiGrezze(false).second)
+                    .firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) } ?: return@runCatching emptyList<String>()
+                val parti = classe.chiave.split("|", limit = 3)
+                val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
+                client.tipiAttivita(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, data)
+            }.getOrDefault(emptyList())
+            if (dalSito.isEmpty()) return@Thread
+            tipiAttivitaSito = dalSito
+            activity.runOnUiThread {
+                if (!tipologia.isAttachedToWindow) return@runOnUiThread
+                val scelta = voci.getOrNull(tipologia.selectedItemPosition)
+                voci = dalSito
+                tipologia.adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, voci)
+                tipologia.setSelection(voci.indexOf(scelta).coerceAtLeast(0))
+            }
+        }.start()
         val argomento = android.widget.EditText(activity).apply {
             hint = "argomento della lezione"
             setText(imp.firmaArgomento)
@@ -1048,11 +1069,14 @@ object FinestraRientro {
             .setPositiveButton("firma") { _, _ ->
                 firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
                     scelta = SceltaFirma(sceltaMateria.checkedRadioButtonId == civica.id, argomento.text.toString(),
-                        attivita[tipologia.selectedItemPosition.coerceIn(0, attivita.lastIndex)]))
+                        voci.getOrElse(tipologia.selectedItemPosition) { "Lezione" }))
             }
             .setNegativeButton("annulla", null)
             .show()
     }
+
+    /** Voci del tipo attività lette dal sito, tenute finché l'app è aperta. */
+    private var tipiAttivitaSito: List<String>? = null
 
     /** Scelte della firma ordinaria per una sola ora. */
     private data class SceltaFirma(val civica: Boolean, val argomento: String, val tipoAttivita: String)
