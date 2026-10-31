@@ -14,7 +14,7 @@ data class NotificaPianificata(val ora: Int, val stato: StatoNotifica, val compa
  * - compare estesa 15 minuti prima dell'inizio della sua fascia;
  * - diventa ridotta 15 minuti prima della fine della sua fascia;
  * - scade 15 minuti prima della fine della fascia successiva della tabella (due ore scolastiche effettive, conta anche
- *   l'ora in cui il docente non ha lezione); se la fascia successiva non c'è (ultima ora), scade 15 minuti DOPO la fine della sua fascia;
+ *   l'ora in cui il docente non ha lezione); se è l'ultima ora (nessuna ora successiva ha classe e materia), scade 15 minuti DOPO la fine della sua fascia;
  * - al massimo 3 insieme, le più recenti, dalla più vecchia (in alto) alla più nuova (in basso);
  * - al massimo una estesa: se l'orario ne prevede più di una resta estesa solo la più recente, le altre sono ridotte.
  * Tempi e notifiche attive si ricalcolano a ogni risveglio; resta invece memorizzata la scelta dell'utente di mantenere
@@ -63,7 +63,9 @@ object PianoNotifiche {
             val fascia = fasce[ora - 1]
             val successiva = fasce.getOrNull(ora)
             val riduzione = fascia.fine * 60 - anticipo
-            val scadenza = if (successiva != null) successiva.fine * 60 - anticipo else fascia.fine * 60 + anticipo
+            // ultima ora = nessuna ora successiva (fino alla fine della tabella) con lezione, cioè con classe e materia vuote
+            val ultima = oreConLezione.none { it > ora }
+            val scadenza = if (!ultima && successiva != null) successiva.fine * 60 - anticipo else fascia.fine * 60 + anticipo
             NotificaPianificata(ora, StatoNotifica.ESTESA, fascia.inizio * 60 - anticipo, riduzione, scadenza.coerceAtLeast(riduzione))
         }
             .filter { secondiAdesso >= it.comparsa && secondiAdesso < it.scadenza }

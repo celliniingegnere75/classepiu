@@ -41,7 +41,8 @@ class PianoNotificheTest {
         assertEquals(listOf(4 to E), piano(10, 30)) // la 2ª scompare, compare la 4ª
         assertEquals(listOf(4 to R, 5 to E), piano(11, 30)) // 4ª ridotta in alto, 5ª estesa in basso
         assertEquals(listOf(5 to R), piano(12, 20)) // la 4ª scompare, la 5ª si riduce
-        assertEquals(emptyList<Pair<Int, StatoNotifica>>(), piano(13, 15)) // la 5ª scompare
+        assertEquals(listOf(5 to R), piano(12, 45)) // la 5ª è l'ultima: resta fino a 15 minuti dopo la fine
+        assertEquals(emptyList<Pair<Int, StatoNotifica>>(), piano(12, 50)) // la 5ª scompare
         // un secondo prima di ogni confine vale ancora lo stato precedente
         assertEquals(emptyList<Pair<Int, StatoNotifica>>(), PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(8, 35) - 1).map { it.ora })
         assertEquals(listOf(2 to E), PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(9, 40) - 1).map { it.ora to it.stato })
@@ -53,13 +54,21 @@ class PianoNotificheTest {
         val p = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(11, 35)).associateBy { it.ora }
         // 4ª ora: fine della 5ª fascia (12:35) - 15 minuti, anche se la 5ª è un'altra lezione
         assertEquals(s(12, 20), p.getValue(4).scadenza)
-        // 5ª ora: fine della 6ª fascia (13:30, senza lezione) - 15 minuti
-        assertEquals(s(13, 15), p.getValue(5).scadenza)
+        // 5ª ora: è l'ultima (le successive sono vuote): fine della sua fascia (12:35) + 15 minuti
+        assertEquals(s(12, 50), p.getValue(5).scadenza)
         val seconda = PianoNotifiche.calcola(fasceMercoledi, oreMercoledi, s(8, 40)).single()
         // 2ª ora: conta la 3ª fascia anche se il docente non ha lezione (10:45 - 15), non la 4ª
         assertEquals(s(10, 30), seconda.scadenza)
         assertEquals(s(8, 35), seconda.comparsa)
         assertEquals(s(9, 40), seconda.riduzione)
+    }
+
+    @Test
+    fun ultimaOraEQuellaSenzaLezioniDopo() {
+        // solo la 2ª ora: è l'ultima anche se la tabella continua, scade alle 9:55 + 15 minuti
+        assertEquals(s(10, 10), PianoNotifiche.calcola(fasceMercoledi, listOf(2), s(9, 0)).single().scadenza)
+        // con una lezione anche alla 4ª la 2ª non è l'ultima: regola delle due ore (fine della 3ª fascia - 15)
+        assertEquals(s(10, 30), PianoNotifiche.calcola(fasceMercoledi, listOf(2, 4), s(9, 0)).single { it.ora == 2 }.scadenza)
     }
 
     @Test
@@ -171,7 +180,7 @@ class PianoNotificheTest {
 
         val visibili = PianoNotifiche.escludiSwippate(piano, setOf(chiave))
         assertEquals(listOf(4), visibili.map { it.ora })
-        assertEquals(s(13, 15), swippata.scadenza)
+        assertEquals(s(12, 50), swippata.scadenza)
 
         // Al ripristino la stessa notifica conserva la scadenza calcolata alla prima comparsa.
         val ripristinate = PianoNotifiche.escludiSwippate(piano, emptySet())
