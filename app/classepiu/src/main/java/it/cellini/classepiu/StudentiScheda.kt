@@ -145,7 +145,7 @@ class StudentiScheda : Scheda() {
                 salvaSubitoAppello()
                 caricaStato()
             }
-            addView(elencoScorrevole, SwipeRefreshLayout.LayoutParams(
+            addView(elencoScorrevole, ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
             ))
         }
