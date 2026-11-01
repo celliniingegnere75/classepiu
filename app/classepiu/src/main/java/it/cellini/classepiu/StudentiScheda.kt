@@ -1767,7 +1767,7 @@ class LinguetteView(
     private var attiva = attivaIniziale
     private val d = ctx.resources.displayMetrics.density
     private val pennaFondo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = androidx.core.graphics.ColorUtils.blendARGB(0xFFC4C4C4.toInt(), 0xFF69BCE8.toInt(), 0.2f) }
-    private val pennaAttiva = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = androidx.core.graphics.ColorUtils.blendARGB(colorePannello, 0xFF69BCE8.toInt(), 0.2f) }
+    private val pennaAttiva = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply { color = androidx.core.graphics.ColorUtils.blendARGB(colorePannello, 0xFF69BCE8.toInt(), 0.12f) }
     private val pennaBordo = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
         color = 0xFFA9A9A9.toInt(); style = android.graphics.Paint.Style.STROKE; strokeWidth = 1f * d
     }
