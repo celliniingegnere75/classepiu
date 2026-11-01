@@ -192,8 +192,7 @@ class VotiScheda : Scheda() {
     private fun creaLinguette(materie: List<String>) {
         linguette.removeAllViews()
         if (materiaScelta !in materie) materiaScelta = materie.firstOrNull() ?: ""
-        // due linguette riempiono lo schermo; dalla terza in poi si scorre e la terza si vede appena
-        val larga = ((resources.displayMetrics.widthPixels - dp(28)) / 2.3).toInt()
+        // Ogni linguetta occupa soltanto lo spazio necessario alla scritta della materia.
         schede = materie.map { m ->
             val t = TextView(requireContext()).apply {
                 text = m.lowercase().let { if (it.length > 15) it.take(14) + "…" else it } // nome materia: 15 caratteri al massimo
@@ -201,8 +200,9 @@ class VotiScheda : Scheda() {
                 setSingleLine(true); ellipsize = android.text.TextUtils.TruncateAt.END; setPadding(dp(12), 0, dp(12), 0)
                 setOnClickListener { materiaScelta = m; coloraLinguette(); mostra(elenco, tutti) }
             }
-            val lp = if (materie.size <= 2) LinearLayout.LayoutParams(0, dp(40), 1f) else LinearLayout.LayoutParams(larga, dp(40))
-            linguette.addView(t, lp.apply { rightMargin = dp(8) })
+            linguette.addView(t, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(40)).apply {
+                rightMargin = dp(8)
+            })
             m to t
         }
         coloraLinguette()
