@@ -309,8 +309,11 @@ class StudentiScheda : Scheda() {
         val giorno = formatoApi.format(selezionato.time)
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
-            val statiWeb = if (libroDocente) async(Dispatchers.IO) {
-                runCatching { client.statiRegistroWeb(classeId, gruppo, giorno) }.getOrDefault(emptyMap())
+            val statiWeb: kotlinx.coroutines.Deferred<Map<String, Pair<String, String>>>? = if (libroDocente) {
+                async(Dispatchers.IO) {
+                    runCatching { client.statiRegistroWeb(classeId, gruppo, giorno) }
+                        .getOrDefault(emptyMap<String, Pair<String, String>>())
+                }
             } else null
             val r = withContext(Dispatchers.IO) {
                 runCatching {
