@@ -243,17 +243,10 @@ class StudentiScheda : Scheda() {
     /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
     private var appelloBloccati: Set<String> = emptySet()
     /** Stato letto dal registro web: senza una lettura positiva dell'alunno lo swipe resta disabilitato. */
-    private var appelloStatiWeb: Map<String, String> = emptyMap()
-    private fun statoWebSenzaLezione(stato: String): Boolean {
-        val normalizzato = stato.uppercase(Locale.ROOT).replace(Regex("[^A-Z0-9]+"), " ").trim()
-        return normalizzato.split(' ').any { it == "X" || it == "XG" || it == "NOLESSON" || it == "NO_LESSON" } ||
-            normalizzato.contains("NO LEZ") || normalizzato.contains("NO LESSON")
-    }
-    private fun appelloModificabile(studenteId: String): Boolean {
-        val statoWeb = appelloStatiWeb[studenteId] ?: return false
-        return !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() &&
-            studenteId !in appelloBloccati && !statoWebSenzaLezione(statoWeb)
-    }
+    private var appelloStatiWeb: Set<String> = emptySet()
+    private fun appelloModificabile(studenteId: String) =
+        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() &&
+            studenteId in appelloStatiWeb && studenteId !in appelloBloccati
 
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
@@ -342,7 +335,7 @@ class StudentiScheda : Scheda() {
         // Si può modificare l'appello esclusivamente per oggi: i giorni passati e futuri sono sempre in sola lettura.
         appelloGiornoBloccato = giorno != oggiSelezionato || giornoSenzaScuola
         appelloBloccati = emptySet()
-        appelloStatiWeb = emptyMap()
+        appelloStatiWeb = emptySet()
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
@@ -402,7 +395,7 @@ class StudentiScheda : Scheda() {
             val esitoWeb = statiWeb?.await()
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
-                appelloStatiWeb = web.mapValues { (_, valore) -> valore.stato }
+                appelloStatiWeb = web.keys
                 val oggi = dataOdierna()
                 val bloccati = mutableSetOf<String>()
                 stato = stato.toMutableMap().apply {
@@ -410,12 +403,6 @@ class StudentiScheda : Scheda() {
                         val esito = web[al.id] ?: continue
                         val (statoWeb, oraEvento, giornoDiScuola) = esito
                         val valoreAttuale = this[al.id]?.valore ?: -1
-                        if (statoWebSenzaLezione(statoWeb)) {
-                            // Le pagine possono esporre una dicitura composta, ad esempio "XG / no lez.".
-                            if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
-                            bloccati += al.id
-                            continue
-                        }
                         when (statoWeb) {
                             "PS" -> if (valoreAttuale != 3) this[al.id] = StatoGiornaliero(3)
                             "PV" -> if (valoreAttuale != 4) this[al.id] = StatoGiornaliero(4)
@@ -430,6 +417,11 @@ class StudentiScheda : Scheda() {
                                     // e mai nei giorni in sola lettura (sabato senza scuola, domenica)
                                     if (oraEvento.isEmpty() && giorno <= oggi && !giornoSenzaScuola) daRegistrare += al.id
                                 }
+                            }
+                            "X", "XG", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
+                                // X / XG / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
+                                if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
+                                bloccati += al.id
                             }
                             else -> {} // altro: resta come letto dalle API, o grigio se senza codice
                         }
