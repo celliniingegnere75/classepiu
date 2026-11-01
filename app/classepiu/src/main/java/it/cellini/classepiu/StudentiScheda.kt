@@ -1368,9 +1368,20 @@ class StudentiScheda : Scheda() {
             }
         }
 
-        // materia: solo le mie della classe (subjects/list)
-        val materia = spinner(p.materie.map { it.lowercase() }).apply {
-            setSelection(p.materie.indexOfFirst { FirmaLezione.normalizza(it) == FirmaLezione.normalizza(iniziale?.materia.orEmpty()) }.coerceAtLeast(0))
+        // Priorità materia: tabella lezioni di Opzioni per il giorno e l'ora selezionati.
+        // FirmaLezione.analizzaOrario ha già filtrato le righe della classe del libro docente.
+        fun materiaSuggerita(ora: Int): String? =
+            p.analisi.proposte.firstOrNull { it.ora == ora }?.materia
+                ?: p.materie.firstOrNull { !it.contains("civica", ignoreCase = true) }
+        fun materiePerOra(ora: Int): List<String> {
+            val prima = materiaSuggerita(ora)
+            return (listOfNotNull(prima) + p.materie.filterNot { FirmaLezione.normalizza(it) == FirmaLezione.normalizza(prima.orEmpty()) }).distinctBy { FirmaLezione.normalizza(it) }
+        }
+        var materieMostrate = materiePerOra(iniziale?.ora ?: 1)
+        val materia = spinner(materieMostrate.map { it.lowercase() }).apply {
+            val prioritaria = iniziale?.materia?.takeIf { scelto -> materieMostrate.any { FirmaLezione.normalizza(it) == FirmaLezione.normalizza(scelto) } }
+                ?: materiaSuggerita(iniziale?.ora ?: 1)
+            setSelection(materieMostrate.indexOfFirst { FirmaLezione.normalizza(it) == FirmaLezione.normalizza(prioritaria.orEmpty()) }.coerceAtLeast(0))
         }
         // ora d'inizio e numero di ore (fino all'ultima ora del giorno)
         val oreGiorno = (1..Orario.ORE).toList()
@@ -1391,7 +1402,13 @@ class StudentiScheda : Scheda() {
             avvisoOre.text = "già firmata da te: " + firmate.entries.joinToString { "${it.key}ª ora (${it.value.lowercase()})" }
             avvisoOre.visibility = if (firmate.isEmpty()) View.GONE else View.VISIBLE
         }
-        alCambio(ora) { aggiornaNumeroOre(numeroScelto()); controllaOre() }
+        alCambio(ora) {
+            aggiornaNumeroOre(numeroScelto())
+            controllaOre()
+            materieMostrate = materiePerOra(oraScelta())
+            materia.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, materieMostrate.map { it.lowercase() })
+            materia.setSelection(materieMostrate.indexOfFirst { FirmaLezione.normalizza(it) == FirmaLezione.normalizza(materiaSuggerita(oraScelta()).orEmpty()) }.coerceAtLeast(0))
+        }
         alCambio(numeroOre) { controllaOre() }
 
         // tipo attività e progetti: dal registro web (come il sito), finché non arrivano solo "Lezione"
@@ -1454,7 +1471,7 @@ class StudentiScheda : Scheda() {
         var udaLavoro: kotlinx.coroutines.Job? = null
         fun caricaUda() {
             if (!web) return
-            val nomeMateria = p.materie.getOrNull(materia.selectedItemPosition) ?: return
+            val nomeMateria = materieMostrate.getOrNull(materia.selectedItemPosition) ?: return
             udaLavoro?.cancel()
             udaLavoro = lifecycleScope.launch {
                 val lette = withContext(Dispatchers.IO) {
@@ -1512,7 +1529,7 @@ class StudentiScheda : Scheda() {
         controllaOre()
         // "firma" controlla i dati prima di chiudere la finestra: con un errore la finestra resta aperta
         dialogo.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
-            val m = p.materie.getOrNull(materia.selectedItemPosition)
+            val m = materieMostrate.getOrNull(materia.selectedItemPosition)
             val firmate = FirmaLezione.oreGiaFirmate(p.lezioniGiorno, p.mioId, data, oraScelta(), numeroScelto())
             val serveProgetto = sezioneProgetto.visibility == View.VISIBLE
             val messaggio = when {
