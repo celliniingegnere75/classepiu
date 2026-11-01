@@ -20,6 +20,7 @@ import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -41,7 +42,20 @@ class StudentiScheda : Scheda() {
     private var studenti: List<Studente> = emptyList()
     private val selezionato: Calendar get() = striscia.selezionato
     private var lavoro: Job? = null
-    private val cambiStatoInCorso = mutableSetOf<String>()
+    /** Scritture Appello differite e serializzate per singolo studente e giornata. */
+    private data class CambioAppelloPending(
+        val chiave: String,
+        val studenteId: String,
+        val giorno: String,
+        var statoConfermato: StatoGiornaliero,
+        var statoDesiderato: Int,
+        var generazione: Int = 0,
+        var invioInCorso: Boolean = false,
+        var timerScaduto: Boolean = false,
+        var timer: Job? = null,
+        var callbackEsito: ((Boolean, String?) -> Unit)? = null
+    )
+    private val cambiAppelloPendenti = mutableMapOf<String, CambioAppelloPending>()
     private var tipo = ""
     private var classeId = ""
     private var nome = ""
@@ -595,6 +609,82 @@ class StudentiScheda : Scheda() {
             .start()
     }
 
+    /**
+     * Riavvia il debounce per il solo studente modificato. L'interfaccia resta ottimistica:
+     * la rete viene contattata soltanto dopo 5 secondi senza altri swipe su quello studente.
+     */
+    private fun programmaInvioAppello(
+        studenteId: String,
+        giorno: String,
+        statoPrecedente: StatoGiornaliero,
+        nuovoValore: Int,
+        badge: TextView,
+        callback: (Boolean, String?) -> Unit
+    ) {
+        val chiave = "$giorno|$studenteId"
+        val cambio = cambiAppelloPendenti.getOrPut(chiave) {
+            CambioAppelloPending(chiave, studenteId, giorno, statoPrecedente, nuovoValore)
+        }
+        cambio.statoDesiderato = nuovoValore
+        cambio.generazione++
+        cambio.timerScaduto = false
+        cambio.callbackEsito = callback
+        cambio.timer?.cancel()
+        cambio.timer = lifecycleScope.launch {
+            delay(5_000)
+            cambio.timerScaduto = true
+            if (!cambio.invioInCorso) inviaCambioAppello(cambio)
+        }
+    }
+
+    /**
+     * Per lo stesso studente non partono mai due scritture contemporaneamente: se arriva
+     * un nuovo swipe durante una richiesta, il nuovo stato viene inviato dopo la precedente.
+     * Studenti diversi mantengono code e richieste indipendenti.
+     */
+    private suspend fun inviaCambioAppello(cambio: CambioAppelloPending) {
+        if (cambiAppelloPendenti[cambio.chiave] !== cambio || cambio.invioInCorso) return
+        val codiceEvento = codiceEventoAppello(cambio.statoDesiderato) ?: return
+        cambio.invioInCorso = true
+        val generazioneInviata = cambio.generazione
+        val statoInviato = cambio.statoDesiderato
+        val esito = withContext(Dispatchers.IO) {
+            runCatching {
+                client.cambiaStatoAppello(classeId, gruppo, cambio.studenteId, cambio.giorno, codiceEvento)
+            }
+        }
+        cambio.invioInCorso = false
+        if (cambiAppelloPendenti[cambio.chiave] !== cambio) return
+
+        val risposta = esito.getOrNull()
+        val ok = risposta != null && risposta.first == 200 && risposta.second.trim().equals("OK", true)
+        val ciSonoModifichePiuRecenti = cambio.generazione != generazioneInviata
+
+        if (ok) {
+            cambio.statoConfermato = StatoGiornaliero(statoInviato)
+            if (ciSonoModifichePiuRecenti) {
+                // Il timer può essere già scaduto mentre la richiesta precedente era in corso.
+                if (cambio.timerScaduto) inviaCambioAppello(cambio)
+            } else {
+                cambiAppelloPendenti.remove(cambio.chiave)
+                cambio.callbackEsito?.invoke(true, null)
+            }
+            return
+        }
+
+        if (ciSonoModifichePiuRecenti) {
+            // Non annullare uno stato più recente per un errore relativo alla richiesta precedente.
+            if (cambio.timerScaduto) inviaCambioAppello(cambio)
+            return
+        }
+
+        cambiAppelloPendenti.remove(cambio.chiave)
+        val messaggio = risposta?.let {
+            "ClasseViva non ha accettato il cambio stato (HTTP ${it.first}). ${it.second.take(120)}"
+        } ?: "Cambio stato non riuscito: ${esito.exceptionOrNull()?.message ?: "errore di rete"}"
+        cambio.callbackEsito?.invoke(false, messaggio)
+    }
+
     /** Elenco «appello» del libro del docente (pulsante «libro del docente»). Parte come copia di [mostraAlunni], poi diverge. */
     private fun mostraAppello(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), numeroOre: Int = 9, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
@@ -653,7 +743,10 @@ class StudentiScheda : Scheda() {
                 minHeight = dp(28)
                 visibility = if (etichettaStato.isEmpty()) View.GONE else View.VISIBLE
                 background = sfondoBadgeAppello(valore)
-                contentDescription = etichettaStato.takeIf { it.isNotEmpty() }?.let { "Stato: $it" }
+                contentDescription = etichettaStato.takeIf { it.isNotEmpty() }?.let {
+                    "Stato: $it" + if (cambiAppelloPendenti.containsKey("${formatoApi.format(selezionato.time)}|${s.id}")) ", in attesa di salvataggio" else ""
+                },
+                alpha = if (cambiAppelloPendenti.containsKey("${formatoApi.format(selezionato.time)}|${s.id}")) 0.55f else 1f
             }
             rigaNome.addView(badgeStato, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28)))
             scheda.addView(rigaNome, LinearLayout.LayoutParams(
@@ -694,28 +787,25 @@ class StudentiScheda : Scheda() {
                                 val precedente = datiGiorno?.stato?.get(s.id) ?: StatoGiornaliero(-1)
                                 val nuovoValore = prossimoStatoAppello(valoreVisivo, direzione)
                                 val codiceEvento = codiceEventoAppello(nuovoValore)
-                                if (codiceEvento != null && cambiStatoInCorso.add(s.id)) {
+                                if (codiceEvento != null) {
                                     val giornoCambio = formatoApi.format(selezionato.time)
                                     val nuovoStato = StatoGiornaliero(nuovoValore)
                                     valoreVisivo = nuovoValore
                                     datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to nuovoStato)) }
+                                    badgeStato.alpha = 0.55f // indicazione discreta: stato in attesa di salvataggio
+                                    badgeStato.contentDescription = "Stato: ${etichettaStatoAppello(nuovoValore)}, in attesa di salvataggio"
                                     animaCambioStatoAppello(rigaNome, badgeStato, precedente.valore, nuovoValore, direzione)
-                                    lifecycleScope.launch {
-                                        val esito = withContext(Dispatchers.IO) {
-                                            runCatching { client.cambiaStatoAppello(classeId, gruppo, s.id, giornoCambio, codiceEvento) }
+                                    programmaInvioAppello(s.id, giornoCambio, precedente, nuovoValore, badgeStato) { confermato, messaggio ->
+                                        badgeStato.alpha = 1f
+                                        badgeStato.contentDescription = "Stato: ${etichettaStatoAppello(if (confermato) nuovoValore else precedente.valore)}"
+                                        if (!confermato && formatoApi.format(selezionato.time) == giornoCambio) {
+                                            val cambio = cambiAppelloPendenti["$giornoCambio|${s.id}"]
+                                            val ripristino = cambio?.statoConfermato ?: precedente
+                                            valoreVisivo = ripristino.valore
+                                            datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to ripristino)) }
+                                            animaCambioStatoAppello(rigaNome, badgeStato, nuovoValore, ripristino.valore, -direzione)
                                         }
-                                        cambiStatoInCorso.remove(s.id)
-                                        val risposta = esito.getOrNull()
-                                        if (risposta != null && risposta.first == 200 && risposta.second.trim().equals("OK", true)) {
-                                            // Lo stato è già stato aggiornato in modo ottimistico: evitiamo di rileggere tutta la classe.
-                                        } else {
-                                            if (formatoApi.format(selezionato.time) == giornoCambio) {
-                                                valoreVisivo = precedente.valore
-                                                datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to precedente)) }
-                                                animaCambioStatoAppello(rigaNome, badgeStato, nuovoValore, precedente.valore, -direzione)
-                                            }
-                                            val messaggio = risposta?.let { "ClasseViva non ha accettato il cambio stato (HTTP ${it.first}). ${it.second.take(120)}" }
-                                                ?: "Cambio stato non riuscito: ${esito.exceptionOrNull()?.message ?: "errore di rete"}"
+                                        if (!messaggio.isNullOrBlank()) {
                                             view?.let { Snackbar.make(it, messaggio, Snackbar.LENGTH_LONG).show() }
                                         }
                                     }
