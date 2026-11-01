@@ -265,10 +265,21 @@ class ClasseViva(private val utente: String, private val password: String, priva
             val (codice, html) = web.chiama(pagina)
             if (codice !in 200..299) return emptyMap()
             val risultato = HashMap<String, StatoWeb>()
+            // Il campo nascosto abullet può conservare P mentre la cella visibile mostra PV/PS (es. nel giorno festivo).
+            // Leggiamo prima la sigla effettivamente visualizzata in sfondocella e usiamo l'attributo come ripiego.
+            val statiVisibili = HashMap<String, String>()
+            Regex("""<div[^>]*\bid="sfondocella_(\d+)"[^>]*>([\s\S]*?)</div>""").findAll(html).forEach { cella ->
+                val breve = Regex("""<p[^>]*class="[^"]*\bstato_giorno_shortdesc\b[^"]*"[^>]*>([\s\S]*?)</p>""")
+                    .find(cella.groupValues[2])?.groupValues?.get(1)
+                    ?.replace(Regex("""<[^>]+>"""), "")
+                    ?.replace("&nbsp;", " ")
+                    ?.trim()?.uppercase().orEmpty()
+                if (breve.isNotEmpty()) statiVisibili[cella.groupValues[1]] = breve
+            }
             Regex("""<td[^>]*\bid="abullet_(\d+)"[^>]*>""").findAll(html).forEach { m ->
                 val tag = m.value
                 fun attributo(nome: String) = Regex("""\b$nome="([^"]*)"""").find(tag)?.groupValues?.get(1).orEmpty().trim()
-                val stato = attributo("stato").uppercase()
+                val stato = statiVisibili[m.groupValues[1]] ?: attributo("stato").uppercase()
                 val classi = Regex("""\bclass="([^"]*)"""").find(tag)?.groupValues?.get(1).orEmpty()
                 val giornoDiScuola = !classi.contains("f_reg_festivo")
                 if (stato.isNotEmpty()) risultato[m.groupValues[1]] = StatoWeb(stato, attributo("evento_ora"), giornoDiScuola)
