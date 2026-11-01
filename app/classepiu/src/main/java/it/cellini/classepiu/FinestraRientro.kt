@@ -1069,11 +1069,6 @@ object FinestraRientro {
      * Prima e dopo rilegge le firme di oggi: non firma due volte e conferma che la firma è nel registro.
      * La notifica resta aperta finché non si chiude con la X, così l'esito si legge.
      */
-    /**
-     * Firma ordinaria: come la firma rapida (stesso FIRMA_INSERT del registro web, HAR di Cristian del 30/10/2026) ma
-     * tipologia e argomento si scelgono qui per questa ora, invece di venire dalla scheda "firma" delle opzioni.
-     * Educazione civica è una materia a sé (sul sito è una voce del menu "Materia"); tipo_attivita resta "Lezione".
-     */
     /** Scelte della firma ordinaria per una sola ora. */
     private data class SceltaFirma(val civica: Boolean, val argomento: String, val tipoAttivita: String)
 
