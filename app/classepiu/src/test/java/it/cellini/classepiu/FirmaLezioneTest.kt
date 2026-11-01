@@ -103,6 +103,64 @@ class FirmaLezioneTest {
     }
 
     @Test
+    fun oreConsecutiveDiventanoUnaLezione() {
+        val b = FirmaLezione.blocchi(listOf(
+            FirmaLezione.Proposta(2, "TPSEE"), FirmaLezione.Proposta(1, "TPSEE"),
+            FirmaLezione.Proposta(4, "TPSEE"), FirmaLezione.Proposta(5, "SISTEMI"),
+        ))
+        assertEquals(listOf(FirmaLezione.Blocco(1, 2, "TPSEE"), FirmaLezione.Blocco(4, 1, "TPSEE"), FirmaLezione.Blocco(5, 1, "SISTEMI")), b)
+        assertEquals(2, b[0].ultima)
+    }
+
+    @Test
+    fun oreGiaFirmateInUnIntervallo() {
+        val grezzo = """{"lessons":[{"evtDate":"2026-11-02","evtHPos":3,"evtDuration":1,"subjectDesc":"TPSEE","authorId":5753831}]}"""
+        assertEquals(mapOf(3 to "TPSEE"), FirmaLezione.oreGiaFirmate(grezzo, "5753831", "20261102", 2, 3))
+        assertTrue(FirmaLezione.oreGiaFirmate(grezzo, "5753831", "20261102", 1, 2).isEmpty())
+        assertTrue(FirmaLezione.oreGiaFirmate(null, "5753831", "20261102", 1, 2).isEmpty())
+    }
+
+    @Test
+    fun opzioniDellaPaginaDelRegistro() {
+        val html = """
+            <select id="tipo_attivita" class="styled-select open_sans" name="tipo_attivita">
+              <option value="Lezione">Lezione</option> <option value="PCTO - Orientamento">PCTO - Orientamento</option>
+              <option value="FSL - Sicurezza">FSL - Sicurezza</option> </select>
+            <tr id="tr_progetti_set" style="display: none;"><td><input type="hidden" id="set_enable" value="1"> Progetto </td>
+            <td><select id="progetto_set" name="id_progetto_set" class="styled-select"><option value=""></option><option value="1622644">2025/26&nbsp;&bull;&nbsp;- FSL - BIOTECNOLOGIE SANITARIE: ASSISTENZA</option><option value="1562019">2024/25&nbsp;&bull;&nbsp;4ENA - PCTO &quot;TECNICO DELLA PROGETTAZIONE&quot;</option></select></td></tr>
+        """
+        val o = FirmaLezione.leggiOpzioniFirma(html)
+        assertEquals(listOf("Lezione", "PCTO - Orientamento", "FSL - Sicurezza"), o.tipiAttivita)
+        assertEquals(listOf(
+            FirmaLezione.Progetto("1622644", "2025/26 • - FSL - BIOTECNOLOGIE SANITARIE: ASSISTENZA"),
+            FirmaLezione.Progetto("1562019", "2024/25 • 4ENA - PCTO \"TECNICO DELLA PROGETTAZIONE\""),
+        ), o.progetti)
+        assertTrue(o.progettiAttivi)
+        assertFalse(FirmaLezione.leggiOpzioniFirma("<html></html>").progettiAttivi)
+    }
+
+    @Test
+    fun tipiCheChiedonoIlProgetto() {
+        assertTrue(FirmaLezione.richiedeProgetto("PCTO - Orientamento"))
+        assertTrue(FirmaLezione.richiedeProgetto("FSL - Attività in aula"))
+        assertTrue(FirmaLezione.richiedeProgetto("Alternanza scuola lavoro"))
+        assertFalse(FirmaLezione.richiedeProgetto("Lezione"))
+        assertFalse(FirmaLezione.richiedeProgetto("Ore personalizzazione - attività di PCTO"))
+    }
+
+    @Test
+    fun ricercaDeiProgetti() {
+        val elenco = listOf(
+            FirmaLezione.Progetto("1", "2025/26 • CHIMICA e MATERIALI"),
+            FirmaLezione.Progetto("2", "2025/26 • 4ETA - PCTO orientamento"),
+            FirmaLezione.Progetto("3", "2025/26 • 4ETAB laboratorio"),
+        )
+        assertEquals(listOf("2", "1", "3"), FirmaLezione.cercaProgetti(elenco, "", "4ETA").map { it.id })
+        assertEquals(listOf("2"), FirmaLezione.cercaProgetti(elenco, "orientamento 4eta", "4ETA").map { it.id })
+        assertEquals(listOf("1"), FirmaLezione.cercaProgetti(elenco, "chimica", "").map { it.id })
+    }
+
+    @Test
     fun esitoRiuscito() {
         val e = FirmaLezione.esito(200, """{"status":"OK","evento_id":123}""")
         assertTrue(e.ok)

@@ -722,126 +722,289 @@ class StudentiScheda : Scheda() {
         }
     }
 
-    /** Caso A: una sola lezione nell'orario → conferma; caso B: più lezioni → scelta; caso C: orario vuoto o incompleto → scelta a mano. */
+    /** "3ª ora" o, per più ore, "3ª–4ª ora". */
+    private fun etichettaOre(ora: Int, ore: Int) = if (ore <= 1) "${ora}ª ora" else "${ora}ª–${ora + ore - 1}ª ora"
+
+    /**
+     * Caso A: una lezione nell'orario (anche di più ore consecutive) → finestra di firma già compilata; caso B: più lezioni →
+     * prima la scelta; caso C: orario vuoto o incompleto → finestra con l'ora dopo l'ultima firma della classe o da scegliere.
+     */
     private fun scegliLezione(p: PreparazioneFirma, giorno: Calendar, data: String) {
-        val proposte = p.analisi.proposte.map { it.copy(firmata = p.lezioniGiorno?.let { g -> FirmaLezione.firmaEsistente(g, p.mioId, data, it.ora) }) }
+        val blocchi = FirmaLezione.blocchi(p.analisi.proposte)
         when {
-            proposte.size == 1 -> confermaFirma(p, proposte[0], giorno, data)
-            proposte.size > 1 -> {
-                val voci = proposte.map { "${it.ora}ª ora · ${it.materia.lowercase()}" + if (it.firmata != null) " · già firmata" else "" }.toTypedArray()
-                var scelta = proposte.indexOfFirst { it.firmata == null }.coerceAtLeast(0)
+            blocchi.size == 1 -> finestraFirma(p, blocchi[0], giorno, data, "dall'orario delle lezioni.")
+            blocchi.size > 1 -> {
+                val voci = blocchi.map { b ->
+                    val firmate = FirmaLezione.oreGiaFirmate(p.lezioniGiorno, p.mioId, data, b.ora, b.ore)
+                    "${etichettaOre(b.ora, b.ore)} · ${b.materia.lowercase()}" + if (firmate.isNotEmpty()) " · già firmata" else ""
+                }.toTypedArray()
+                var scelta = blocchi.indexOfFirst { FirmaLezione.oreGiaFirmate(p.lezioniGiorno, p.mioId, data, it.ora, it.ore).isEmpty() }.coerceAtLeast(0)
                 MaterialAlertDialogBuilder(requireContext())
                     .setTitle("quale lezione firmi? · ${p.registro.nome}")
                     .setSingleChoiceItems(voci, scelta) { _, i -> scelta = i }
-                    .setPositiveButton("avanti") { _, _ -> confermaFirma(p, proposte[scelta], giorno, data) }
-                    .setNeutralButton("altra ora") { _, _ -> sceltaManuale(p, giorno, data, "") }
+                    .setPositiveButton("avanti") { _, _ -> finestraFirma(p, blocchi[scelta], giorno, data, "dall'orario delle lezioni.") }
+                    .setNeutralButton("altra ora") { _, _ -> finestraFirma(p, null, giorno, data, "") }
                     .setNegativeButton("annulla") { _, _ -> bloccaFirma(false) }
                     .setOnCancelListener { bloccaFirma(false) }
                     .show()
             }
-            p.oraDopoUltima != null && p.analisi.oreSenzaMateria.isEmpty() -> {
-                // l'orario non indica la classe: ora subito dopo l'ultima firma del giorno; con una sola materia basta confermare
-                val nota = "ora proposta: la prima dopo l'ultima firma di ${p.registro.nome} in questo giorno."
-                if (p.materie.size == 1) confermaFirma(p, FirmaLezione.Proposta(p.oraDopoUltima, p.materie[0],
-                    p.lezioniGiorno?.let { FirmaLezione.firmaEsistente(it, p.mioId, data, p.oraDopoUltima) }), giorno, data, nota)
-                else sceltaManuale(p, giorno, data, "$nota scegli la materia.", p.oraDopoUltima)
-            }
-            else -> sceltaManuale(p, giorno, data,
-                if (p.analisi.oreSenzaMateria.isEmpty()) "nell'orario di ${descriviData(giorno.time)} non c'è ${p.registro.nome}: scegli materia e ora."
-                else "nell'orario manca una tua materia per ${p.registro.nome}: scegli materia e ora.")
+            p.oraDopoUltima != null && p.analisi.oreSenzaMateria.isEmpty() ->
+                // l'orario non indica la classe: ora subito dopo l'ultima firma del giorno; con una sola materia è già scelta
+                finestraFirma(p, FirmaLezione.Blocco(p.oraDopoUltima, 1, p.materie.singleOrNull().orEmpty()), giorno, data,
+                    "ora proposta: la prima dopo l'ultima firma di ${p.registro.nome} in questo giorno.")
+            else -> finestraFirma(p, p.analisi.oreSenzaMateria.firstOrNull()?.let { FirmaLezione.Blocco(it, 1, "") }, giorno, data,
+                if (p.analisi.oreSenzaMateria.isEmpty()) "nell'orario non c'è ${p.registro.nome}: scegli materia e ora."
+                else "nell'orario manca una tua materia per ${p.registro.nome}: controlla materia e ora.")
         }
     }
 
-    /** Caso C (o "altra ora"): materia tra le mie della classe e numero dell'ora; classe e data restano quelle della scheda. */
-    private fun sceltaManuale(p: PreparazioneFirma, giorno: Calendar, data: String, avviso: String, oraIniziale: Int? = null) {
+    /** Valori scelti nella finestra di firma. */
+    private data class SceltaFirma(
+        val ora: Int, val ore: Int, val materia: String, val tipoAttivita: String,
+        val progetto: FirmaLezione.Progetto?, val argomento: String,
+    )
+
+    /** Tipi attività e progetti letti dal registro web, per registro ("tipo|id"): si leggono una volta per scheda. */
+    private val opzioniWeb = HashMap<String, FirmaLezione.OpzioniFirma>()
+
+    /**
+     * La finestra di firma, come "nuova lezione" del registro web: classe e data della scheda, materia, ora e numero di ore
+     * (una sola firma per più ore consecutive), tipo attività, progetto di scuola e territorio per PCTO/FSL (con ricerca)
+     * e argomento. Le ore già firmate da me si segnalano subito e non si possono inviare. Il pulsante "firma" invia.
+     */
+    private fun finestraFirma(p: PreparazioneFirma, iniziale: FirmaLezione.Blocco?, giorno: Calendar, data: String, nota: String) {
         val ctx = requireContext()
-        val materia = android.widget.Spinner(ctx).apply {
-            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, p.materie.map { it.lowercase() })
+        val rosso = 0xFFD32F2F.toInt()
+        fun etichetta(s: String) = TextView(ctx).apply { text = s; setTextColor(azzurro); textSize = 14f; typeface = outfitBold }
+        fun spinner(voci: List<String>) = android.widget.Spinner(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, voci)
         }
-        val ore = (1..Orario.ORE).toList()
-        val ora = android.widget.Spinner(ctx).apply {
-            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, ore.map { "${it}ª ora" })
-            // se l'orario ha la classe in un'ora (senza materia valida) si parte da quella
-            setSelection(ore.indexOf(oraIniziale ?: p.analisi.oreSenzaMateria.firstOrNull() ?: p.analisi.proposte.firstOrNull()?.ora ?: p.oraDopoUltima ?: 1).coerceAtLeast(0))
+        fun alCambio(sp: android.widget.Spinner, azione: () -> Unit) {
+            sp.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+                override fun onItemSelected(a: android.widget.AdapterView<*>?, v: View?, pos: Int, id: Long) = azione()
+                override fun onNothingSelected(a: android.widget.AdapterView<*>?) {}
+            }
         }
-        fun etichetta(s: String) = TextView(ctx).apply { text = s; setTextColor(azzurro); textSize = 14f }
+
+        // materia: solo le mie della classe (subjects/list)
+        val materia = spinner(p.materie.map { it.lowercase() }).apply {
+            setSelection(p.materie.indexOfFirst { FirmaLezione.normalizza(it) == FirmaLezione.normalizza(iniziale?.materia.orEmpty()) }.coerceAtLeast(0))
+        }
+        // ora d'inizio e numero di ore (fino all'ultima ora del giorno)
+        val oreGiorno = (1..Orario.ORE).toList()
+        val ora = spinner(oreGiorno.map { "${it}ª ora" }).apply { setSelection(oreGiorno.indexOf(iniziale?.ora ?: 1).coerceAtLeast(0)) }
+        val numeroOre = android.widget.Spinner(ctx)
+        fun oraScelta() = oreGiorno.getOrElse(ora.selectedItemPosition) { 1 }
+        fun numeroScelto() = numeroOre.selectedItemPosition.coerceAtLeast(0) + 1
+        fun aggiornaNumeroOre(desiderate: Int) {
+            val massimo = (Orario.ORE - oraScelta() + 1).coerceIn(1, 6)
+            numeroOre.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item,
+                (1..massimo).map { if (it == 1) "1 ora" else "$it ore" })
+            numeroOre.setSelection((desiderate.coerceIn(1, massimo)) - 1)
+        }
+        aggiornaNumeroOre(iniziale?.ore ?: 1)
+        val avvisoOre = TextView(ctx).apply { setTextColor(rosso); textSize = 13f; visibility = View.GONE }
+        fun controllaOre() {
+            val firmate = FirmaLezione.oreGiaFirmate(p.lezioniGiorno, p.mioId, data, oraScelta(), numeroScelto())
+            avvisoOre.text = "già firmata da te: " + firmate.entries.joinToString { "${it.key}ª ora (${it.value.lowercase()})" }
+            avvisoOre.visibility = if (firmate.isEmpty()) View.GONE else View.VISIBLE
+        }
+        alCambio(ora) { aggiornaNumeroOre(numeroScelto()); controllaOre() }
+        alCambio(numeroOre) { controllaOre() }
+
+        // tipo attività e progetti: dal registro web (come il sito), finché non arrivano solo "Lezione"
+        val chiave = "${p.registro.tipo}|${p.registro.id}"
+        val web = p.registro.tipo.equals("C", true) || p.registro.tipo.equals("G", true)
+        var opzioni = opzioniWeb[chiave]
+        var tipi = opzioni?.tipiAttivita?.ifEmpty { null } ?: listOf("Lezione")
+        val tipo = spinner(tipi)
+        val caricamento = TextView(ctx).apply {
+            text = "carico tipi attività e progetti dal registro…"; textSize = 12f; alpha = .7f
+            visibility = if (opzioni == null && web) View.VISIBLE else View.GONE
+        }
+        var progetto: FirmaLezione.Progetto? = null
+        val scegliProgetto = TextView(ctx).apply {
+            text = "tocca per scegliere il progetto"; textSize = 15f; setTextColor(0xFF111111.toInt())
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            background = GradientDrawable().apply { setColor(0xFFF0F0F0.toInt()); cornerRadius = dp(10).toFloat() }
+        }
+        val sezioneProgetto = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; visibility = View.GONE
+            addView(etichetta("progetto (scuola e territorio)"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+            addView(scegliProgetto, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(4) })
+        }
+        fun tipoScelto() = tipi.getOrElse(tipo.selectedItemPosition) { "Lezione" }
+        fun aggiornaProgetto() {
+            val serve = FirmaLezione.richiedeProgetto(tipoScelto()) && (opzioni?.progettiAttivi ?: true)
+            sezioneProgetto.visibility = if (serve) View.VISIBLE else View.GONE
+            if (!serve) { progetto = null; scegliProgetto.text = "tocca per scegliere il progetto" }
+        }
+        alCambio(tipo) { aggiornaProgetto() }
+        scegliProgetto.setOnClickListener {
+            val elenco = opzioni?.progetti.orEmpty()
+            if (elenco.isEmpty()) {
+                android.widget.Toast.makeText(ctx, if (opzioni == null) "progetti in caricamento…" else "nessun progetto nel registro.", android.widget.Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            sceltaProgetto(elenco, p.registro.nome) { scelto -> progetto = scelto; scegliProgetto.text = scelto.nome }
+        }
+
+        val argomento = android.widget.EditText(ctx).apply {
+            hint = "argomento della lezione"
+            minLines = 2; maxLines = 5
+            gravity = Gravity.TOP or Gravity.START
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
+                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val errore = TextView(ctx).apply { setTextColor(rosso); textSize = 13f; visibility = View.GONE }
+
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(22), dp(8), dp(22), 0)
-            if (avviso.isNotEmpty()) addView(TextView(ctx).apply { text = avviso; textSize = 14f; setPadding(0, 0, 0, dp(10)) })
-            addView(etichetta("materia"))
+            setPadding(dp(22), dp(4), dp(22), dp(8))
+            addView(TextView(ctx).apply { text = "${p.registro.nome} · ${descriviData(giorno.time)}"; textSize = 16f; typeface = outfitBold; setTextColor(0xFF111111.toInt()) })
+            if (nota.isNotEmpty()) addView(TextView(ctx).apply { text = nota; textSize = 13f; alpha = .7f; setPadding(0, dp(2), 0, 0) })
+            addView(etichetta("materia"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
             addView(materia, LinearLayout.LayoutParams(-1, -2))
-            addView(etichetta("ora"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
-            addView(ora, LinearLayout.LayoutParams(-1, -2))
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(etichetta("dalla"))
+                    addView(ora, LinearLayout.LayoutParams(-1, -2))
+                }, LinearLayout.LayoutParams(0, -2, 1f))
+                addView(LinearLayout(ctx).apply {
+                    orientation = LinearLayout.VERTICAL
+                    addView(etichetta("per"))
+                    addView(numeroOre, LinearLayout.LayoutParams(-1, -2))
+                }, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(12) })
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(12) })
+            addView(avvisoOre)
+            addView(etichetta("tipo attività"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+            addView(tipo, LinearLayout.LayoutParams(-1, -2))
+            addView(caricamento)
+            addView(sezioneProgetto)
+            addView(etichetta("argomento"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+            addView(argomento, LinearLayout.LayoutParams(-1, -2))
+            addView(errore, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         }
-        MaterialAlertDialogBuilder(ctx)
-            .setTitle("firma la lezione · ${p.registro.nome}")
-            .setView(corpo)
-            .setPositiveButton("avanti") { _, _ ->
-                val m = p.materie.getOrNull(materia.selectedItemPosition)
-                val o = ore.getOrNull(ora.selectedItemPosition)
-                if (m == null || o == null) { bloccaFirma(false); return@setPositiveButton }
-                confermaFirma(p, FirmaLezione.Proposta(o, m, p.lezioniGiorno?.let { FirmaLezione.firmaEsistente(it, p.mioId, data, o) }), giorno, data)
-            }
+        val dialogo = MaterialAlertDialogBuilder(ctx)
+            .setTitle("firma la lezione")
+            .setView(ScrollView(ctx).apply { addView(corpo) })
+            .setPositiveButton("firma", null)
             .setNegativeButton("annulla") { _, _ -> bloccaFirma(false) }
             .setOnCancelListener { bloccaFirma(false) }
             .show()
-    }
-
-    /** Riepilogo di classe, materia, data e ora prima di inviare; un'ora già firmata non si può confermare. */
-    private fun confermaFirma(p: PreparazioneFirma, proposta: FirmaLezione.Proposta, giorno: Calendar, data: String, nota: String = "") {
-        val riepilogo = "classe: ${p.registro.nome}\nmateria: ${proposta.materia.lowercase()}\ndata: ${descriviData(giorno.time)}\nora: ${proposta.ora}ª ora" +
-            if (nota.isNotEmpty()) "\n\n$nota" else ""
-        val dialogo = MaterialAlertDialogBuilder(requireContext()).setTitle("firma la lezione")
-        if (proposta.firmata != null) {
-            dialogo.setMessage("$riepilogo\n\nquest'ora risulta già firmata da te (${proposta.firmata.lowercase()}): non si firma di nuovo.")
-                .setPositiveButton("chiudi") { _, _ -> bloccaFirma(false) }
-                .setNeutralButton("altra ora") { _, _ -> sceltaManuale(p, giorno, data, "") }
-        } else {
-            dialogo.setMessage(riepilogo)
-                .setPositiveButton("firma") { _, _ -> inviaFirma(p.registro, proposta, data) }
-                .setNeutralButton("altra ora") { _, _ -> sceltaManuale(p, giorno, data, "") }
-                .setNegativeButton("annulla") { _, _ -> bloccaFirma(false) }
+        controllaOre()
+        // "firma" controlla i dati prima di chiudere la finestra: con un errore la finestra resta aperta
+        dialogo.getButton(android.content.DialogInterface.BUTTON_POSITIVE).setOnClickListener {
+            val m = p.materie.getOrNull(materia.selectedItemPosition)
+            val firmate = FirmaLezione.oreGiaFirmate(p.lezioniGiorno, p.mioId, data, oraScelta(), numeroScelto())
+            val serveProgetto = sezioneProgetto.visibility == View.VISIBLE
+            val messaggio = when {
+                m == null -> "scegli la materia."
+                firmate.isNotEmpty() -> "una delle ore scelte è già firmata da te: cambia ora o numero di ore."
+                serveProgetto && opzioni == null && web -> "attendi il caricamento dei progetti."
+                serveProgetto && progetto == null && opzioni?.progetti.orEmpty().isNotEmpty() -> "per ${tipoScelto()} scegli il progetto di scuola e territorio."
+                else -> null
+            }
+            if (messaggio != null) { errore.text = messaggio; errore.visibility = View.VISIBLE; return@setOnClickListener }
+            dialogo.dismiss()
+            inviaFirma(p.registro, SceltaFirma(oraScelta(), numeroScelto(), m!!, tipoScelto(), progetto, argomento.text.toString()), data)
         }
-        dialogo.setOnCancelListener { bloccaFirma(false) }.show()
+
+        if (opzioni == null && web) lifecycleScope.launch {
+            val lette = withContext(Dispatchers.IO) {
+                runCatching {
+                    val (codice, html) = client.paginaRegistroWeb(if (p.registro.tipo.equals("G", true)) "" else p.registro.id,
+                        if (p.registro.tipo.equals("G", true)) p.registro.nome else "", data)
+                    if (codice in 200..299) FirmaLezione.leggiOpzioniFirma(html).takeIf { it.tipiAttivita.isNotEmpty() } else null
+                }.getOrNull()
+            }
+            if (lette != null) opzioniWeb[chiave] = lette
+            if (!dialogo.isShowing) return@launch
+            if (lette == null) { caricamento.text = "tipi attività e progetti non letti dal registro: si firma come «lezione»."; return@launch }
+            opzioni = lette
+            caricamento.visibility = View.GONE
+            val prima = tipoScelto()
+            tipi = lette.tipiAttivita
+            tipo.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, tipi)
+            tipo.setSelection(tipi.indexOf(prima).coerceAtLeast(0))
+            aggiornaProgetto()
+        }
     }
 
-    /** Esito di una firma inviata: risposta del server (con la verifica su lessons/mine) oppure ora trovata già firmata. */
+    /** Elenco dei progetti di scuola e territorio con ricerca; quelli che nominano la classe vengono prima. */
+    private fun sceltaProgetto(progetti: List<FirmaLezione.Progetto>, sigla: String, alla: (FirmaLezione.Progetto) -> Unit) {
+        val ctx = requireContext()
+        var mostrati = FirmaLezione.cercaProgetti(progetti, "", sigla)
+        val adattatore = android.widget.ArrayAdapter(ctx, android.R.layout.simple_list_item_1, mostrati.map { it.nome }.toMutableList())
+        val conteggio = TextView(ctx).apply { textSize = 12f; alpha = .7f; text = "${mostrati.size} progetti" }
+        val cerca = android.widget.EditText(ctx).apply { hint = "cerca (es. 4eta, orientamento)"; setSingleLine(true) }
+        val elenco = android.widget.ListView(ctx).apply { adapter = adattatore }
+        cerca.addTextChangedListener(object : android.text.TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: android.text.Editable?) {
+                mostrati = FirmaLezione.cercaProgetti(progetti, s?.toString().orEmpty(), sigla)
+                adattatore.clear(); adattatore.addAll(mostrati.map { it.nome })
+                conteggio.text = if (mostrati.size == 1) "1 progetto" else "${mostrati.size} progetti"
+            }
+        })
+        val corpo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(4), dp(22), 0)
+            addView(cerca, LinearLayout.LayoutParams(-1, -2))
+            addView(conteggio)
+            addView(elenco, LinearLayout.LayoutParams(-1, dp(360)))
+        }
+        val dialogo = MaterialAlertDialogBuilder(ctx)
+            .setTitle("progetto di scuola e territorio")
+            .setView(corpo)
+            .setNegativeButton("annulla", null)
+            .show()
+        elenco.setOnItemClickListener { _, _, pos, _ -> mostrati.getOrNull(pos)?.let(alla); dialogo.dismiss() }
+    }
+
+    /** Esito di una firma inviata: risposta del server (con la verifica su lessons/mine) oppure ore trovate già firmate. */
     private sealed class RisultatoFirma {
-        class GiaFirmata(val materia: String) : RisultatoFirma()
+        class GiaFirmata(val descrizione: String) : RisultatoFirma()
         class Risposta(val codice: Int, val testo: String, val verificata: Boolean?) : RisultatoFirma()
     }
 
-    private fun inviaFirma(registro: FirmaLezione.Registro, proposta: FirmaLezione.Proposta, data: String) {
+    private fun inviaFirma(registro: FirmaLezione.Registro, s: SceltaFirma, data: String) {
         bloccaFirma(true)
         val ctx = requireContext().applicationContext
+        val quando = etichettaOre(s.ora, s.ore)
         view?.let { Snackbar.make(it, "firma in corso…", Snackbar.LENGTH_SHORT).setAnchorView(fabFirma).show() }
         val log = StringBuilder("firma dal libro del docente classePiù ${BuildConfig.VERSION_NAME}\n")
-            .append("data $data, ora ${proposta.ora}, registro ${registro.tipo}|${registro.id}|${registro.nome}, materia ${proposta.materia}, attività Lezione\n\n")
+            .append("data $data, $quando (${s.ore} ore), registro ${registro.tipo}|${registro.id}|${registro.nome}, materia ${s.materia}, ")
+            .append("attività ${s.tipoAttivita}, progetto ${s.progetto?.let { "${it.id} ${it.nome}" } ?: "nessuno"}, argomento \"${s.argomento.trim()}\"\n\n")
         lavoroFirma = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 val esito = runCatching {
                     val mioId = client.idDocente()
-                    // controllo appena prima di inviare: se nel frattempo l'ora è stata firmata non si manda niente
+                    // controllo appena prima di inviare: se nel frattempo una delle ore è stata firmata non si manda niente
                     val (codicePrima, prima) = client.lezioniGrezze(data, data)
                     log.append("GET lessons/mine/$data/$data -> HTTP $codicePrima\n\n")
                     if (codicePrima != 200) throw ClasseVivaException("non riesco a controllare le firme del giorno (http $codicePrima): firma non inviata.\n${FirmaLezione.messaggioServer(prima)}")
-                    FirmaLezione.firmaEsistente(prima, mioId, data, proposta.ora)?.let { return@runCatching RisultatoFirma.GiaFirmata(it) }
-                    val (codice, testo) = client.firmaRapida(registro.tipo, registro.id, proposta.materia, data, proposta.ora, log,
-                        nomeClasse = registro.nome, tipoAttivita = "Lezione")
+                    val firmate = FirmaLezione.oreGiaFirmate(prima, mioId, data, s.ora, s.ore)
+                    if (firmate.isNotEmpty()) return@runCatching RisultatoFirma.GiaFirmata(firmate.entries.joinToString { "${it.key}ª ora (${it.value.lowercase()})" })
+                    val (codice, testo) = client.firmaRapida(registro.tipo, registro.id, s.materia, data, s.ora, log,
+                        nomeClasse = registro.nome, argomento = s.argomento, tipoAttivita = s.tipoAttivita,
+                        numeroOre = s.ore, idProgetto = s.progetto?.id.orEmpty())
                     var verificata: Boolean? = null
                     if (codice in 200..299) {
                         val (codiceDopo, dopo) = runCatching { client.lezioniGrezze(data, data) }.getOrDefault(0 to "")
                         log.append("verifica lessons/mine -> HTTP $codiceDopo\n")
-                        if (codiceDopo == 200) verificata = FirmaLezione.firmaEsistente(dopo, mioId, data, proposta.ora) != null
+                        if (codiceDopo == 200) verificata = FirmaLezione.oreGiaFirmate(dopo, mioId, data, s.ora, s.ore).size == s.ore
                     }
                     RisultatoFirma.Risposta(codice, testo, verificata)
                 }
                 log.append(esito.fold({ x -> when (x) {
-                    is RisultatoFirma.GiaFirmata -> "esito: ora già firmata (${x.materia}), non inviata"
+                    is RisultatoFirma.GiaFirmata -> "esito: già firmata ${x.descrizione}, non inviata"
                     is RisultatoFirma.Risposta -> "esito: HTTP ${x.codice} ${x.testo.take(300)}" + (x.verificata?.let { if (it) " · verificata" else " · non trovata in lessons/mine" } ?: "")
                 } }, { "esito: errore ${it.javaClass.simpleName} ${it.message}" }))
-                runCatching { Diario.scrivi(ctx, "firma libro del docente ${registro.nome} $data ${proposta.ora}ª ora: ${log.lines().last()}") }
+                runCatching { Diario.scrivi(ctx, "firma libro del docente ${registro.nome} $data $quando: ${log.lines().last()}") }
                 esito
             }
             bloccaFirma(false)
@@ -850,7 +1013,7 @@ class StudentiScheda : Scheda() {
                 onSuccess = { risultato ->
                     when (risultato) {
                         is RisultatoFirma.GiaFirmata -> mostraErroreFirma("ora già firmata",
-                            "la ${proposta.ora}ª ora risulta già firmata da te (${risultato.materia.lowercase()}): firma non inviata.", log.toString())
+                            "risulta già firmata da te: ${risultato.descrizione}. firma non inviata.", log.toString())
                         is RisultatoFirma.Risposta -> {
                             val e = FirmaLezione.esito(risultato.codice, risultato.testo)
                             when {
@@ -858,7 +1021,7 @@ class StudentiScheda : Scheda() {
                                 risultato.verificata == false -> mostraErroreFirma(e.titolo,
                                     "classeviva ha accettato la firma, ma non la vedo ancora tra le tue lezioni: controlla sul registro.", log.toString())
                                 else -> view?.let {
-                                    Snackbar.make(it, "${e.titolo}: ${registro.nome}, ${proposta.ora}ª ora" + if (risultato.verificata == true) ", verificata" else "",
+                                    Snackbar.make(it, "${e.titolo}: ${registro.nome}, $quando" + if (risultato.verificata == true) ", verificata" else "",
                                         Snackbar.LENGTH_LONG).setAnchorView(fabFirma).show()
                                 }
                             }

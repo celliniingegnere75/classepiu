@@ -46,7 +46,7 @@ Tutte derivano dalla classe base `Scheda`.
 | `Scuola.kt` | Dati fissi della scuola |
 | `FinestraRientro.kt` | Notifiche dell'orario al rientro in primo piano (fino a 3, ognuna col suo stato e i suoi timer) |
 | `FinestraFirmaOrdinaria.kt` | Scelta di materia, tipo attività e argomento per una firma ordinaria |
-| `FirmaLezione.kt` | Pulsante «firma la lezione» del libro del docente (`StudentiScheda`): registro da firmare, ore dall'orario, ora già firmata, esito; provato da `FirmaLezioneTest` |
+| `FirmaLezione.kt` | Pulsante «firma la lezione» del libro del docente (`StudentiScheda`): registro da firmare, ore dall'orario (anche più ore insieme), ore già firmate, tipi attività e progetti PCTO/FSL dal registro web, esito; provato da `FirmaLezioneTest` |
 | `PianoNotifiche.kt` | Regole delle notifiche (comparsa, riduzione, scadenza a due ore scolastiche) e vita delle finestre, provate da `PianoNotificheTest` |
 | `Controllo.kt` | Controllo periodico delle nuove circolari con WorkManager e notifiche |
 | `GoogleMail.kt` | Accesso Google e invio tramite Gmail API (scope `gmail.send`) |

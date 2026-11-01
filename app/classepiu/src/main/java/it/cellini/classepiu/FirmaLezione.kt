@@ -141,6 +141,81 @@ object FirmaLezione {
         return (ultima + 1).takeIf { it <= Orario.ORE }
     }
 
+    /** Ore consecutive della stessa materia nell'orario: una lezione di più ore da firmare con una sola firma. */
+    data class Blocco(val ora: Int, val ore: Int, val materia: String) {
+        val ultima get() = ora + ore - 1
+    }
+
+    /** Raggruppa le proposte dell'orario in blocchi di ore consecutive con la stessa materia (es. 1ª e 2ª ora → una lezione di 2 ore). */
+    fun blocchi(proposte: List<Proposta>): List<Blocco> {
+        val out = mutableListOf<Blocco>()
+        for (p in proposte.sortedBy { it.ora }) {
+            val ultimo = out.lastOrNull()
+            if (ultimo != null && ultimo.ultima + 1 == p.ora && normalizza(ultimo.materia) == normalizza(p.materia)) out[out.size - 1] = ultimo.copy(ore = ultimo.ore + 1)
+            else out += Blocco(p.ora, 1, p.materia)
+        }
+        return out
+    }
+
+    /** Le ore da [ora] per [ore] ore già firmate da me il giorno [data]: ora → materia della firma presente. */
+    fun oreGiaFirmate(grezzo: String?, mioId: String, data: String, ora: Int, ore: Int): Map<Int, String> {
+        if (grezzo == null) return emptyMap()
+        return (ora until ora + ore.coerceAtLeast(1)).mapNotNull { o -> firmaEsistente(grezzo, mioId, data, o)?.let { o to it } }.toMap()
+    }
+
+    /** Un progetto di scuola e territorio (PCTO/FSL) del registro web: [id] è il valore di id_progetto_set. */
+    data class Progetto(val id: String, val nome: String)
+
+    /** Voci "tipo attività", progetti PCTO/FSL e se il registro li chiede ([progettiAttivi], campo set_enable del sito). */
+    data class OpzioniFirma(val tipiAttivita: List<String>, val progetti: List<Progetto>, val progettiAttivi: Boolean)
+
+    /** Testo di un'opzione HTML in chiaro: entità comuni e numeriche, spazi ripetuti tolti. */
+    fun testoHtml(s: String): String {
+        val nomi = mapOf("nbsp" to " ", "bull" to "•", "amp" to "&", "quot" to "\"", "apos" to "'", "lt" to "<", "gt" to ">",
+            "agrave" to "à", "egrave" to "è", "eacute" to "é", "igrave" to "ì", "ograve" to "ò", "ugrave" to "ù", "ordf" to "ª", "deg" to "°",
+            "rsquo" to "’", "lsquo" to "‘", "rdquo" to "”", "ldquo" to "“", "ndash" to "–", "mdash" to "—", "hellip" to "…")
+        return Regex("&(#x[0-9a-fA-F]+|#\\d+|[a-zA-Z]+);").replace(s.replace(Regex("<[^>]*>"), "")) { m ->
+            val k = m.groupValues[1]
+            when {
+                k.startsWith("#x") || k.startsWith("#X") -> k.drop(2).toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: m.value
+                k.startsWith("#") -> k.drop(1).toIntOrNull()?.let { String(Character.toChars(it)) } ?: m.value
+                else -> nomi[k.lowercase(Locale.ROOT)] ?: m.value
+            }
+        }.replace(Regex("\\s+"), " ").trim()
+    }
+
+    private fun opzioniSelect(html: String, id: String): List<Pair<String, String>> {
+        val inizio = html.indexOf("id=\"$id\"").takeIf { it >= 0 } ?: return emptyList()
+        val fine = html.indexOf("</select>", inizio).takeIf { it > 0 } ?: html.length
+        return Regex("<option\\s+value=\"([^\"]*)\"[^>]*>(.*?)</option>", RegexOption.DOT_MATCHES_ALL)
+            .findAll(html.substring(inizio, fine)).map { testoHtml(it.groupValues[1]) to testoHtml(it.groupValues[2]) }.toList()
+    }
+
+    /** Dalla pagina del registro web (regclasse.php): voci di <select id="tipo_attivita"> e progetti di <select id="progetto_set">. */
+    fun leggiOpzioniFirma(html: String): OpzioniFirma {
+        val tipi = opzioniSelect(html, "tipo_attivita").map { it.first }.filter { it.isNotEmpty() }.distinct()
+        val progetti = opzioniSelect(html, "progetto_set").filter { it.first.isNotEmpty() && it.second.isNotEmpty() }
+            .map { Progetto(it.first, it.second) }.distinctBy { it.id }
+        val attivi = Regex("id=\"set_enable\"\\s+value=\"1\"").containsMatchIn(html) || Regex("value=\"1\"\\s+id=\"set_enable\"").containsMatchIn(html)
+        return OpzioniFirma(tipi, progetti, attivi)
+    }
+
+    /** Il tipo attività chiede il progetto di scuola e territorio? Stessa regola del sito (regclasse.js): ALTERNANZA, ASL, PCTO, FSL. */
+    fun richiedeProgetto(tipoAttivita: String): Boolean {
+        val t = tipoAttivita.trim().uppercase(Locale.ROOT)
+        return t.startsWith("ALTERNANZA") || t.startsWith("ASL") || t.startsWith("PCTO") || t.startsWith("FSL")
+    }
+
+    /** Progetti filtrati per [cerca] (tutte le parole, senza maiuscole); quelli che nominano la classe [sigla] vengono prima. */
+    fun cercaProgetti(progetti: List<Progetto>, cerca: String, sigla: String): List<Progetto> {
+        val parole = normalizza(cerca).split(' ').filter { it.isNotEmpty() }
+        val trovati = progetti.filter { p -> val n = normalizza(p.nome); parole.all { it in n } }
+        val s = normalizza(sigla).substringBefore('_')
+        if (s.isEmpty()) return trovati
+        val (classe, altri) = trovati.partition { Regex("(^|[^A-Z0-9])${Regex.escape(s)}([^A-Z0-9]|$)").containsMatchIn(normalizza(it.nome)) }
+        return classe + altri
+    }
+
     /** Il messaggio leggibile della risposta del server: il campo di errore se è JSON, altrimenti il testo senza HTML. */
     fun messaggioServer(testo: String): String {
         val t = testo.trim()
