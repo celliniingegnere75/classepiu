@@ -1,5 +1,6 @@
 package it.cellini.classepiu
 
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -7,10 +8,15 @@ import android.os.Bundle
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import com.google.android.material.floatingactionbutton.ExtendedFloatingActionButton
+import com.google.android.material.snackbar.Snackbar
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -95,7 +101,8 @@ class StudentiScheda : Scheda() {
 
         lista = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(14), dp(16), dp(14), dp(16 + SPAZIO_BARRA))
+            // in fondo anche lo spazio del pulsante "firma la lezione", così l'ultimo alunno non resta sotto
+            setPadding(dp(14), dp(16), dp(14), dp(16 + SPAZIO_BARRA + 64))
         }
         val pannello = ScrollView(ctx).apply {
             addView(lista)
@@ -106,7 +113,7 @@ class StudentiScheda : Scheda() {
         }
         pannelloAlunni = pannello
         contenitoreLezioni = android.widget.FrameLayout(ctx).apply { id = idLezioni; visibility = View.GONE }
-        setContentView(LinearLayout(ctx).apply {
+        val colonna = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(azzurro)
             addView(barra)
@@ -116,7 +123,27 @@ class StudentiScheda : Scheda() {
                 addView(pannello, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
                 addView(contenitoreLezioni, android.widget.FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
             }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }
+        // "firma la lezione": lo stesso pulsante di "invia per email" della bacheca (colore, icona bianca, posto e margini),
+        // uno solo per scheda, fuori dal pannello delle linguette: resta fermo cambiando giorno o linguetta
+        val celeste = ContextCompat.getColor(ctx, R.color.logo_sfondo)
+        val fab = ExtendedFloatingActionButton(ctx).apply {
+            text = "firma la lezione"
+            setIconResource(R.drawable.ic_matita)
+            backgroundTintList = ColorStateList.valueOf(celeste)
+            setTextColor(0xFFFFFFFF.toInt())
+            iconTint = ColorStateList.valueOf(0xFFFFFFFF.toInt())
+            setOnClickListener { preparaFirma() }
+        }
+        fabFirma = fab
+        setContentView(FrameLayout(ctx).apply {
+            addView(colonna)
+            addView(fab, FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT,
+                Gravity.BOTTOM or Gravity.END).apply { setMargins(0, 0, dp(16), dp(ALTEZZA_BARRA + ALZO_BARRA + SOMBRA_BARRA + 12)) }) // sopra la barra delle pagine
         })
+        aggiornaPulsanteFirma()
+        // una scheda ricostruita mentre una firma è ancora in corso tiene il pulsante bloccato fino all'esito
+        bloccaFirma(lavoroFirma?.isActive == true)
         linguetteView = linguette
         mostraLinguetta()
         // "le mie lezioni" solo per le mie classi: si parte dalla copia salvata, poi si controlla su classeviva
@@ -137,12 +164,14 @@ class StudentiScheda : Scheda() {
         val files = requireContext().filesDir
         miaClasse = FiltroArticolate.eMiaClasseDaCopia(files, tipo, classeId, nome, gruppo) ?: true
         linguetteView?.impostaVoci(nomiLinguette(), idLinguette().indexOf(linguettaAttiva).coerceAtLeast(0))
+        aggiornaPulsanteFirma()
         lifecycleScope.launch {
             val mia = withContext(Dispatchers.IO) { runCatching { FiltroArticolate.eMiaClasse(client, files, tipo, classeId, nome, gruppo) }.getOrNull() } ?: return@launch
             if (mia == miaClasse) return@launch
             miaClasse = mia
             if (!mia && linguettaAttiva == 1) { linguettaAttiva = 0; mostraLinguetta(); caricaStato(); ridisegna() }
             linguetteView?.impostaVoci(nomiLinguette(), idLinguette().indexOf(linguettaAttiva).coerceAtLeast(0))
+            aggiornaPulsanteFirma()
         }
     }
     private var linguettaAttiva = 0
@@ -615,6 +644,231 @@ class StudentiScheda : Scheda() {
         1 -> "ritardo o uscita anticipata"
         2 -> "assente"
         else -> "stato non disponibile"
+    }
+
+    // ---- «firma la lezione»: classe e data dalla scheda aperta, materia e ora dall'orario o scelte a mano, firma con firmaRapida
+
+    private var fabFirma: ExtendedFloatingActionButton? = null
+    /** Vero dal tocco del pulsante fino alla fine delle finestre o della firma: niente seconde richieste. */
+    private var firmaInCorso = false
+    private var lavoroFirma: Job? = null
+
+    /** Il pulsante c'è solo se la classe aperta è tra le mie (classes/mine): sulle altre non si può firmare. */
+    private fun aggiornaPulsanteFirma() {
+        fabFirma?.visibility = if (miaClasse) View.VISIBLE else View.GONE
+    }
+
+    private fun bloccaFirma(si: Boolean) {
+        firmaInCorso = si
+        fabFirma?.isEnabled = !si
+        fabFirma?.alpha = if (si) .6f else 1f
+    }
+
+    /** Dati letti da classeviva prima di proporre la firma. */
+    private class PreparazioneFirma(
+        val registro: FirmaLezione.Registro,
+        val materie: List<String>,
+        val analisi: FirmaLezione.Analisi,
+        /** lessons/mine del giorno, null se non letto: serve solo a segnalare in anticipo le ore già firmate */
+        val lezioniGiorno: String?,
+        val mioId: String,
+    )
+
+    private fun etichettaClasse() = gruppo.ifBlank { nome }
+
+    private fun descriviData(data: java.util.Date) = SimpleDateFormat("EEEE d/M/yyyy", Locale.ITALIAN).format(data)
+
+    private fun preparaFirma() {
+        if (firmaInCorso) return
+        // classe e data sono quelle della scheda aperta e del giorno scelto nella striscia, fissate al tocco
+        val giorno = selezionato.clone() as Calendar
+        val data = formatoApi.format(giorno.time)
+        val giornoOrario = Orario.giornoDi(giorno)
+        val ctx = requireContext().applicationContext
+        bloccaFirma(true)
+        lavoroFirma = lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                runCatching {
+                    val (codiceClassi, grezzoClassi) = client.classiGrezze(false)
+                    if (codiceClassi != 200) throw ClasseVivaException("le tue classi non sono disponibili (http $codiceClassi): ${FirmaLezione.messaggioServer(grezzoClassi)}")
+                    val registro = FirmaLezione.registroDaFirmare(leggiClassi(grezzoClassi).map { it.chiave }, tipo, classeId, gruppo)
+                        ?: throw ClasseVivaException("${etichettaClasse()} non è tra le tue classi: da qui non si può firmare.")
+                    val materie = client.materieMie(registro.tipo, registro.id)
+                    if (materie.isEmpty()) throw ClasseVivaException("non trovo tue materie in ${registro.nome} (subjects/list): firma non possibile.")
+                    val ore = Orario(ctx).lezioniDel(giornoOrario).map { FirmaLezione.OraOrario(it.ora, it.classe, it.materia) }
+                    val analisi = FirmaLezione.analizzaOrario(ore, registro, materie)
+                    val (codiceLezioni, lezioni) = client.lezioniGrezze(data, data)
+                    PreparazioneFirma(registro, materie, analisi, lezioni.takeIf { codiceLezioni == 200 }, client.idDocente())
+                }
+            }
+            if (view == null) { firmaInCorso = false; return@launch }
+            r.fold(
+                onSuccess = { p -> scegliLezione(p, giorno, data) },
+                onFailure = { e ->
+                    bloccaFirma(false)
+                    mostraErroreFirma("firma non possibile", FirmaLezione.descriviErrore(e), null)
+                }
+            )
+        }
+    }
+
+    /** Caso A: una sola lezione nell'orario → conferma; caso B: più lezioni → scelta; caso C: orario vuoto o incompleto → scelta a mano. */
+    private fun scegliLezione(p: PreparazioneFirma, giorno: Calendar, data: String) {
+        val proposte = p.analisi.proposte.map { it.copy(firmata = p.lezioniGiorno?.let { g -> FirmaLezione.firmaEsistente(g, p.mioId, data, it.ora) }) }
+        when {
+            proposte.size == 1 -> confermaFirma(p, proposte[0], giorno, data)
+            proposte.size > 1 -> {
+                val voci = proposte.map { "${it.ora}ª ora · ${it.materia.lowercase()}" + if (it.firmata != null) " · già firmata" else "" }.toTypedArray()
+                var scelta = proposte.indexOfFirst { it.firmata == null }.coerceAtLeast(0)
+                MaterialAlertDialogBuilder(requireContext())
+                    .setTitle("quale lezione firmi? · ${p.registro.nome}")
+                    .setSingleChoiceItems(voci, scelta) { _, i -> scelta = i }
+                    .setPositiveButton("avanti") { _, _ -> confermaFirma(p, proposte[scelta], giorno, data) }
+                    .setNeutralButton("altra ora") { _, _ -> sceltaManuale(p, giorno, data, "") }
+                    .setNegativeButton("annulla") { _, _ -> bloccaFirma(false) }
+                    .setOnCancelListener { bloccaFirma(false) }
+                    .show()
+            }
+            else -> sceltaManuale(p, giorno, data,
+                if (p.analisi.oreSenzaMateria.isEmpty()) "nell'orario di ${descriviData(giorno.time)} non c'è ${p.registro.nome}: scegli materia e ora."
+                else "nell'orario manca una tua materia per ${p.registro.nome}: scegli materia e ora.")
+        }
+    }
+
+    /** Caso C (o "altra ora"): materia tra le mie della classe e numero dell'ora; classe e data restano quelle della scheda. */
+    private fun sceltaManuale(p: PreparazioneFirma, giorno: Calendar, data: String, avviso: String) {
+        val ctx = requireContext()
+        val materia = android.widget.Spinner(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, p.materie.map { it.lowercase() })
+        }
+        val ore = (1..Orario.ORE).toList()
+        val ora = android.widget.Spinner(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, ore.map { "${it}ª ora" })
+            // se l'orario ha la classe in un'ora (senza materia valida) si parte da quella
+            setSelection(ore.indexOf(p.analisi.oreSenzaMateria.firstOrNull() ?: p.analisi.proposte.firstOrNull()?.ora ?: 1).coerceAtLeast(0))
+        }
+        fun etichetta(s: String) = TextView(ctx).apply { text = s; setTextColor(azzurro); textSize = 14f }
+        val corpo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(22), dp(8), dp(22), 0)
+            if (avviso.isNotEmpty()) addView(TextView(ctx).apply { text = avviso; textSize = 14f; setPadding(0, 0, 0, dp(10)) })
+            addView(etichetta("materia"))
+            addView(materia, LinearLayout.LayoutParams(-1, -2))
+            addView(etichetta("ora"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+            addView(ora, LinearLayout.LayoutParams(-1, -2))
+        }
+        MaterialAlertDialogBuilder(ctx)
+            .setTitle("firma la lezione · ${p.registro.nome}")
+            .setView(corpo)
+            .setPositiveButton("avanti") { _, _ ->
+                val m = p.materie.getOrNull(materia.selectedItemPosition)
+                val o = ore.getOrNull(ora.selectedItemPosition)
+                if (m == null || o == null) { bloccaFirma(false); return@setPositiveButton }
+                confermaFirma(p, FirmaLezione.Proposta(o, m, p.lezioniGiorno?.let { FirmaLezione.firmaEsistente(it, p.mioId, data, o) }), giorno, data)
+            }
+            .setNegativeButton("annulla") { _, _ -> bloccaFirma(false) }
+            .setOnCancelListener { bloccaFirma(false) }
+            .show()
+    }
+
+    /** Riepilogo di classe, materia, data e ora prima di inviare; un'ora già firmata non si può confermare. */
+    private fun confermaFirma(p: PreparazioneFirma, proposta: FirmaLezione.Proposta, giorno: Calendar, data: String) {
+        val riepilogo = "classe: ${p.registro.nome}\nmateria: ${proposta.materia.lowercase()}\ndata: ${descriviData(giorno.time)}\nora: ${proposta.ora}ª ora"
+        val dialogo = MaterialAlertDialogBuilder(requireContext()).setTitle("firma la lezione")
+        if (proposta.firmata != null) {
+            dialogo.setMessage("$riepilogo\n\nquest'ora risulta già firmata da te (${proposta.firmata.lowercase()}): non si firma di nuovo.")
+                .setPositiveButton("chiudi") { _, _ -> bloccaFirma(false) }
+                .setNeutralButton("altra ora") { _, _ -> sceltaManuale(p, giorno, data, "") }
+        } else {
+            dialogo.setMessage(riepilogo)
+                .setPositiveButton("firma") { _, _ -> inviaFirma(p.registro, proposta, data) }
+                .setNeutralButton("altra ora") { _, _ -> sceltaManuale(p, giorno, data, "") }
+                .setNegativeButton("annulla") { _, _ -> bloccaFirma(false) }
+        }
+        dialogo.setOnCancelListener { bloccaFirma(false) }.show()
+    }
+
+    /** Esito di una firma inviata: risposta del server (con la verifica su lessons/mine) oppure ora trovata già firmata. */
+    private sealed class RisultatoFirma {
+        class GiaFirmata(val materia: String) : RisultatoFirma()
+        class Risposta(val codice: Int, val testo: String, val verificata: Boolean?) : RisultatoFirma()
+    }
+
+    private fun inviaFirma(registro: FirmaLezione.Registro, proposta: FirmaLezione.Proposta, data: String) {
+        bloccaFirma(true)
+        val ctx = requireContext().applicationContext
+        view?.let { Snackbar.make(it, "firma in corso…", Snackbar.LENGTH_SHORT).setAnchorView(fabFirma).show() }
+        val log = StringBuilder("firma dal libro del docente classePiù ${BuildConfig.VERSION_NAME}\n")
+            .append("data $data, ora ${proposta.ora}, registro ${registro.tipo}|${registro.id}|${registro.nome}, materia ${proposta.materia}, attività Lezione\n\n")
+        lavoroFirma = lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) {
+                val esito = runCatching {
+                    val mioId = client.idDocente()
+                    // controllo appena prima di inviare: se nel frattempo l'ora è stata firmata non si manda niente
+                    val (codicePrima, prima) = client.lezioniGrezze(data, data)
+                    log.append("GET lessons/mine/$data/$data -> HTTP $codicePrima\n\n")
+                    if (codicePrima != 200) throw ClasseVivaException("non riesco a controllare le firme del giorno (http $codicePrima): firma non inviata.\n${FirmaLezione.messaggioServer(prima)}")
+                    FirmaLezione.firmaEsistente(prima, mioId, data, proposta.ora)?.let { return@runCatching RisultatoFirma.GiaFirmata(it) }
+                    val (codice, testo) = client.firmaRapida(registro.tipo, registro.id, proposta.materia, data, proposta.ora, log,
+                        nomeClasse = registro.nome, tipoAttivita = "Lezione")
+                    var verificata: Boolean? = null
+                    if (codice in 200..299) {
+                        val (codiceDopo, dopo) = runCatching { client.lezioniGrezze(data, data) }.getOrDefault(0 to "")
+                        log.append("verifica lessons/mine -> HTTP $codiceDopo\n")
+                        if (codiceDopo == 200) verificata = FirmaLezione.firmaEsistente(dopo, mioId, data, proposta.ora) != null
+                    }
+                    RisultatoFirma.Risposta(codice, testo, verificata)
+                }
+                log.append(esito.fold({ x -> when (x) {
+                    is RisultatoFirma.GiaFirmata -> "esito: ora già firmata (${x.materia}), non inviata"
+                    is RisultatoFirma.Risposta -> "esito: HTTP ${x.codice} ${x.testo.take(300)}" + (x.verificata?.let { if (it) " · verificata" else " · non trovata in lessons/mine" } ?: "")
+                } }, { "esito: errore ${it.javaClass.simpleName} ${it.message}" }))
+                runCatching { Diario.scrivi(ctx, "firma libro del docente ${registro.nome} $data ${proposta.ora}ª ora: ${log.lines().last()}") }
+                esito
+            }
+            bloccaFirma(false)
+            if (view == null) return@launch
+            r.fold(
+                onSuccess = { risultato ->
+                    when (risultato) {
+                        is RisultatoFirma.GiaFirmata -> mostraErroreFirma("ora già firmata",
+                            "la ${proposta.ora}ª ora risulta già firmata da te (${risultato.materia.lowercase()}): firma non inviata.", log.toString())
+                        is RisultatoFirma.Risposta -> {
+                            val e = FirmaLezione.esito(risultato.codice, risultato.testo)
+                            when {
+                                !e.ok -> mostraErroreFirma(e.titolo, e.dettaglio + if (e.giaFirmata) "\n\nl'ora risulta già firmata sul registro." else "", log.toString())
+                                risultato.verificata == false -> mostraErroreFirma(e.titolo,
+                                    "classeviva ha accettato la firma, ma non la vedo ancora tra le tue lezioni: controlla sul registro.", log.toString())
+                                else -> view?.let {
+                                    Snackbar.make(it, "${e.titolo}: ${registro.nome}, ${proposta.ora}ª ora" + if (risultato.verificata == true) ", verificata" else "",
+                                        Snackbar.LENGTH_LONG).setAnchorView(fabFirma).show()
+                                }
+                            }
+                            if (e.ok) aggiornaDopoFirma()
+                        }
+                    }
+                },
+                onFailure = { mostraErroreFirma("firma non riuscita", FirmaLezione.descriviErrore(it), log.toString()) }
+            )
+        }
+    }
+
+    /** Dopo una firma si rileggono i dati della linguetta aperta (presenze per ora o elenco lezioni). */
+    private fun aggiornaDopoFirma() {
+        if (linguettaAttiva == 0) { caricaStato(); ridisegna() }
+        else (childFragmentManager.findFragmentById(idLezioni) as? ListaScheda)?.ricarica()
+    }
+
+    /** Errore con il suo messaggio; con [log] si può copiare il registro tecnico della richiesta. */
+    private fun mostraErroreFirma(titolo: String, messaggio: String, log: String?) {
+        val ctx = context ?: return
+        val dialogo = MaterialAlertDialogBuilder(ctx).setTitle(titolo).setMessage(messaggio).setPositiveButton("chiudi", null)
+        if (log != null) dialogo.setNeutralButton("copia log") { _, _ ->
+            ctx.getSystemService(android.content.ClipboardManager::class.java)
+                .setPrimaryClip(android.content.ClipData.newPlainText("firma", log))
+            android.widget.Toast.makeText(ctx, "log copiato.", android.widget.Toast.LENGTH_SHORT).show()
+        }
+        dialogo.show()
     }
 
     private fun testo(s: String, codice: Int = 0, corpo: String = "") {
