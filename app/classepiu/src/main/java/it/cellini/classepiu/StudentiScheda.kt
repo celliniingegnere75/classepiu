@@ -745,7 +745,7 @@ class StudentiScheda : Scheda() {
                 background = sfondoBadgeAppello(valore)
                 contentDescription = etichettaStato.takeIf { it.isNotEmpty() }?.let {
                     "Stato: $it" + if (cambiAppelloPendenti.containsKey("${formatoApi.format(selezionato.time)}|${s.id}")) ", in attesa di salvataggio" else ""
-                },
+                }
                 alpha = if (cambiAppelloPendenti.containsKey("${formatoApi.format(selezionato.time)}|${s.id}")) 0.55f else 1f
             }
             rigaNome.addView(badgeStato, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28)))
