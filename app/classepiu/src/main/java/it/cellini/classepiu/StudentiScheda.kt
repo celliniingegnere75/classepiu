@@ -359,18 +359,29 @@ class StudentiScheda : Scheda() {
                 }
             }
             // Come ClasseViva: l'alunno senza stato è subito presente, e viene registrato così. Con X / no lez. resta grigio.
+            // Il registro web (regclasse.php, stesso "stato" mostrato al docente) è la fonte di verità: le API REST (status2)
+            // a volte non segnalano stage/gita (PS/PV), mostrando un normale presente. Il valore letto dal web corregge quello.
             val daRegistrare = mutableListOf<String>()
             if (libroDocente) {
                 val web = statiWeb?.await().orEmpty()
                 val oggi = formatoApi.format(java.util.Date())
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
-                        if ((this[al.id]?.valore ?: -1) != -1) continue
                         val (statoWeb, oraEvento) = web[al.id] ?: continue
-                        if (statoWeb != "P") continue // X / no lez. (o altro): resta grigio
-                        this[al.id] = StatoGiornaliero(0)
-                        // solo presenza predefinita (nessun evento) e mai per i giorni futuri
-                        if (oraEvento.isEmpty() && giorno <= oggi) daRegistrare += al.id
+                        val valoreAttuale = this[al.id]?.valore ?: -1
+                        when (statoWeb) {
+                            "PS" -> if (valoreAttuale != 3) this[al.id] = StatoGiornaliero(3)
+                            "PV" -> if (valoreAttuale != 4) this[al.id] = StatoGiornaliero(4)
+                            "A" -> if (valoreAttuale != 2) this[al.id] = (this[al.id] ?: StatoGiornaliero(2)).copy(valore = 2)
+                            "P" -> {
+                                if (valoreAttuale == -1) {
+                                    this[al.id] = StatoGiornaliero(0)
+                                    // solo presenza predefinita (nessun evento) e mai per i giorni futuri
+                                    if (oraEvento.isEmpty() && giorno <= oggi) daRegistrare += al.id
+                                }
+                            }
+                            else -> {} // X / no lez. (o altro): resta come letto dalle API, o grigio se senza codice
+                        }
                     }
                 }
             }
