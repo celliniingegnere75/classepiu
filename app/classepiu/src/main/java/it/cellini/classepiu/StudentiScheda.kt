@@ -242,8 +242,11 @@ class StudentiScheda : Scheda() {
     private var appelloGiornoBloccato = false
     /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
     private var appelloBloccati: Set<String> = emptySet()
+    /** Stato letto dal registro web: senza una lettura positiva dell'alunno lo swipe resta disabilitato. */
+    private var appelloStatiWeb: Set<String> = emptySet()
     private fun appelloModificabile(studenteId: String) =
-        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() && studenteId !in appelloBloccati
+        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() &&
+            studenteId in appelloStatiWeb && studenteId !in appelloBloccati
 
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
@@ -332,6 +335,7 @@ class StudentiScheda : Scheda() {
         // Si può modificare l'appello esclusivamente per oggi: i giorni passati e futuri sono sempre in sola lettura.
         appelloGiornoBloccato = giorno != oggiSelezionato || giornoSenzaScuola
         appelloBloccati = emptySet()
+        appelloStatiWeb = emptySet()
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
@@ -391,6 +395,7 @@ class StudentiScheda : Scheda() {
             val esitoWeb = statiWeb?.await()
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
+                appelloStatiWeb = web.keys
                 val oggi = dataOdierna()
                 val bloccati = mutableSetOf<String>()
                 stato = stato.toMutableMap().apply {
@@ -765,6 +770,11 @@ class StudentiScheda : Scheda() {
      */
     private suspend fun inviaCambioAppello(cambio: CambioAppelloPending) {
         if (cambiAppelloPendenti[cambio.chiave] !== cambio || cambio.invioInCorso) return
+        if (!appelloModificabile(cambio.studenteId)) {
+            cambiAppelloPendenti.remove(cambio.chiave)
+            cambio.callbackEsito?.invoke(false, "stato non modificabile: verifica X / no lez. sul registro web", cambio.statoConfermato)
+            return
+        }
         if (cambio.giorno != dataOdierna()) {
             cambiAppelloPendenti.remove(cambio.chiave)
             cambio.callbackEsito?.invoke(false, "modifica consentita solo per la data odierna", cambio.statoConfermato)
