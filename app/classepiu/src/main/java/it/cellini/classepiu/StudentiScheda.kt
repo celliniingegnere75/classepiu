@@ -672,6 +672,8 @@ class StudentiScheda : Scheda() {
         /** lessons/mine del giorno, null se non letto: serve solo a segnalare in anticipo le ore già firmate */
         val lezioniGiorno: String?,
         val mioId: String,
+        /** ora dopo l'ultima firma della classe nel giorno (null se non letta o se la classe ha già tutte le ore) */
+        val oraDopoUltima: Int?,
     )
 
     private fun etichettaClasse() = gruppo.ifBlank { nome }
@@ -695,10 +697,18 @@ class StudentiScheda : Scheda() {
                         ?: throw ClasseVivaException("${etichettaClasse()} non è tra le tue classi: da qui non si può firmare.")
                     val materie = client.materieMie(registro.tipo, registro.id)
                     if (materie.isEmpty()) throw ClasseVivaException("non trovo tue materie in ${registro.nome} (subjects/list): firma non possibile.")
-                    val ore = Orario(ctx).lezioniDel(giornoOrario).map { FirmaLezione.OraOrario(it.ora, it.classe, it.materia) }
+                    // con "settimana fino a sabato" spenta il sabato non ha orario (le sue caselle restano solo salvate)
+                    val sabatoSpento = giornoOrario == 6 && !Impostazioni(ctx).sabato
+                    val ore = if (sabatoSpento) emptyList()
+                        else Orario(ctx).lezioniDel(giornoOrario).map { FirmaLezione.OraOrario(it.ora, it.classe, it.materia) }
                     val analisi = FirmaLezione.analizzaOrario(ore, registro, materie)
                     val (codiceLezioni, lezioni) = client.lezioniGrezze(data, data)
-                    PreparazioneFirma(registro, materie, analisi, lezioni.takeIf { codiceLezioni == 200 }, client.idDocente())
+                    // senza l'orario si propone l'ora dopo l'ultima firma del registro della classe
+                    val oraDopo = if (analisi.proposte.isNotEmpty()) null else runCatching {
+                        val (codiceClasse, firmeClasse) = client.lezioniClasseGrezze(registro.tipo, registro.id, data)
+                        if (codiceClasse == 200) FirmaLezione.oraDopoUltimaFirma(firmeClasse, data) else null
+                    }.getOrNull()
+                    PreparazioneFirma(registro, materie, analisi, lezioni.takeIf { codiceLezioni == 200 }, client.idDocente(), oraDopo)
                 }
             }
             if (view == null) { firmaInCorso = false; return@launch }
@@ -729,6 +739,13 @@ class StudentiScheda : Scheda() {
                     .setOnCancelListener { bloccaFirma(false) }
                     .show()
             }
+            p.oraDopoUltima != null && p.analisi.oreSenzaMateria.isEmpty() -> {
+                // l'orario non indica la classe: ora subito dopo l'ultima firma del giorno; con una sola materia basta confermare
+                val nota = "ora proposta: la prima dopo l'ultima firma di ${p.registro.nome} in questo giorno."
+                if (p.materie.size == 1) confermaFirma(p, FirmaLezione.Proposta(p.oraDopoUltima, p.materie[0],
+                    p.lezioniGiorno?.let { FirmaLezione.firmaEsistente(it, p.mioId, data, p.oraDopoUltima) }), giorno, data, nota)
+                else sceltaManuale(p, giorno, data, "$nota scegli la materia.", p.oraDopoUltima)
+            }
             else -> sceltaManuale(p, giorno, data,
                 if (p.analisi.oreSenzaMateria.isEmpty()) "nell'orario di ${descriviData(giorno.time)} non c'è ${p.registro.nome}: scegli materia e ora."
                 else "nell'orario manca una tua materia per ${p.registro.nome}: scegli materia e ora.")
@@ -736,7 +753,7 @@ class StudentiScheda : Scheda() {
     }
 
     /** Caso C (o "altra ora"): materia tra le mie della classe e numero dell'ora; classe e data restano quelle della scheda. */
-    private fun sceltaManuale(p: PreparazioneFirma, giorno: Calendar, data: String, avviso: String) {
+    private fun sceltaManuale(p: PreparazioneFirma, giorno: Calendar, data: String, avviso: String, oraIniziale: Int? = null) {
         val ctx = requireContext()
         val materia = android.widget.Spinner(ctx).apply {
             adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, p.materie.map { it.lowercase() })
@@ -745,7 +762,7 @@ class StudentiScheda : Scheda() {
         val ora = android.widget.Spinner(ctx).apply {
             adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, ore.map { "${it}ª ora" })
             // se l'orario ha la classe in un'ora (senza materia valida) si parte da quella
-            setSelection(ore.indexOf(p.analisi.oreSenzaMateria.firstOrNull() ?: p.analisi.proposte.firstOrNull()?.ora ?: 1).coerceAtLeast(0))
+            setSelection(ore.indexOf(oraIniziale ?: p.analisi.oreSenzaMateria.firstOrNull() ?: p.analisi.proposte.firstOrNull()?.ora ?: p.oraDopoUltima ?: 1).coerceAtLeast(0))
         }
         fun etichetta(s: String) = TextView(ctx).apply { text = s; setTextColor(azzurro); textSize = 14f }
         val corpo = LinearLayout(ctx).apply {
@@ -772,8 +789,9 @@ class StudentiScheda : Scheda() {
     }
 
     /** Riepilogo di classe, materia, data e ora prima di inviare; un'ora già firmata non si può confermare. */
-    private fun confermaFirma(p: PreparazioneFirma, proposta: FirmaLezione.Proposta, giorno: Calendar, data: String) {
-        val riepilogo = "classe: ${p.registro.nome}\nmateria: ${proposta.materia.lowercase()}\ndata: ${descriviData(giorno.time)}\nora: ${proposta.ora}ª ora"
+    private fun confermaFirma(p: PreparazioneFirma, proposta: FirmaLezione.Proposta, giorno: Calendar, data: String, nota: String = "") {
+        val riepilogo = "classe: ${p.registro.nome}\nmateria: ${proposta.materia.lowercase()}\ndata: ${descriviData(giorno.time)}\nora: ${proposta.ora}ª ora" +
+            if (nota.isNotEmpty()) "\n\n$nota" else ""
         val dialogo = MaterialAlertDialogBuilder(requireContext()).setTitle("firma la lezione")
         if (proposta.firmata != null) {
             dialogo.setMessage("$riepilogo\n\nquest'ora risulta già firmata da te (${proposta.firmata.lowercase()}): non si firma di nuovo.")

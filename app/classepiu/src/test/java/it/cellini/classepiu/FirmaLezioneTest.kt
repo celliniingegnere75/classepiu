@@ -87,6 +87,22 @@ class FirmaLezioneTest {
     }
 
     @Test
+    fun oraDopoUltimaFirmaDellaClasse() {
+        val grezzo = """{"lessons":[
+            {"evtDate":"2026-11-07","evtHPos":1,"evtDuration":2,"subjectDesc":"ITALIANO","authorId":11,"studentStatus":[]},
+            {"evtDate":"2026-11-07","evtHPos":3,"evtDuration":1,"subjectDesc":"MATEMATICA","authorId":12,"studentStatus":[]},
+            {"evtDate":"2026-11-06","evtHPos":6,"subjectDesc":"TPSEE","authorId":5753831}
+        ]}"""
+        assertEquals(4, FirmaLezione.oraDopoUltimaFirma(grezzo, "20261107"))
+        // nessuna firma nel giorno: si parte dalla prima ora
+        assertEquals(1, FirmaLezione.oraDopoUltimaFirma("""{"lessons":[]}""", "20261107"))
+        // classe con tutte le ore firmate: nessuna proposta
+        assertNull(FirmaLezione.oraDopoUltimaFirma("""{"lessons":[{"evtDate":"2026-11-07","evtHPos":8,"evtDuration":2,"subjectDesc":"X"}]}""", "20261107"))
+        // risposta non leggibile
+        assertNull(FirmaLezione.oraDopoUltimaFirma("errore", "20261107"))
+    }
+
+    @Test
     fun esitoRiuscito() {
         val e = FirmaLezione.esito(200, """{"status":"OK","evento_id":123}""")
         assertTrue(e.ok)

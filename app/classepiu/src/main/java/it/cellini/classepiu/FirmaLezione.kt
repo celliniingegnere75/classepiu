@@ -101,6 +101,46 @@ object FirmaLezione {
         return cerca(radice, 0)
     }
 
+    /**
+     * L'ora subito dopo l'ultima firma del giorno [data] (yyyyMMdd) nel registro della classe (lessons2/students, firme di
+     * tutti i docenti): 1 se non c'è ancora nessuna firma, null se l'ultima arriva già all'ultima ora o la risposta non si legge.
+     * Una firma di più ore (evtDuration) conta fino alla sua ultima ora. Serve quando l'orario non indica la classe.
+     */
+    fun oraDopoUltimaFirma(grezzo: String, data: String): Int? {
+        val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return null
+        if (radice !is JSONObject && radice !is JSONArray) return null
+        fun testo(o: JSONObject, vararg chiavi: String): String {
+            for (k in chiavi) {
+                val v = o.opt(k)
+                if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty() && s != "null") return s
+                }
+            }
+            return ""
+        }
+        var ultima = 0
+        fun cammina(v: Any?, livello: Int) {
+            if (livello > 7) return
+            when (v) {
+                is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), livello + 1)
+                is JSONObject -> {
+                    val inizio = testo(v, "evtHPos", "hourPos", "evtHour").toDoubleOrNull()?.toInt()
+                    val giorno = testo(v, "evtDate", "lessonDate", "date").take(10).replace("-", "")
+                    // una firma vera ha almeno materia, docente o codice evento; le caselle vuote non contano
+                    val firmata = testo(v, "subjectDesc", "subjectId", "authorId", "teacherId", "evtCode", "authorName").isNotEmpty()
+                    if (inizio != null && inizio in 1..Orario.ORE && firmata && (giorno.isEmpty() || giorno == data)) {
+                        val durata = (testo(v, "evtDuration", "evtNumH", "duration").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
+                        ultima = maxOf(ultima, inizio + durata - 1)
+                    }
+                    for (k in v.keys()) if (k != "studentStatus") cammina(v.opt(k), livello + 1)
+                }
+            }
+        }
+        cammina(radice, 0)
+        return (ultima + 1).takeIf { it <= Orario.ORE }
+    }
+
     /** Il messaggio leggibile della risposta del server: il campo di errore se è JSON, altrimenti il testo senza HTML. */
     fun messaggioServer(testo: String): String {
         val t = testo.trim()
