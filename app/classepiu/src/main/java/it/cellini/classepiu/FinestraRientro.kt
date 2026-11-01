@@ -797,7 +797,7 @@ object FinestraRientro {
                 lezione = lezione,
                 onApri = { gestore.interagita(avviso); gestore.trattieni(avviso) }
             ) { civica, argomento, tipoAttivita ->
-                firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
+                firmaRapida(activity, avviso, lezione, statoFirma, materiaFirma, firmaRapida,
                     scelta = SceltaFirma(civica, argomento, tipoAttivita))
             }
         }
