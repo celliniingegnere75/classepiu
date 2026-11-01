@@ -766,7 +766,7 @@ class StudentiScheda : Scheda() {
     private data class SceltaFirma(
         val ora: Int, val ore: Int, val materia: String, val tipoAttivita: String,
         val progetto: FirmaLezione.Progetto?, val argomento: String,
-        /** valore dell'ora (peso_ora), UDA e fase, supplenza: gli altri campi della firma del sito */
+        /** valore dell'ora (peso_ora), UDA e fase: gli altri campi della firma del sito */
         val altri: FirmaLezione.CampiFirma = FirmaLezione.CampiFirma(),
     )
 
@@ -866,24 +866,6 @@ class StudentiScheda : Scheda() {
         val valore = spinner(FirmaLezione.PESI_ORA.map { it.second }).apply {
             setSelection(FirmaLezione.PESI_ORA.indexOfFirst { it.first == "1" }.coerceAtLeast(0))
         }
-        // supplenza: come sul sito, spuntandola compare la scelta sulle ore di assenza
-        val conteggia = android.widget.RadioButton(ctx).apply { id = View.generateViewId(); text = "conteggia ore assenza"; isChecked = true }
-        val ignora = android.widget.RadioButton(ctx).apply { id = View.generateViewId(); text = "ignora ore assenza" }
-        val sceltaAssenze = android.widget.RadioGroup(ctx).apply {
-            orientation = android.widget.RadioGroup.VERTICAL; visibility = View.GONE
-            addView(conteggia); addView(ignora)
-        }
-        val notaAssenze = TextView(ctx).apply {
-            text = "ignora: l'eventuale assenza non viene conteggiata e la lezione non va nel giornale del professore."
-            textSize = 12f; alpha = .7f; visibility = View.GONE
-        }
-        val supplenza = android.widget.CheckBox(ctx).apply {
-            text = "supplenza"
-            setOnCheckedChangeListener { _, si ->
-                sceltaAssenze.visibility = if (si) View.VISIBLE else View.GONE
-                notaAssenze.visibility = if (si) View.VISIBLE else View.GONE
-            }
-        }
         // uda: le unità di apprendimento che il registro propone per materia e classe; la riga compare solo se ce ne sono
         var udaElenco = emptyList<FirmaLezione.Uda>()
         val uda = android.widget.Spinner(ctx)
@@ -940,9 +922,6 @@ class StudentiScheda : Scheda() {
             addView(sezioneUda)
             addView(etichetta("valore"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
             addView(valore, LinearLayout.LayoutParams(-1, -2))
-            addView(supplenza, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
-            addView(sceltaAssenze, LinearLayout.LayoutParams(-1, -2).apply { leftMargin = dp(24) })
-            addView(notaAssenze, LinearLayout.LayoutParams(-1, -2).apply { leftMargin = dp(24) })
             addView(etichetta("argomento"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
             addView(argomento, LinearLayout.LayoutParams(-1, -2))
             addView(errore, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -972,8 +951,7 @@ class StudentiScheda : Scheda() {
             val u = udaScelta()
             val altri = FirmaLezione.CampiFirma(
                 pesoOra = FirmaLezione.PESI_ORA.getOrNull(valore.selectedItemPosition)?.first ?: "1",
-                udaId = u?.id.orEmpty(), faseId = u?.fasi?.firstOrNull()?.first.orEmpty(),
-                supplenza = supplenza.isChecked, conteggiaAssenze = !ignora.isChecked
+                udaId = u?.id.orEmpty(), faseId = u?.fasi?.firstOrNull()?.first.orEmpty()
             )
             inviaFirma(p.registro, SceltaFirma(oraScelta(), numeroScelto(), m!!, tipoScelto(), progetto, argomento.text.toString(), altri), data)
         }
@@ -1045,8 +1023,7 @@ class StudentiScheda : Scheda() {
         val log = StringBuilder("firma dal libro del docente classePiù ${BuildConfig.VERSION_NAME}\n")
             .append("data $data, $quando (${s.ore} ore), registro ${registro.tipo}|${registro.id}|${registro.nome}, materia ${s.materia}, ")
             .append("attività ${s.tipoAttivita}, progetto ${s.progetto?.let { "${it.id} ${it.nome}" } ?: "nessuno"}, argomento \"${s.argomento.trim()}\", ")
-            .append("valore ${s.altri.pesoOra}, uda ${s.altri.udaId.ifEmpty { "nessuna" }}, ")
-            .append(if (s.altri.supplenza) "supplenza (${if (s.altri.conteggiaAssenze) "conteggia" else "ignora"} ore assenza)\n\n" else "nessuna supplenza\n\n")
+            .append("valore ${s.altri.pesoOra}, uda ${s.altri.udaId.ifEmpty { "nessuna" }}\n\n")
         lavoroFirma = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 val esito = runCatching {

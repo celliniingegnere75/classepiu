@@ -587,7 +587,7 @@ class ClasseViva(private val utente: String, private val password: String, priva
         numeroOre: Int = 1,
         /** progetto di scuola e territorio per PCTO/FSL (id_progetto_set del sito, HAR del 1/11/2026); vuoto = nessuno */
         idProgetto: String = "",
-        /** gli altri campi della finestra di firma del sito: valore dell'ora, UDA e fase, supplenza (solo via registro web) */
+        /** gli altri campi della finestra di firma del sito: valore dell'ora, UDA e fase (solo via registro web) */
         altri: FirmaLezione.CampiFirma = FirmaLezione.CampiFirma()
     ): Pair<Int, String> {
         assicuraLogin()

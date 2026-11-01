@@ -309,10 +309,6 @@ object FirmaLezione {
         val pesoOra: String = "1",
         val udaId: String = "",
         val faseId: String = "",
-        /** casella "supplenza" del sito: inviata come supplenza=on solo se spuntata */
-        val supplenza: Boolean = false,
-        /** con supplenza: true "conteggia ore assenza", false "ignora ore assenza" */
-        val conteggiaAssenze: Boolean = true,
     )
 
     /**
@@ -321,10 +317,9 @@ object FirmaLezione {
      * [giorno] è yyyy-MM-dd.
      */
     fun campiFirmaInsert(classeId: String, gruppo: String, materiaId: String, giorno: String, ora: Int, c: CampiFirma): List<Pair<String, String>> {
-        val campi = mutableListOf("action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno)
-        if (c.supplenza) campi += "supplenza" to "on"
-        campi += listOf(
-            "conteggioassenze" to if (!c.supplenza || c.conteggiaAssenze) "conteggiaora" else "noconteggiaora",
+        return listOf(
+            "action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno,
+            "conteggioassenze" to "conteggiaora",
             "materia" to materiaId, "tipo_attivita" to c.tipoAttivita,
             "ora_posizione" to ora.toString(), "numero_ore" to c.numeroOre.coerceAtLeast(1).toString(),
             "uda_firma" to c.udaId, "fase_firma" to if (c.udaId.isEmpty()) "" else c.faseId,
@@ -332,7 +327,6 @@ object FirmaLezione {
             "peso_ora" to (PESI_ORA.firstOrNull { it.first == c.pesoOra }?.first ?: "1"),
             "text_nota" to c.argomento.trim(), "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
         )
-        return campi
     }
 
     /** Il tipo attività chiede il progetto di scuola e territorio? Stessa regola del sito (regclasse.js): ALTERNANZA, ASL, PCTO, FSL. */

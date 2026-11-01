@@ -265,14 +265,12 @@ class FirmaLezioneTest {
             "ora_posizione" to "1", "numero_ore" to "1", "uda_firma" to "", "fase_firma" to "", "id_progetto_set" to "473167",
             "peso_ora" to "1", "text_nota" to "prova", "output" to "", "gruppo" to "0"), c)
         val g = FirmaLezione.campiFirmaInsert("", "5EA_AUA", "7", "2026-11-02", 3,
-            FirmaLezione.CampiFirma(numeroOre = 2, pesoOra = "0.5", udaId = "12", faseId = "7", supplenza = true, conteggiaAssenze = false)).toMap()
+            FirmaLezione.CampiFirma(numeroOre = 2, pesoOra = "0.5", udaId = "12", faseId = "7")).toMap()
         assertEquals("5EA_AUA", g["classe_id"]); assertEquals("1", g["gruppo"]); assertEquals("2", g["numero_ore"])
         assertEquals("0.5", g["peso_ora"]); assertEquals("12", g["uda_firma"]); assertEquals("7", g["fase_firma"])
-        assertEquals("on", g["supplenza"]); assertEquals("noconteggiaora", g["conteggioassenze"])
-        // valore sconosciuto → un'ora; fase senza uda non si manda; senza supplenza si conteggia sempre
-        val x = FirmaLezione.campiFirmaInsert("1", "", "2", "2026-11-02", 1,
-            FirmaLezione.CampiFirma(pesoOra = "9", faseId = "7", conteggiaAssenze = false)).toMap()
-        assertEquals("1", x["peso_ora"]); assertEquals("", x["fase_firma"]); assertEquals("conteggiaora", x["conteggioassenze"])
-        assertFalse(x.containsKey("supplenza"))
+        assertEquals("conteggiaora", g["conteggioassenze"])
+        // valore sconosciuto → un'ora; fase senza uda non si manda
+        val x = FirmaLezione.campiFirmaInsert("1", "", "2", "2026-11-02", 1, FirmaLezione.CampiFirma(pesoOra = "9", faseId = "7")).toMap()
+        assertEquals("1", x["peso_ora"]); assertEquals("", x["fase_firma"])
     }
 }
