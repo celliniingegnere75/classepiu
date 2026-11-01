@@ -500,15 +500,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
     }
 
-    data class OpzioniModificaFirma(
-        val attivita: List<String>,
-        val progetti: List<Pair<String, String>>,
-        val notaSecondaria: String,
-        val idUda: String,
-        val risposta: String
-    )
+    /** La finestra di modifica letta dal registro web e una riga di log della richiesta. */
+    data class OpzioniModificaFirma(val form: FirmaLezione.FormModifica, val risposta: String)
 
-    /** Legge la finestra di modifica nativa del registro web (regclasse_update_firma.php). */
+    /**
+     * Legge la finestra di modifica nativa del registro web (regclasse_update_firma.php?ids=…&evento_id=…, HAR
+     * RichiamoeCancellaFirma) con i valori attuali: tipo attività, progetto, argomento, integrazione privata e UDA.
+     */
     fun opzioniModificaFirma(grezzo: String): OpzioniModificaFirma {
         val o = JSONObject(grezzo)
         fun campo(vararg nomi: String): String = nomi.firstNotNullOfOrNull { k ->
@@ -520,28 +518,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val url = "https://web.spaggiari.eu/cvv/app/default/regclasse_update_firma.php?ids=${enc(ids)}&evento_id=${enc(eventoId)}"
         sessioneWeb().use { web ->
-            val (codice, html) = web.chiama(url)
+            val (codice, html) = web.chiama(url, referer = "https://web.spaggiari.eu/cvv/app/default/regclasse.php")
             if (codice !in 200..299) throw ClasseVivaException("finestra di modifica non leggibile (HTTP $codice)")
-            fun opzioni(id: String): List<Pair<String, String>> {
-                val select = Regex("""<select\b(?=[^>]*\bid=["']${Regex.escape(id)}["'])[^>]*>(.*?)</select>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-                    .find(html)?.groupValues?.get(1).orEmpty()
-                return Regex("""<option\b[^>]*value=["']([^"']*)["'][^>]*>(.*?)</option>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
-                    .findAll(select).map { m ->
-                        android.text.Html.fromHtml(m.groupValues[1], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim() to
-                            android.text.Html.fromHtml(m.groupValues[2], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
-                    }.filter { it.first.isNotEmpty() || it.second.isNotEmpty() }.toList()
-            }
-            fun valore(id: String): String = Regex("""<(?:input|textarea)\b(?=[^>]*(?:id|name)=["']${Regex.escape(id)}["'])[^>]*value=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
-                .find(html)?.groupValues?.get(1)?.let { android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_LEGACY).toString() }.orEmpty()
-            val progetti = opzioni("progetto_set_modifica").ifEmpty { opzioni("id_progetto_set") }
-            val attivita = opzioni("tipo_attivita_modifica").map { it.second.ifEmpty { it.first } }.filter { it.isNotEmpty() }.distinct()
-            return OpzioniModificaFirma(
-                attivita = attivita,
-                progetti = progetti.filter { it.first.isNotEmpty() }.distinctBy { it.first },
-                notaSecondaria = valore("text_nota_2"),
-                idUda = valore("id_uda"),
-                risposta = "GET $url -> HTTP $codice\\nform letta: ${html.length} caratteri"
-            )
+            val form = FirmaLezione.leggiFormModifica(html)
+            if (form.attivita.isEmpty()) throw ClasseVivaException("finestra di modifica non riconosciuta (HTTP $codice, ${html.length} caratteri)")
+            return OpzioniModificaFirma(form, "GET regclasse_update_firma.php -> HTTP $codice, ${html.length} caratteri")
         }
     }
 
@@ -605,7 +586,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
         /** ore consecutive coperte dalla firma a partire da [ora] (campo numero_ore del sito: una sola firma) */
         numeroOre: Int = 1,
         /** progetto di scuola e territorio per PCTO/FSL (id_progetto_set del sito, HAR del 1/11/2026); vuoto = nessuno */
-        idProgetto: String = ""
+        idProgetto: String = "",
+        /** gli altri campi della finestra di firma del sito: valore dell'ora, UDA e fase (solo via registro web) */
+        altri: FirmaLezione.CampiFirma = FirmaLezione.CampiFirma()
     ): Pair<Int, String> {
         assicuraLogin()
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
@@ -634,8 +617,9 @@ class ClasseViva(private val utente: String, private val password: String, priva
             if (tipo == "G" && nomeClasse.isNotBlank()) return firmaCompresenza("", nomeClasse, sid.toString(), data, ora, argomento, log)
             return 422 to "compresenza non disponibile per questo tipo di classe"
         }
-        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, argomento, tipoAttivita, numeroOre, idProgetto)
-        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, argomento, tipoAttivita, numeroOre, idProgetto)
+        val campi = altri.copy(tipoAttivita = tipoAttivita, numeroOre = numeroOre, idProgetto = idProgetto, argomento = argomento)
+        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, campi)
+        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, campi)
         val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
         log.append("tipi di lezione: ${tipi.joinToString { "${it.codice}=${it.nome}" }.ifEmpty { "non letti" }}\n\n")
         val lezione = tipi.firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
@@ -719,6 +703,34 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * che il sito manda come classe_id insieme a gruppo=1, e la pagina del registro si apre con gruppo_id.
      * Il sito risponde {"status":"OK","evento_id":...} se la firma è inserita.
      */
+    /**
+     * Unità di apprendimento che il registro propone per la [materia] (nome come in subjects/list) della classe, come la
+     * tendina "Uda" della firma del sito (regclasse.js, udaLoad: GET rubrica_io.php?ope=getUdaFirma). Sola lettura.
+     * Classe intera: [tipo] C e [classeId]; gruppo: [tipo] G e la sigla [nomeClasse]. Lista vuota se non ce ne sono.
+     */
+    fun udaFirma(tipo: String, classeId: String, nomeClasse: String, materia: String): List<FirmaLezione.Uda> {
+        assicuraLogin()
+        val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
+        if (m.codice != 200) return emptyList()
+        val radice = runCatching { org.json.JSONTokener(m.testo).nextValue() }.getOrNull() ?: return emptyList()
+        val elenco = trovaArrayGenerico(radice, listOf("subjects", "items", "data")) ?: return emptyList()
+        val voci = (0 until elenco.length()).mapNotNull { elenco.optJSONObject(it) }
+        val ceMia = voci.any { it.optBoolean("isMine", false) }
+        val voce = voci.filter { !ceMia || it.optBoolean("isMine", false) }
+            .firstOrNull { FirmaLezione.normalizza(it.optString("subjectDesc")) == FirmaLezione.normalizza(materia) } ?: return emptyList()
+        val sid = listOf("subjectId", "id", "subject_id").firstNotNullOfOrNull { k ->
+            voce.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString()
+        } ?: return emptyList()
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val gruppo = tipo.equals("G", true)
+        val url = "https://web.spaggiari.eu/cmp/app/default/rubrica_io.php?ope=getUdaFirma&materia_id=${enc(sid)}" +
+            "&classe_id=${enc(if (gruppo) "" else classeId)}&gruppo_id=${enc(if (gruppo) nomeClasse else "")}"
+        sessioneWeb().use { web ->
+            val (codice, testo) = web.chiama(url, referer = "https://web.spaggiari.eu/cvv/app/default/regclasse.php")
+            return if (codice in 200..299) FirmaLezione.leggiUda(testo) else emptyList()
+        }
+    }
+
     /**
      * Pagina del registro web (regclasse.php) del giorno [data] (yyyyMMdd), in sola lettura: da qui si leggono le voci
      * "tipo attività" e i progetti di scuola e territorio per PCTO/FSL (FirmaLezione.leggiOpzioniFirma).
@@ -813,17 +825,13 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
     }
 
-    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder, argomento: String = "", tipoAttivita: String = "Lezione",
-                         numeroOre: Int = 1, idProgetto: String = ""): Pair<Int, String> {
+    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder,
+                         campi: FirmaLezione.CampiFirma = FirmaLezione.CampiFirma()): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
         val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=${enc(gruppo)}&data_start=$giorno&corsoextra=0"
-        val corpo = listOf(
-            "action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno,
-            "conteggioassenze" to "conteggiaora", "materia" to materiaId, "tipo_attivita" to tipoAttivita,
-            "ora_posizione" to ora.toString(), "numero_ore" to numeroOre.coerceAtLeast(1).toString(), "uda_firma" to "", "fase_firma" to "",
-            "id_progetto_set" to idProgetto, "peso_ora" to "1", "text_nota" to argomento.trim(), "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
-        ).joinToString("&") { (k, v) -> "$k=${enc(v)}" }
+        val corpo = FirmaLezione.campiFirmaInsert(classeId, gruppo, materiaId, giorno, ora, campi)
+            .joinToString("&") { (k, v) -> "$k=${enc(v)}" }
         val web = sessioneWeb()
         try {
             val (codicePagina, _) = web.chiama(pagina)

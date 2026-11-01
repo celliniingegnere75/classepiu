@@ -170,18 +170,21 @@ object FirmaLezione {
     data class OpzioniFirma(val tipiAttivita: List<String>, val progetti: List<Progetto>, val progettiAttivi: Boolean)
 
     /** Testo di un'opzione HTML in chiaro: entità comuni e numeriche, spazi ripetuti tolti. */
-    fun testoHtml(s: String): String {
+    fun testoHtml(s: String): String = entita(s.replace(Regex("<[^>]*>"), "")).replace(Regex("\\s+"), " ").trim()
+
+    /** Entità HTML comuni e numeriche in chiaro, senza toccare spazi e a capo (per il contenuto delle textarea). */
+    private fun entita(s: String): String {
         val nomi = mapOf("nbsp" to " ", "bull" to "•", "amp" to "&", "quot" to "\"", "apos" to "'", "lt" to "<", "gt" to ">",
             "agrave" to "à", "egrave" to "è", "eacute" to "é", "igrave" to "ì", "ograve" to "ò", "ugrave" to "ù", "ordf" to "ª", "deg" to "°",
             "rsquo" to "’", "lsquo" to "‘", "rdquo" to "”", "ldquo" to "“", "ndash" to "–", "mdash" to "—", "hellip" to "…")
-        return Regex("&(#x[0-9a-fA-F]+|#\\d+|[a-zA-Z]+);").replace(s.replace(Regex("<[^>]*>"), "")) { m ->
+        return Regex("&(#x[0-9a-fA-F]+|#\\d+|[a-zA-Z]+);").replace(s) { m ->
             val k = m.groupValues[1]
             when {
                 k.startsWith("#x") || k.startsWith("#X") -> k.drop(2).toIntOrNull(16)?.let { String(Character.toChars(it)) } ?: m.value
                 k.startsWith("#") -> k.drop(1).toIntOrNull()?.let { String(Character.toChars(it)) } ?: m.value
                 else -> nomi[k.lowercase(Locale.ROOT)] ?: m.value
             }
-        }.replace(Regex("\\s+"), " ").trim()
+        }
     }
 
     private fun opzioniSelect(html: String, id: String): List<Pair<String, String>> {
@@ -198,6 +201,132 @@ object FirmaLezione {
             .map { Progetto(it.first, it.second) }.distinctBy { it.id }
         val attivi = Regex("id=\"set_enable\"\\s+value=\"1\"").containsMatchIn(html) || Regex("value=\"1\"\\s+id=\"set_enable\"").containsMatchIn(html)
         return OpzioniFirma(tipi, progetti, attivi)
+    }
+
+    /**
+     * Voci di una <select> con l'eventuale voce scelta. Il sito scrive le voci scelte come `selected` o
+     * `selected="selected"` e lascia `:selected:` su quelle non scelte (finestra di modifica, HAR del 1/11/2026).
+     */
+    private fun selectConScelta(html: String, id: String): Pair<List<Pair<String, String>>, String?> {
+        val apertura = Regex("<select\\b[^>]*\\bid=[\"']${Regex.escape(id)}[\"'][^>]*>", RegexOption.IGNORE_CASE).find(html)
+            ?: return emptyList<Pair<String, String>>() to null
+        val fine = html.indexOf("</select>", apertura.range.last).takeIf { it > 0 } ?: html.length
+        var scelta: String? = null
+        val voci = Regex("<option\\b([^>]*)>(.*?)(?=</option>|<option\\b|$)", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            .findAll(html.substring(apertura.range.last + 1, fine)).mapNotNull { m ->
+                val attributi = m.groupValues[1]
+                val valore = Regex("\\bvalue=[\"']([^\"']*)[\"']", RegexOption.IGNORE_CASE).find(attributi)?.groupValues?.get(1)
+                    ?: return@mapNotNull null
+                val voce = testoHtml(valore) to testoHtml(m.groupValues[2])
+                if (scelta == null && Regex("(?<![:\\w])selected(?![:\\w])", RegexOption.IGNORE_CASE).containsMatchIn(attributi)) scelta = voce.first
+                voce
+            }.toList()
+        return voci to scelta
+    }
+
+    /** Contenuto di una <textarea> (con a capo), null se nella pagina non c'è. */
+    private fun textarea(html: String, id: String): String? =
+        Regex("<textarea\\b[^>]*\\bid=[\"']${Regex.escape(id)}[\"'][^>]*>(.*?)</textarea>", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+            .find(html)?.groupValues?.get(1)?.let { entita(it).trim() }
+
+    /**
+     * La finestra "aggiorna argomento della lezione" del registro web (regclasse_update_firma.php), con i valori attuali
+     * della firma: si rimandano tutti nel POST UPD, così quello che non si tocca resta com'è (progetto, integrazione privata, UDA).
+     */
+    data class FormModifica(
+        val attivita: List<String>,
+        val attivitaScelta: String?,
+        val progetti: List<Progetto>,
+        val progettoScelto: String?,
+        /** campo set_enable: il registro usa i progetti di scuola e territorio */
+        val progettiAttivi: Boolean,
+        /** argomento (text_nota), null se la finestra non l'ha */
+        val argomento: String?,
+        /** integrazione privata (text_nota_2), visibile solo nel registro del docente */
+        val notaPrivata: String,
+        /** unità di apprendimento (uda_firma_edit): id → nome, senza la voce vuota */
+        val uda: List<Pair<String, String>>,
+        val udaScelta: String?,
+    )
+
+    fun leggiFormModifica(html: String): FormModifica {
+        val (attivita, attivitaScelta) = selectConScelta(html, "tipo_attivita_modifica")
+        val (progetti, progettoScelto) = selectConScelta(html, "progetto_set_modifica")
+        val (uda, udaScelta) = selectConScelta(html, "uda_firma_edit")
+        val attivi = Regex("<input\\b(?=[^>]*\\bid=[\"']set_enable[\"'])(?=[^>]*\\bvalue=[\"']1[\"'])[^>]*>", RegexOption.IGNORE_CASE).containsMatchIn(html)
+        return FormModifica(
+            attivita = attivita.map { it.first.ifEmpty { it.second } }.filter { it.isNotEmpty() }.distinct(),
+            attivitaScelta = attivitaScelta?.takeIf { it.isNotEmpty() },
+            progetti = progetti.filter { it.first.isNotEmpty() && it.second.isNotEmpty() }.map { Progetto(it.first, it.second) }.distinctBy { it.id },
+            progettoScelto = progettoScelto?.takeIf { it.isNotEmpty() },
+            progettiAttivi = attivi,
+            argomento = textarea(html, "popup_text_nota"),
+            notaPrivata = textarea(html, "popup_text_nota_2").orEmpty(),
+            uda = uda.filter { it.first.isNotEmpty() },
+            udaScelta = udaScelta?.takeIf { it.isNotEmpty() },
+        )
+    }
+
+    /** Un'unità di apprendimento proposta dal registro per materia e classe (rubrica_io.php?ope=getUdaFirma). */
+    data class Uda(val id: String, val nome: String, val corrente: Boolean, val fasi: List<Pair<String, String>>)
+
+    /**
+     * La risposta di getUdaFirma, letta come fa regclasse.js (udaLoad): per ogni voce uda_id, "(codice) - shortdesc",
+     * current = "1" per quella già proposta, lista_fasi con id e fase. Arriva come elenco o come oggetto; vuota se non ci sono UDA.
+     */
+    fun leggiUda(testo: String): List<Uda> {
+        val radice = runCatching { org.json.JSONTokener(testo.trim()).nextValue() }.getOrNull() ?: return emptyList()
+        val voci = when (radice) {
+            is JSONArray -> (0 until radice.length()).mapNotNull { radice.optJSONObject(it) }
+            is JSONObject -> radice.keys().asSequence().mapNotNull { radice.optJSONObject(it) }.toList()
+            else -> emptyList()
+        }
+        fun JSONObject.testo(k: String) = opt(k)?.takeIf { it != JSONObject.NULL }?.toString()?.trim().orEmpty()
+        return voci.mapNotNull { u ->
+            val id = u.testo("uda_id").ifEmpty { return@mapNotNull null }
+            val codice = u.testo("codice")
+            val nome = listOf(codice.takeIf { it.isNotEmpty() }?.let { "($it)" }, u.testo("shortdesc").takeIf { it.isNotEmpty() })
+                .filterNotNull().joinToString(" - ").ifEmpty { id }
+            val elencoFasi = when (val f = u.opt("lista_fasi")) {
+                is JSONArray -> (0 until f.length()).mapNotNull { f.optJSONObject(it) }
+                is JSONObject -> f.keys().asSequence().mapNotNull { f.optJSONObject(it) }.toList()
+                else -> emptyList()
+            }
+            val fasi = elencoFasi.mapNotNull { x -> x.testo("id").takeIf { it.isNotEmpty() }?.let { it to x.testo("fase") } }
+            Uda(id, testoHtml(nome), u.testo("current") == "1", fasi)
+        }.distinctBy { it.id }
+    }
+
+    /** Voci "valore" della finestra di firma del sito (peso_ora); la quarta (1.75) sul sito è nascosta. */
+    val PESI_ORA = listOf("0.5" to "mezz'ora", "1" to "un'ora", "1.5" to "un'ora e mezza")
+
+    /** Campi della nuova firma oltre a classe, materia, giorno e ora, con i valori predefiniti del sito. */
+    data class CampiFirma(
+        val tipoAttivita: String = "Lezione",
+        val numeroOre: Int = 1,
+        val idProgetto: String = "",
+        val argomento: String = "",
+        val pesoOra: String = "1",
+        val udaId: String = "",
+        val faseId: String = "",
+    )
+
+    /**
+     * Corpo del POST regclasse_io.php (FIRMA_INSERT), negli stessi campi e nello stesso ordine del sito (HAR del 1/11/2026).
+     * Classe intera: [classeId] e [gruppo] vuoto; gruppo di classe articolata: la sigla [gruppo] va in classe_id con gruppo=1.
+     * [giorno] è yyyy-MM-dd.
+     */
+    fun campiFirmaInsert(classeId: String, gruppo: String, materiaId: String, giorno: String, ora: Int, c: CampiFirma): List<Pair<String, String>> {
+        return listOf(
+            "action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno,
+            "conteggioassenze" to "conteggiaora",
+            "materia" to materiaId, "tipo_attivita" to c.tipoAttivita,
+            "ora_posizione" to ora.toString(), "numero_ore" to c.numeroOre.coerceAtLeast(1).toString(),
+            "uda_firma" to c.udaId, "fase_firma" to if (c.udaId.isEmpty()) "" else c.faseId,
+            "id_progetto_set" to c.idProgetto,
+            "peso_ora" to (PESI_ORA.firstOrNull { it.first == c.pesoOra }?.first ?: "1"),
+            "text_nota" to c.argomento.trim(), "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
+        )
     }
 
     /** Il tipo attività chiede il progetto di scuola e territorio? Stessa regola del sito (regclasse.js): ALTERNANZA, ASL, PCTO, FSL. */

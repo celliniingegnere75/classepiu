@@ -382,7 +382,11 @@ class ListaScheda : Scheda() {
             }.show()
     }
 
-    /** Modifica la firma usando la form UPD del registro web, senza creare un nuovo evento. */
+    /**
+     * Modifica la firma con la finestra "aggiorna argomento della lezione" del registro web (POST UPD, senza creare un
+     * nuovo evento). I campi partono dai valori attuali letti dal sito e si rimandano tutti, così quello che non si
+     * tocca (progetto, integrazione privata, UDA) resta com'è.
+     */
     private fun modificaFirma(v: Voce) {
         val ctx = requireContext()
         val tipoAttuale = runCatching {
@@ -391,42 +395,56 @@ class ListaScheda : Scheda() {
                 o.optString(k).takeIf { it.isNotBlank() && it != "null" }
             } ?: "Lezione"
         }.getOrDefault("Lezione")
-        val argomento = android.widget.EditText(ctx).apply {
-            setText(if (v.testo == "nessun argomento") "" else v.testo)
-            textSize = 15f; minLines = 3; gravity = Gravity.TOP
+        fun testoMultiriga(righe: Int, suggerimento: String) = android.widget.EditText(ctx).apply {
+            hint = suggerimento; textSize = 15f; minLines = righe; gravity = Gravity.TOP
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
-        val secondario = android.widget.EditText(ctx).apply {
-            hint = "secondo argomento (se previsto dal registro)"
-            textSize = 15f; minLines = 2; gravity = Gravity.TOP
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        fun spinner(voci: List<String>) = android.widget.Spinner(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, voci)
         }
-        val uda = android.widget.EditText(ctx).apply { hint = "ID UDA"; setSingleLine(true) }
-        val attivita = android.widget.Spinner(ctx).apply {
-            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, listOf(tipoAttuale))
+        fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(3)) }
+        val argomento = testoMultiriga(3, "argomento della lezione").apply { setText(if (v.testo == "nessun argomento") "" else v.testo) }
+        val privata = testoMultiriga(2, "integrazione privata")
+        val attivita = spinner(listOf(tipoAttuale))
+        val progetti = spinner(listOf("nessun progetto"))
+        val uda = spinner(listOf("nessuna uda"))
+        val sezioneProgetto = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE
+            addView(etichetta("progetto (scuola e territorio)")); addView(progetti)
         }
-        val progetti = android.widget.Spinner(ctx).apply {
-            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, listOf("nessun progetto"))
+        val sezioneUda = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; visibility = android.view.View.GONE
+            addView(etichetta("uda")); addView(uda)
         }
-        val stato = TextView(ctx).apply { text = "carico i campi della firma da ClasseViva Web…"; textSize = 12f; setTextColor(0xFF666666.toInt()) }
+        val stato = TextView(ctx).apply { text = "carico la firma da ClasseViva Web…"; textSize = 12f; setTextColor(0xFF666666.toInt()) }
         val corpo = LinearLayout(ctx).apply {
             orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), 0)
             addView(TextView(ctx).apply { text = v.titolo; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
-            fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(3)) }
-            addView(etichetta("attività"))
+            addView(etichetta("tipo attività"))
             addView(attivita)
-            addView(etichetta("progetto PCTO/FSL"))
-            addView(progetti)
+            addView(sezioneProgetto)
+            addView(sezioneUda)
             addView(etichetta("argomento"))
             addView(argomento)
-            addView(etichetta("secondo argomento"))
-            addView(secondario)
-            addView(etichetta("unità didattica di apprendimento"))
-            addView(uda)
+            addView(etichetta("integrazione privata · visibile solo nel registro del docente"))
+            addView(privata)
             addView(stato, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
         }
-        var opzioni: ClasseViva.OpzioniModificaFirma? = null
+        var form: FirmaLezione.FormModifica? = null
+        var voceAttivita = listOf(tipoAttuale)
+        var voceProgetti = emptyList<FirmaLezione.Progetto>()
+        var voceUda = emptyList<Pair<String, String>>()
         var erroreCaricamento = ""
+        fun attivitaScelta() = voceAttivita.getOrElse(attivita.selectedItemPosition) { tipoAttuale }
+        // come il sito (regclasse_mod_firma.js): il progetto si chiede solo per ALTERNANZA/ASL/PCTO/FSL con set_enable=1
+        fun aggiornaProgetto() {
+            val serve = FirmaLezione.richiedeProgetto(attivitaScelta()) && form?.progettiAttivi == true && voceProgetti.isNotEmpty()
+            sezioneProgetto.visibility = if (serve) android.view.View.VISIBLE else android.view.View.GONE
+        }
+        attivita.onItemSelectedListener = object : android.widget.AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(a: android.widget.AdapterView<*>?, w: android.view.View?, pos: Int, id: Long) = aggiornaProgetto()
+            override fun onNothingSelected(a: android.widget.AdapterView<*>?) {}
+        }
         val dialogo = com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
             .setTitle("modifica firma")
             .setView(android.widget.ScrollView(ctx).apply { addView(corpo) })
@@ -435,19 +453,24 @@ class ListaScheda : Scheda() {
             .create()
         dialogo.setOnShowListener {
             dialogo.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val dati = opzioni
-                if (dati == null) {
+                if (form == null) {
                     android.widget.Toast.makeText(ctx, erroreCaricamento.ifBlank { "attendo i campi di ClasseViva…" }, android.widget.Toast.LENGTH_LONG).show()
                     return@setOnClickListener
                 }
-                val progetto = (progetti.selectedItemPosition - 1).takeIf { it >= 0 }?.let { dati.progetti.getOrNull(it)?.first }.orEmpty()
+                val progetto = if (sezioneProgetto.visibility == android.view.View.VISIBLE)
+                    (progetti.selectedItemPosition - 1).takeIf { it >= 0 }?.let { voceProgetti.getOrNull(it)?.id }.orEmpty() else ""
+                if (sezioneProgetto.visibility == android.view.View.VISIBLE && progetto.isEmpty()) {
+                    stato.text = "per ${attivitaScelta()} scegli il progetto di scuola e territorio."
+                    stato.setTextColor(0xFFD32F2F.toInt())
+                    return@setOnClickListener
+                }
+                val idUda = (uda.selectedItemPosition - 1).takeIf { it >= 0 }?.let { voceUda.getOrNull(it)?.first }.orEmpty()
                 dialogo.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = false
                 lifecycleScope.launch {
                     val r = withContext(Dispatchers.IO) {
                         runCatching {
                             Impostazioni(ctx).client().salvaFirmaWeb(
-                                v.grezzo, attivita.selectedItem?.toString().orEmpty(), progetto,
-                                argomento.text.toString(), secondario.text.toString(), uda.text.toString()
+                                v.grezzo, attivitaScelta(), progetto, argomento.text.toString(), privata.text.toString(), idUda
                             )
                         }
                     }
@@ -477,16 +500,27 @@ class ListaScheda : Scheda() {
         dialogo.show()
         lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().opzioniModificaFirma(v.grezzo) } }
-            r.onSuccess { dati ->
-                opzioni = dati
-                val voci = dati.attivita.ifEmpty { listOf(tipoAttuale) }
-                attivita.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, voci)
-                attivita.setSelection(voci.indexOfFirst { it.equals(tipoAttuale, true) }.coerceAtLeast(0))
-                val progettiVoci = listOf("" to "nessun progetto") + dati.progetti
-                progetti.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, progettiVoci.map { it.second })
-                secondario.setText(dati.notaSecondaria)
-                uda.setText(dati.idUda)
-                stato.text = "opzioni lette dal registro web"
+            if (!dialogo.isShowing) return@launch
+            r.onSuccess { letti ->
+                val f = letti.form
+                val attuale = f.attivitaScelta ?: tipoAttuale
+                voceAttivita = (if (f.attivita.any { it.equals(attuale, true) }) f.attivita else listOf(attuale) + f.attivita)
+                attivita.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, voceAttivita)
+                attivita.setSelection(voceAttivita.indexOfFirst { it.equals(attuale, true) }.coerceAtLeast(0))
+                voceProgetti = f.progetti
+                progetti.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item,
+                    listOf("scegli il progetto") + voceProgetti.map { it.nome })
+                progetti.setSelection(voceProgetti.indexOfFirst { it.id == f.progettoScelto } + 1)
+                voceUda = f.uda
+                uda.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item,
+                    listOf("nessuna uda") + voceUda.map { it.second })
+                uda.setSelection(voceUda.indexOfFirst { it.first == f.udaScelta } + 1)
+                sezioneUda.visibility = if (voceUda.isEmpty()) android.view.View.GONE else android.view.View.VISIBLE
+                f.argomento?.let { argomento.setText(it) }
+                privata.setText(f.notaPrivata)
+                form = f
+                aggiornaProgetto()
+                stato.text = "valori attuali letti dal registro web"
             }.onFailure {
                 erroreCaricamento = it.message ?: "non riesco a leggere la finestra di ClasseViva"
                 stato.text = erroreCaricamento
