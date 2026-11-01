@@ -303,6 +303,13 @@ class StudentiScheda : Scheda() {
         }
     }
 
+    /**
+     * Sigla del gruppo per il registro web (gruppo_id di regclasse.php e regclasse_io.php): il gruppo di classe articolata
+     * aperto da «tutti i registri», oppure il nome del registro quando è un gruppo (tipo G, es. 5EA_AUA), come fa la firma.
+     * Con il solo id numerico del gruppo la pagina web non mostra gli alunni.
+     */
+    private fun gruppoWeb(): String = gruppo.ifBlank { if (tipo.equals("G", true)) nome.trim() else "" }
+
     private fun caricaStato() {
         lavoro?.cancel()
         datiGiorno = null
@@ -317,7 +324,7 @@ class StudentiScheda : Scheda() {
             // questa seconda lettura, separata dalle API REST, non è riuscita (es. login web fallito).
             val statiWeb: kotlinx.coroutines.Deferred<Result<Map<String, ClasseViva.StatoWeb>>>? = if (libroDocente) {
                 async(Dispatchers.IO) {
-                    runCatching { client.statiRegistroWeb(classeId, gruppo, giorno) }
+                    runCatching { client.statiRegistroWeb(classeId, gruppoWeb(), giorno) }
                 }
             } else null
             val r = withContext(Dispatchers.IO) {
@@ -393,6 +400,14 @@ class StudentiScheda : Scheda() {
                             }
                             else -> {} // X / no lez. (o altro): resta come letto dalle API, o grigio se senza codice
                         }
+                    }
+                    // Giorno senza scuola (domenica, sabato con «settimana fino a sabato» spenta): le API danno comunque
+                    // AT00 a tutti (evtId -1, nessun evento vero). Il presente senza un evento registrato diventa grigio;
+                    // restano gli eventi veri (A, PS, PV, ritardi, uscite, o P con un orario di registrazione).
+                    if (giornoSenzaScuola) for (al in studenti) {
+                        val v = this[al.id] ?: continue
+                        val ora = web[al.id]?.eventoOra.orEmpty()
+                        if (v.valore == 0 && !v.isRitardoBreve && !v.isUscita && (ora.isEmpty() || ora == "0")) this[al.id] = v.copy(valore = -1)
                     }
                 }
             }
@@ -741,7 +756,7 @@ class StudentiScheda : Scheda() {
         val statoInviato = cambio.statoDesiderato
         val esito = withContext(Dispatchers.IO) {
             runCatching {
-                client.cambiaStatoAppello(classeId, gruppo, cambio.studenteId, cambio.giorno, codiceEvento)
+                client.cambiaStatoAppello(classeId, gruppoWeb(), cambio.studenteId, cambio.giorno, codiceEvento)
             }
         }
         cambio.invioInCorso = false
