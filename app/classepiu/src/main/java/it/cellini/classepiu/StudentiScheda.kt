@@ -413,8 +413,8 @@ class StudentiScheda : Scheda() {
                                     if (oraEvento.isEmpty() && giorno <= oggi && !giornoSenzaScuola) daRegistrare += al.id
                                 }
                             }
-                            "X" -> {
-                                // X / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
+                            "X", "XG", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
+                                // X / XG / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
                                 if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
                                 bloccati += al.id
                             }
