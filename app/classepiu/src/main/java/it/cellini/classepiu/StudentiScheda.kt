@@ -11,6 +11,7 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.ScrollView
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
@@ -130,12 +131,23 @@ class StudentiScheda : Scheda() {
             // in fondo anche lo spazio del pulsante "firma la lezione", così l'ultimo alunno non resta sotto
             setPadding(dp(14), dp(16), dp(14), dp(16 + SPAZIO_BARRA + 64))
         }
-        val pannello = ScrollView(ctx).apply {
+        val elencoScorrevole = ScrollView(ctx).apply {
             addView(lista)
             background = GradientDrawable().apply {
                 setColor(colorePannello)
             }
             clipToOutline = true
+        }
+        val pannello = SwipeRefreshLayout(ctx).apply {
+            setColorSchemeColors(azzurro)
+            setProgressBackgroundColorSchemeColor(Color.WHITE)
+            setOnRefreshListener {
+                salvaSubitoAppello()
+                caricaStato()
+            }
+            addView(elencoScorrevole, SwipeRefreshLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
+            ))
         }
         pannelloAlunni = pannello
         contenitoreLezioni = android.widget.FrameLayout(ctx).apply { id = idLezioni; visibility = View.GONE }
@@ -201,7 +213,7 @@ class StudentiScheda : Scheda() {
         }
     }
     private var linguettaAttiva = 0
-    private var pannelloAlunni: View? = null
+    private var pannelloAlunni: SwipeRefreshLayout? = null
     private var contenitoreLezioni: View? = null
 
     /** Il giorno scelto nella striscia, usato anche dalle lezioni incorporate. */
@@ -453,6 +465,7 @@ class StudentiScheda : Scheda() {
             // Presenze e pallini si vedono subito; gli orari di Rb/U dal registro web arrivano dopo.
             datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(""))
             ridisegna()
+            pannelloAlunni?.isRefreshing = false
             daRegistrare.forEach { registraPresenteIniziale(it, giorno) }
 
             // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web
