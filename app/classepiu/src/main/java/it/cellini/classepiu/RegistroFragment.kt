@@ -374,7 +374,8 @@ class RegistroFragment : Fragment() {
             }
             val testi = LinearLayout(ctx).apply {
                 orientation = LinearLayout.VERTICAL
-                addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+                // "appello veloce" ha l'altezza che gli serve; i tre pulsanti prendono tutto lo spazio che resta
+                addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT))
                 addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f).apply { topMargin = ctx.dp(6) })
             }
             val riga = LinearLayout(ctx).apply {
