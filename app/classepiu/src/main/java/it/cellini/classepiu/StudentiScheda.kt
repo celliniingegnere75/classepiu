@@ -236,6 +236,12 @@ class StudentiScheda : Scheda() {
     )
     private var datiGiorno: DatiGiorno? = null
 
+    /** Giorno dell'appello in sola lettura (domenica, sabato con «settimana fino a sabato» spenta): si vede, non si scrive. */
+    private var appelloGiornoBloccato = false
+    /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
+    private var appelloBloccati: Set<String> = emptySet()
+    private fun appelloModificabile(studenteId: String) = !appelloGiornoBloccato && studenteId !in appelloBloccati
+
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
 
@@ -314,10 +320,13 @@ class StudentiScheda : Scheda() {
         lavoro?.cancel()
         datiGiorno = null
         val giorno = formatoApi.format(selezionato.time)
-        // Domenica, e sabato con «settimana fino a sabato» spenta: niente scuola, anche se il registro web mostra «P» di default.
+        // Domenica, e sabato con «settimana fino a sabato» spenta: l'appello si vede con i colori di ClasseViva
+        // ma è in sola lettura (niente swipe e nessuna registrazione automatica della presenza).
         val giornoSettimana = selezionato.get(Calendar.DAY_OF_WEEK)
         val giornoSenzaScuola = giornoSettimana == Calendar.SUNDAY ||
             (giornoSettimana == Calendar.SATURDAY && !Impostazioni(requireContext()).sabato)
+        appelloGiornoBloccato = giornoSenzaScuola
+        appelloBloccati = emptySet()
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
@@ -378,6 +387,7 @@ class StudentiScheda : Scheda() {
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
                 val oggi = formatoApi.format(java.util.Date())
+                val bloccati = mutableSetOf<String>()
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
                         val esito = web[al.id] ?: continue
@@ -388,28 +398,26 @@ class StudentiScheda : Scheda() {
                             "PV" -> if (valoreAttuale != 4) this[al.id] = StatoGiornaliero(4)
                             "A" -> if (valoreAttuale != 2) this[al.id] = (this[al.id] ?: StatoGiornaliero(2)).copy(valore = 2)
                             "P" -> {
-                                // solo nei giorni di scuola: non festivo sul registro web (f_reg_festivo) e non domenica
-                                // o sabato senza scuola (impostazione «settimana fino a sabato»). Non si può usare la sola
-                                // presenza di ore nelle API REST: in un giorno scolastico futuro non ancora firmato
-                                // le API non hanno ancora ore, come in un giorno senza scuola.
-                                if (valoreAttuale == -1 && giornoDiScuola && !giornoSenzaScuola) {
+                                // P come ClasseViva: verde in ogni giorno non festivo sul registro web (f_reg_festivo).
+                                // Non si può usare la sola presenza di ore nelle API REST: in un giorno scolastico futuro
+                                // non ancora firmato le API non hanno ancora ore, come in un giorno senza scuola.
+                                if (valoreAttuale == -1 && giornoDiScuola) {
                                     this[al.id] = StatoGiornaliero(0)
-                                    // solo presenza predefinita (nessun evento) e mai per i giorni futuri
-                                    if (oraEvento.isEmpty() && giorno <= oggi) daRegistrare += al.id
+                                    // registrata solo se presenza predefinita (nessun evento), mai per i giorni futuri
+                                    // e mai nei giorni in sola lettura (sabato senza scuola, domenica)
+                                    if (oraEvento.isEmpty() && giorno <= oggi && !giornoSenzaScuola) daRegistrare += al.id
                                 }
                             }
-                            else -> {} // X / no lez. (o altro): resta come letto dalle API, o grigio se senza codice
+                            "X" -> {
+                                // X / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
+                                if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
+                                bloccati += al.id
+                            }
+                            else -> {} // altro: resta come letto dalle API, o grigio se senza codice
                         }
                     }
-                    // Giorno senza scuola (domenica, sabato con «settimana fino a sabato» spenta): le API danno comunque
-                    // AT00 a tutti (evtId -1, nessun evento vero). Il presente senza un evento registrato diventa grigio;
-                    // restano gli eventi veri (A, PS, PV, ritardi, uscite, o P con un orario di registrazione).
-                    if (giornoSenzaScuola) for (al in studenti) {
-                        val v = this[al.id] ?: continue
-                        val ora = web[al.id]?.eventoOra.orEmpty()
-                        if (v.valore == 0 && !v.isRitardoBreve && !v.isUscita && (ora.isEmpty() || ora == "0")) this[al.id] = v.copy(valore = -1)
-                    }
                 }
+                appelloBloccati = bloccati
             }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             // Esito della lettura del registro web (solo libro del docente): visibile copiando la risposta,
@@ -694,6 +702,7 @@ class StudentiScheda : Scheda() {
         badge: TextView,
         callback: (Boolean, String?, StatoGiornaliero) -> Unit
     ) {
+        if (!appelloModificabile(studenteId)) return
         val chiave = "$giorno|$studenteId"
         val cambio = cambiAppelloPendenti.getOrPut(chiave) {
             CambioAppelloPending(chiave, studenteId, giorno, statoPrecedente, nuovoValore)
@@ -712,6 +721,7 @@ class StudentiScheda : Scheda() {
 
     /** Presenza predefinita mostrata subito: viene registrata (evento «E») senza attendere, una sola volta per studente e giorno. */
     private fun registraPresenteIniziale(studenteId: String, giorno: String) {
+        if (!appelloModificabile(studenteId)) return
         val chiave = "$giorno|$studenteId"
         if (cambiAppelloPendenti.containsKey(chiave)) return
         val cambio = CambioAppelloPending(chiave, studenteId, giorno, StatoGiornaliero(-1), 0, timerScaduto = true)
@@ -859,8 +869,9 @@ class StudentiScheda : Scheda() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
 
-            // Lo swipe agisce esclusivamente sull'Appello del Libro del docente.
-            if (!caricamento && libroDocente) {
+            // Lo swipe agisce esclusivamente sull'Appello del Libro del docente, e mai nei giorni in sola lettura
+            // (domenica, sabato con «settimana fino a sabato» spenta) né sugli alunni con X / no lez.
+            if (!caricamento && libroDocente && appelloModificabile(s.id)) {
                 var valoreVisivo = valore
                 var inizioX = 0f
                 var inizioY = 0f
