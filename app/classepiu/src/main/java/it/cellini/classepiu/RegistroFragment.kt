@@ -137,9 +137,9 @@ class RegistroFragment : Fragment() {
             orientation = LinearLayout.VERTICAL
             setBackgroundColor(Color.WHITE)
             // le caselle delle classi arrivano a 6 dp dai bordi dello schermo; le schede e la ricerca restano a 14 dp
-            setPadding(ctx.dp(6), ctx.dp(6), ctx.dp(6), 0)
-            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = ctx.dp(8); leftMargin = ctx.dp(8); rightMargin = ctx.dp(8) })
-            addView(rigaCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(8); rightMargin = ctx.dp(8) })
+            setPadding(ctx.dp(4), ctx.dp(6), ctx.dp(4), 0)
+            addView(schede, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { bottomMargin = ctx.dp(8); leftMargin = ctx.dp(10); rightMargin = ctx.dp(10) })
+            addView(rigaCerca, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply { leftMargin = ctx.dp(10); rightMargin = ctx.dp(10) })
             addView(corpo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
         }
 
@@ -369,7 +369,7 @@ class RegistroFragment : Fragment() {
             val sotto = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 listOf(voti, note, compiti).forEachIndexed { i, t ->
-                    addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { if (i > 0) leftMargin = ctx.dp(6) })
+                    addView(t, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f).apply { if (i > 0) leftMargin = ctx.dp(4) })
                 }
             }
             val testi = LinearLayout(ctx).apply {
@@ -381,12 +381,12 @@ class RegistroFragment : Fragment() {
             val riga = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(ctx.dp(8), ctx.dp(14), ctx.dp(8), ctx.dp(14))
+                setPadding(ctx.dp(6), ctx.dp(14), ctx.dp(6), ctx.dp(14))
                 background = GradientDrawable().apply {
                     setColor(0xFFFCFCFC.toInt()); cornerRadius = ctx.dp(18).toFloat(); setStroke(ctx.dp(1), 0xFFE6E6E6.toInt())
                 }
                 addView(tessera, LinearLayout.LayoutParams(ctx.dp(94), ctx.dp(116)))
-                addView(testi, LinearLayout.LayoutParams(0, ctx.dp(116), 1f).apply { leftMargin = ctx.dp(10) })
+                addView(testi, LinearLayout.LayoutParams(0, ctx.dp(116), 1f).apply { leftMargin = ctx.dp(8) })
                 layoutParams = RecyclerView.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, ctx.dp(6), 0, ctx.dp(6))
                 }
