@@ -1225,9 +1225,10 @@ class StudentiScheda : Scheda() {
      */
     private fun aggiornaPulsanteFirma() {
         val oggi = dataOdierna()
+        val primoGiornoScuola = formatoApi.format(Scuola.primoGiorno(requireContext()).time)
         val giornoSelezionato = runCatching { formatoApi.format(selezionato.time) }.getOrNull()
-        val giornoNonFuturo = giornoSelezionato != null && giornoSelezionato <= oggi
-        fabFirma?.visibility = if (libroDocente && miaClasse && linguettaAttiva == 0 && giornoNonFuturo) View.VISIBLE else View.GONE
+        val giornoNelPeriodo = giornoSelezionato != null && giornoSelezionato >= primoGiornoScuola && giornoSelezionato <= oggi
+        fabFirma?.visibility = if (libroDocente && miaClasse && linguettaAttiva == 0 && giornoNelPeriodo) View.VISIBLE else View.GONE
     }
 
     private fun bloccaFirma(si: Boolean) {
@@ -1253,9 +1254,11 @@ class StudentiScheda : Scheda() {
     private fun descriviData(data: java.util.Date) = SimpleDateFormat("EEEE d/M/yyyy", Locale.ITALIAN).format(data)
 
     private fun preparaFirma() {
-        if (formatoApi.format(selezionato.time) > dataOdierna()) {
+        val giornoScelto = formatoApi.format(selezionato.time)
+        val primoGiornoScuola = formatoApi.format(Scuola.primoGiorno(requireContext()).time)
+        if (giornoScelto < primoGiornoScuola || giornoScelto > dataOdierna()) {
             aggiornaPulsanteFirma()
-            view?.let { Snackbar.make(it, "non è possibile firmare una data futura", Snackbar.LENGTH_LONG).show() }
+            view?.let { Snackbar.make(it, "si può firmare solo dall'inizio dell'anno scolastico a oggi", Snackbar.LENGTH_LONG).show() }
             return
         }
         if (firmaInCorso) return
@@ -1589,9 +1592,10 @@ class StudentiScheda : Scheda() {
     }
 
     private fun inviaFirma(registro: FirmaLezione.Registro, s: SceltaFirma, data: String) {
-        if (data > dataOdierna()) {
+        val primoGiornoScuola = formatoApi.format(Scuola.primoGiorno(requireContext()).time)
+        if (data < primoGiornoScuola || data > dataOdierna()) {
             bloccaFirma(false)
-            view?.let { Snackbar.make(it, "non è possibile firmare una data futura", Snackbar.LENGTH_LONG).show() }
+            view?.let { Snackbar.make(it, "si può firmare solo dall'inizio dell'anno scolastico a oggi", Snackbar.LENGTH_LONG).show() }
             return
         }
         bloccaFirma(true)
@@ -1605,7 +1609,7 @@ class StudentiScheda : Scheda() {
         lavoroFirma = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 val esito = runCatching {
-                    check(data <= dataOdierna()) { "non è possibile firmare una data futura" }
+                    check(data >= primoGiornoScuola && data <= dataOdierna()) { "firma fuori dal periodo dell'anno scolastico" }
                     val mioId = client.idDocente()
                     // controllo appena prima di inviare: se nel frattempo una delle ore è stata firmata non si manda niente
                     val (codicePrima, prima) = client.lezioniGrezze(data, data)
