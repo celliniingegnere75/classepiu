@@ -47,6 +47,8 @@ class StudentiScheda : Scheda() {
     /** Da "tutti i registri": un gruppo di classe articolata (es. 5EA_ENA) aperto sulla classe intera. */
     private var gruppo = ""
     private var soloMieLezioni = false
+    /** Vero solo se la scheda è stata aperta dal pulsante "libro del docente" (non dalla tessera della classe). */
+    private var libroDocente = false
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
 
     // Colori della scheda e degli indicatori.
@@ -61,6 +63,7 @@ class StudentiScheda : Scheda() {
         nome = intent.getStringExtra("nome") ?: ""
         gruppo = intent.getStringExtra("gruppo") ?: ""
         soloMieLezioni = intent.getBooleanExtra("solomie", false)
+        libroDocente = intent.getBooleanExtra("librodocente", false)
         tipo = intent.getStringExtra("tipo") ?: ""
         classeId = intent.getStringExtra("id") ?: ""
         val ctx = requireContext()
@@ -655,11 +658,12 @@ class StudentiScheda : Scheda() {
     private var lavoroFirma: Job? = null
 
     /**
-     * Il pulsante c'è solo nel libro del docente vero e proprio, la linguetta «alunni», e solo se la classe aperta è tra le
+     * Il pulsante c'è solo nel libro del docente (scheda aperta dal pulsante "libro del docente", non dalla tessera della
+     * classe), nella sua prima linguetta, e solo se la classe aperta è tra le
      * mie (classes/mine): sulle altre non si può firmare. Nelle linguette delle lezioni le firme hanno «modifica firma» e la X.
      */
     private fun aggiornaPulsanteFirma() {
-        fabFirma?.visibility = if (miaClasse && linguettaAttiva == 0) View.VISIBLE else View.GONE
+        fabFirma?.visibility = if (libroDocente && miaClasse && linguettaAttiva == 0) View.VISIBLE else View.GONE
     }
 
     private fun bloccaFirma(si: Boolean) {
