@@ -447,6 +447,59 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return tipi.values.toList() to grezzo.toString()
     }
 
+    /**
+     * Cancella una firma dal registro web, seguendo regclasse_cancella_firma.php (HAR RichiamoeCancellaFirma).
+     * Non ricostruisce l'identificativo della posizione: usa sigStamp della firma letta da ClasseViva.
+     * Se uno dei dati obbligatori manca, interrompe l'operazione senza inviare richieste.
+     */
+    fun cancellaFirmaWeb(grezzo: String): Pair<Int, String> {
+        val o = JSONObject(grezzo)
+        fun campo(vararg nomi: String): String {
+            for (nome in nomi) {
+                val v = o.opt(nome)
+                if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty() && s != "null") return s
+                }
+            }
+            return ""
+        }
+        val posizione = campo("sigStamp")
+        val eventoId = campo("evtId", "eventId")
+        val ora = campo("evtHPos", "hourPos", "evtHour")
+        val data = campo("evtDate", "lessonDate", "date").take(10)
+        val materia = campo("subjectId")
+        val autore = campo("authorId", "teacherId", "author_id")
+        val classe = campo("classId", "classroomId")
+        val tipoClasse = campo("classType")
+        val mancanti = listOf(
+            "sigStamp/posizioni" to posizione, "evtId/evento_id" to eventoId, "evtHPos/ora_posizione" to ora,
+            "evtDate/evento_data_ora" to data, "subjectId/materia_id" to materia,
+            "authorId/autore_id" to autore, "classId/classe_ident" to classe
+        ).filter { it.second.isEmpty() }.map { it.first }
+        if (mancanti.isNotEmpty()) return 422 to "cancellazione non inviata: dati mancanti nella firma: ${mancanti.joinToString()}"
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val campi = listOf(
+            "posizioni" to posizione,
+            "evento_codice" to "FR",
+            "ora_posizione" to ora,
+            "evento_data_ora" to data.take(10).let { if (it.length == 8 && '-' !in it) "${it.take(4)}-${it.substring(4, 6)}-${it.substring(6, 8)}" else it },
+            "materia_id" to materia,
+            "autore_id" to autore,
+            "classe_ident" to classe,
+            "evento" to "--",
+            "isgruppo" to if (tipoClasse.equals("G", true) || tipoClasse.startsWith("group", true)) "1" else "0",
+            "ope" to "DEL"
+        )
+        val corpo = campi.joinToString("&") { (k, v) -> "${enc(k)}=${enc(v)}" }
+        val url = "https://web.spaggiari.eu/cvv/app/default/regclasse_cancella_firma.php"
+        sessioneWeb().use { web ->
+            val (codice, risposta) = web.chiama(url, corpo, referer = "https://web.spaggiari.eu/cvv/app/default/regclasse.php")
+            val status = runCatching { JSONObject(risposta).optString("status") }.getOrDefault("")
+            return if (codice in 200..299 && status == "OK") 200 to risposta else (if (codice in 200..299) 422 else codice) to risposta
+        }
+    }
+
     fun salvaFirma(grezzo: String, argomento: String, tipo: TipoLezione? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.firma(grezzo)
         assicuraLogin()
