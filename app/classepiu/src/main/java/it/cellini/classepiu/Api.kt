@@ -447,6 +447,133 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return tipi.values.toList() to grezzo.toString()
     }
 
+    /**
+     * Cancella una firma dal registro web, seguendo regclasse_cancella_firma.php (HAR RichiamoeCancellaFirma).
+     * Non ricostruisce l'identificativo della posizione: usa sigStamp della firma letta da ClasseViva.
+     * Se uno dei dati obbligatori manca, interrompe l'operazione senza inviare richieste.
+     */
+    fun cancellaFirmaWeb(grezzo: String): Pair<Int, String> {
+        val o = JSONObject(grezzo)
+        fun campo(vararg nomi: String): String {
+            for (nome in nomi) {
+                val v = o.opt(nome)
+                if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty() && s != "null") return s
+                }
+            }
+            return ""
+        }
+        val posizione = campo("sigStamp")
+        val eventoId = campo("evtId", "eventId")
+        val ora = campo("evtHPos", "hourPos", "evtHour")
+        val data = campo("evtDate", "lessonDate", "date").take(10)
+        val materia = campo("subjectId")
+        val autore = campo("authorId", "teacherId", "author_id")
+        val classe = campo("classId", "classroomId")
+        val tipoClasse = campo("classType")
+        val mancanti = listOf(
+            "sigStamp/posizioni" to posizione, "evtId/evento_id" to eventoId, "evtHPos/ora_posizione" to ora,
+            "evtDate/evento_data_ora" to data, "subjectId/materia_id" to materia,
+            "authorId/autore_id" to autore, "classId/classe_ident" to classe
+        ).filter { it.second.isEmpty() }.map { it.first }
+        if (mancanti.isNotEmpty()) return 422 to "cancellazione non inviata: dati mancanti nella firma: ${mancanti.joinToString()}"
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val campi = listOf(
+            "posizioni" to posizione,
+            "evento_codice" to "FR",
+            "ora_posizione" to ora,
+            "evento_data_ora" to data.take(10).let { if (it.length == 8 && '-' !in it) "${it.take(4)}-${it.substring(4, 6)}-${it.substring(6, 8)}" else it },
+            "materia_id" to materia,
+            "autore_id" to autore,
+            "classe_ident" to classe,
+            "evento" to "--",
+            "isgruppo" to if (tipoClasse.equals("G", true) || tipoClasse.startsWith("group", true)) "1" else "0",
+            "ope" to "DEL"
+        )
+        val corpo = campi.joinToString("&") { (k, v) -> "${enc(k)}=${enc(v)}" }
+        val url = "https://web.spaggiari.eu/cvv/app/default/regclasse_cancella_firma.php"
+        sessioneWeb().use { web ->
+            val (codice, risposta) = web.chiama(url, corpo, referer = "https://web.spaggiari.eu/cvv/app/default/regclasse.php")
+            val status = runCatching { JSONObject(risposta).optString("status") }.getOrDefault("")
+            return if (codice in 200..299 && status == "OK") 200 to risposta else (if (codice in 200..299) 422 else codice) to risposta
+        }
+    }
+
+    data class OpzioniModificaFirma(
+        val attivita: List<String>,
+        val progetti: List<Pair<String, String>>,
+        val notaSecondaria: String,
+        val idUda: String,
+        val risposta: String
+    )
+
+    /** Legge la finestra di modifica nativa del registro web (regclasse_update_firma.php). */
+    fun opzioniModificaFirma(grezzo: String): OpzioniModificaFirma {
+        val o = JSONObject(grezzo)
+        fun campo(vararg nomi: String): String = nomi.firstNotNullOfOrNull { k ->
+            o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        }.orEmpty()
+        val ids = campo("sigStamp")
+        val eventoId = campo("evtId", "eventId")
+        require(ids.isNotEmpty() && eventoId.isNotEmpty()) { "la firma non contiene sigStamp o evtId: modifica non disponibile" }
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val url = "https://web.spaggiari.eu/cvv/app/default/regclasse_update_firma.php?ids=${enc(ids)}&evento_id=${enc(eventoId)}"
+        sessioneWeb().use { web ->
+            val (codice, html) = web.chiama(url)
+            if (codice !in 200..299) throw ClasseVivaException("finestra di modifica non leggibile (HTTP $codice)")
+            fun opzioni(id: String): List<Pair<String, String>> {
+                val select = Regex("""<select\b(?=[^>]*\bid=["']${Regex.escape(id)}["'])[^>]*>(.*?)</select>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                    .find(html)?.groupValues?.get(1).orEmpty()
+                return Regex("""<option\b[^>]*value=["']([^"']*)["'][^>]*>(.*?)</option>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                    .findAll(select).map { m ->
+                        android.text.Html.fromHtml(m.groupValues[1], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim() to
+                            android.text.Html.fromHtml(m.groupValues[2], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
+                    }.filter { it.first.isNotEmpty() || it.second.isNotEmpty() }.toList()
+            }
+            fun valore(id: String): String = Regex("""<(?:input|textarea)\b(?=[^>]*(?:id|name)=["']${Regex.escape(id)}["'])[^>]*value=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
+                .find(html)?.groupValues?.get(1)?.let { android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_LEGACY).toString() }.orEmpty()
+            val progetti = opzioni("progetto_set_modifica").ifEmpty { opzioni("id_progetto_set") }
+            val attivita = opzioni("tipo_attivita_modifica").map { it.second.ifEmpty { it.first } }.filter { it.isNotEmpty() }.distinct()
+            return OpzioniModificaFirma(
+                attivita = attivita,
+                progetti = progetti.filter { it.first.isNotEmpty() }.distinctBy { it.first },
+                notaSecondaria = valore("text_nota_2"),
+                idUda = valore("id_uda"),
+                risposta = "GET $url -> HTTP $codice\\nform letta: ${html.length} caratteri"
+            )
+        }
+    }
+
+    /** Salva la firma con il POST UPD del registro web, senza creare una nuova firma. */
+    fun salvaFirmaWeb(
+        grezzo: String, attivita: String, idProgetto: String, nota: String, notaSecondaria: String, idUda: String
+    ): Pair<Int, String> {
+        val o = JSONObject(grezzo)
+        fun campo(vararg nomi: String): String = nomi.firstNotNullOfOrNull { k ->
+            o.opt(k)?.takeIf { it != JSONObject.NULL && it !is JSONObject && it !is JSONArray }?.toString()?.trim()?.takeIf { it.isNotEmpty() }
+        }.orEmpty()
+        val ids = campo("sigStamp")
+        val eventoId = campo("evtId", "eventId")
+        val dataOriginale = campo("evtDate", "lessonDate", "date").take(10)
+        if (ids.isEmpty() || eventoId.isEmpty() || dataOriginale.isEmpty()) return 422 to "modifica non inviata: mancano sigStamp, evtId o evtDate"
+        val data = if (dataOriginale.length == 8 && '-' !in dataOriginale) "${dataOriginale.take(4)}-${dataOriginale.substring(4, 6)}-${dataOriginale.substring(6, 8)}" else dataOriginale
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val campi = listOf(
+            "ope" to "UPD", "ids" to ids, "data" to data, "evento_id" to eventoId,
+            "text_nota" to nota, "text_nota_2" to notaSecondaria, "attivita" to attivita,
+            "id_progetto_set" to idProgetto, "id_uda" to idUda
+        )
+        val corpo = campi.joinToString("&") { (k, v) -> "${enc(k)}=${enc(v)}" }
+        val url = "https://web.spaggiari.eu/cvv/app/default/regclasse_update_firma.php"
+        sessioneWeb().use { web ->
+            val referer = "https://web.spaggiari.eu/cvv/app/default/regclasse.php"
+            val (codice, risposta) = web.chiama(url, corpo, referer = referer)
+            val status = runCatching { JSONObject(risposta).optString("status") }.getOrDefault("")
+            return if (codice in 200..299 && status == "OK") 200 to risposta else (if (codice in 200..299) 422 else codice) to risposta
+        }
+    }
+
     fun salvaFirma(grezzo: String, argomento: String, tipo: TipoLezione? = null): Pair<Int, String> {
         val o = ClasseVivaPayloadValidation.firma(grezzo)
         assicuraLogin()

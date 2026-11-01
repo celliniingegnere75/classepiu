@@ -236,12 +236,27 @@ class ListaScheda : Scheda() {
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(8), 0, dp(4))
         if (cosa == "lezioni") {
-            addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(ctx).apply {
+                    text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt())
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                // La X è presente solo sulle firme del docente corrente.
+                if (v.mia) addView(TextView(ctx).apply {
+                    text = "✕"; textSize = 18f; gravity = Gravity.CENTER; setTextColor(0xFF666666.toInt())
+                    setPadding(dp(12), dp(2), dp(2), dp(2))
+                    contentDescription = "cancella firma"
+                    setOnClickListener { cancellaFirma(v) }
+                }, LinearLayout.LayoutParams(dp(36), dp(36)))
+            })
             if (v.tipo.isNotEmpty()) addView(TextView(ctx).apply { text = v.tipo; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore); setPadding(0, dp(2), 0, 0) })
             addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
-            // solo la mia firma si può modificare
+            // Solo la mia firma si può modificare.
             if (v.mia) {
-                addView(TextView(ctx).apply { text = "tocca per modificare la firma"; textSize = 12f; setTextColor(azzurro); setPadding(0, dp(6), 0, 0) })
+                addView(TextView(ctx).apply {
+                    text = "modifica firma"; textSize = 12f; setTextColor(0xFF287FA8.toInt()); setPadding(0, dp(6), 0, 0)
+                })
                 setOnClickListener { modificaFirma(v) }
             }
             return@apply
@@ -332,77 +347,151 @@ class ListaScheda : Scheda() {
         lista.addView(copiaRisposta())
     }
 
-    /** Finestra per cambiare argomento e tipo della mia lezione; salva subito su classeviva e ricarica il giorno. */
-    private fun modificaFirma(v: Voce) {
+    /** Conferma e cancellazione della firma sul registro web (flusso DEL del portale ClasseViva). */
+    private fun cancellaFirma(v: Voce) {
         val ctx = requireContext()
-        val argomento = android.widget.EditText(ctx).apply {
-            setText(if (v.testo == "nessun argomento") "" else v.testo); textSize = 15f; minLines = 3; gravity = Gravity.TOP
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        }
-        // tipo di lezione: si parte da quello della firma; l'elenco dei tipi ammessi si legge da classeviva
-        val tipoAttuale = runCatching { org.json.JSONObject(v.grezzo).optString("lessonType") }.getOrDefault("").ifEmpty { "Lezione" }
-        var tipoScelto: ClasseViva.TipoLezione? = null
-        var tipi: List<ClasseViva.TipoLezione> = emptyList()
-        var rispostaTipi = ""
-        val tipo = TextView(ctx).apply {
-            text = "$tipoAttuale  ▾"; textSize = 15f; setTextColor(0xFF111111.toInt()); setPadding(dp(12), dp(10), dp(12), dp(10))
-            background = GradientDrawable().apply { setColor(0xFFF2F2F2.toInt()); cornerRadius = dp(10).toFloat() }
-            setOnClickListener {
-                if (tipi.isEmpty()) {
-                    // elenco non letto: si può copiare la risposta per sistemare la lettura
-                    com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                        .setMessage(if (rispostaTipi.isEmpty()) "sto leggendo i tipi di lezione da classeviva..." else "non riesco a leggere i tipi di lezione.")
-                        .setNegativeButton("chiudi", null)
-                        .apply {
-                            if (rispostaTipi.isNotEmpty()) setPositiveButton("copia la risposta") { _, _ ->
-                                ctx.getSystemService(android.content.ClipboardManager::class.java).setPrimaryClip(android.content.ClipData.newPlainText("risposta", rispostaTipi))
-                            }
-                        }.show()
-                    return@setOnClickListener
-                }
-                val nomi = tipi.map { it.nome }.toTypedArray()
-                val corrente = nomi.indexOfFirst { it.equals(tipoScelto?.nome ?: tipoAttuale, ignoreCase = true) }
-                com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setTitle("tipo di lezione")
-                    .setSingleChoiceItems(nomi, corrente) { d, i ->
-                        tipoScelto = tipi[i]; text = "${tipi[i].nome}  ▾"; d.dismiss()
-                    }.show()
-            }
-        }
-        lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().tipiLezione() } }
-            r.onSuccess { (l, g) -> tipi = l; rispostaTipi = g }.onFailure { rispostaTipi = "errore: ${it.message}" }
-        }
-        val corpo = LinearLayout(ctx).apply {
-            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), 0)
-            addView(TextView(ctx).apply { text = v.titolo; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
-            addView(TextView(ctx).apply { text = "tipo di lezione"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, dp(4)) })
-            addView(tipo, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
-            addView(TextView(ctx).apply { text = "argomento della lezione"; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(12), 0, 0) })
-            addView(argomento)
-        }
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx).setView(corpo)
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle("cancellare la firma?")
+            .setMessage("${v.titolo}\n${formatta(v.data)}\n\nLa firma verrà cancellata dal registro ClasseViva.")
             .setNegativeButton("annulla", null)
-            .setPositiveButton("salva") { _, _ ->
-                val testo = argomento.text.toString().trim()
-                val nuovoTipo = tipoScelto?.takeIf { !it.nome.equals(tipoAttuale, ignoreCase = true) }
+            .setPositiveButton("cancella") { _, _ ->
                 lifecycleScope.launch {
-                    val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().salvaFirma(v.grezzo, testo, nuovoTipo) } }
-                    val (codice, risposta) = r.getOrElse { android.widget.Toast.makeText(ctx, "non riuscito: ${it.message}", android.widget.Toast.LENGTH_LONG).show(); return@launch }
+                    val esito = withContext(Dispatchers.IO) {
+                        runCatching { Impostazioni(ctx).client().cancellaFirmaWeb(v.grezzo) }
+                    }
+                    val (codice, risposta) = esito.getOrElse {
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                            .setTitle("cancellazione non riuscita").setMessage(it.message ?: "errore sconosciuto")
+                            .setPositiveButton("chiudi", null).show()
+                        return@launch
+                    }
                     if (codice in 200..299) {
-                        android.widget.Toast.makeText(ctx, "firma salvata su classeviva", android.widget.Toast.LENGTH_SHORT).show()
+                        android.widget.Toast.makeText(ctx, "firma cancellata da ClasseViva", android.widget.Toast.LENGTH_SHORT).show()
                         carica()
                     } else {
-                        // per sistemare la scrittura serve la risposta di classeviva
                         com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
-                            .setMessage("classeviva non ha accettato la modifica (http $codice).")
+                            .setTitle("ClasseViva non ha cancellato la firma (HTTP $codice)")
+                            .setMessage(risposta.take(700))
                             .setNegativeButton("chiudi", null)
-                            .setPositiveButton("copia la risposta") { _, _ ->
-                                requireContext().getSystemService(android.content.ClipboardManager::class.java)
-                                    .setPrimaryClip(android.content.ClipData.newPlainText("risposta", "HTTP $codice\n$risposta\n\ninviato:\n${v.grezzo}"))
+                            .setPositiveButton("copia risposta") { _, _ ->
+                                ctx.getSystemService(android.content.ClipboardManager::class.java)
+                                    .setPrimaryClip(android.content.ClipData.newPlainText("cancellazione firma", "HTTP $codice\n$risposta\n\nFirma originale:\n${v.grezzo}"))
                             }.show()
                     }
                 }
             }.show()
+    }
+
+    /** Modifica la firma usando la form UPD del registro web, senza creare un nuovo evento. */
+    private fun modificaFirma(v: Voce) {
+        val ctx = requireContext()
+        val tipoAttuale = runCatching {
+            val o = JSONObject(v.grezzo)
+            listOf("lessonType", "attivita", "activityType").firstNotNullOfOrNull { k ->
+                o.optString(k).takeIf { it.isNotBlank() && it != "null" }
+            } ?: "Lezione"
+        }.getOrDefault("Lezione")
+        val argomento = android.widget.EditText(ctx).apply {
+            setText(if (v.testo == "nessun argomento") "" else v.testo)
+            textSize = 15f; minLines = 3; gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val secondario = android.widget.EditText(ctx).apply {
+            hint = "secondo argomento (se previsto dal registro)"
+            textSize = 15f; minLines = 2; gravity = Gravity.TOP
+            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
+        }
+        val uda = android.widget.EditText(ctx).apply { hint = "ID UDA"; setSingleLine(true) }
+        val attivita = android.widget.Spinner(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, listOf(tipoAttuale))
+        }
+        val progetti = android.widget.Spinner(ctx).apply {
+            adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, listOf("nessun progetto"))
+        }
+        val stato = TextView(ctx).apply { text = "carico i campi della firma da ClasseViva Web…"; textSize = 12f; setTextColor(0xFF666666.toInt()) }
+        val corpo = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; setPadding(dp(22), dp(18), dp(22), 0)
+            addView(TextView(ctx).apply { text = v.titolo; textSize = 17f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
+            fun etichetta(t: String) = TextView(ctx).apply { text = t; textSize = 12f; setTextColor(0xFF777777.toInt()); setPadding(0, dp(10), 0, dp(3)) }
+            addView(etichetta("attività"))
+            addView(attivita)
+            addView(etichetta("progetto PCTO/FSL"))
+            addView(progetti)
+            addView(etichetta("argomento"))
+            addView(argomento)
+            addView(etichetta("secondo argomento"))
+            addView(secondario)
+            addView(etichetta("unità didattica di apprendimento"))
+            addView(uda)
+            addView(stato, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
+        }
+        var opzioni: ClasseViva.OpzioniModificaFirma? = null
+        var erroreCaricamento = ""
+        val dialogo = com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle("modifica firma")
+            .setView(android.widget.ScrollView(ctx).apply { addView(corpo) })
+            .setNegativeButton("annulla", null)
+            .setPositiveButton("salva", null)
+            .create()
+        dialogo.setOnShowListener {
+            dialogo.getButton(android.app.AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val dati = opzioni
+                if (dati == null) {
+                    android.widget.Toast.makeText(ctx, erroreCaricamento.ifBlank { "attendo i campi di ClasseViva…" }, android.widget.Toast.LENGTH_LONG).show()
+                    return@setOnClickListener
+                }
+                val progetto = (progetti.selectedItemPosition - 1).takeIf { it >= 0 }?.let { dati.progetti.getOrNull(it)?.first }.orEmpty()
+                dialogo.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = false
+                lifecycleScope.launch {
+                    val r = withContext(Dispatchers.IO) {
+                        runCatching {
+                            Impostazioni(ctx).client().salvaFirmaWeb(
+                                v.grezzo, attivita.selectedItem?.toString().orEmpty(), progetto,
+                                argomento.text.toString(), secondario.text.toString(), uda.text.toString()
+                            )
+                        }
+                    }
+                    val (codice, risposta) = r.getOrElse {
+                        dialogo.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                        android.widget.Toast.makeText(ctx, "modifica non riuscita: ${it.message}", android.widget.Toast.LENGTH_LONG).show()
+                        return@launch
+                    }
+                    if (codice in 200..299) {
+                        dialogo.dismiss()
+                        android.widget.Toast.makeText(ctx, "firma aggiornata su ClasseViva", android.widget.Toast.LENGTH_SHORT).show()
+                        carica()
+                    } else {
+                        dialogo.getButton(android.app.AlertDialog.BUTTON_POSITIVE).isEnabled = true
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                            .setTitle("ClasseViva non ha accettato la modifica (HTTP $codice)")
+                            .setMessage(risposta.take(700))
+                            .setNegativeButton("chiudi", null)
+                            .setPositiveButton("copia risposta") { _, _ ->
+                                ctx.getSystemService(android.content.ClipboardManager::class.java)
+                                    .setPrimaryClip(android.content.ClipData.newPlainText("modifica firma", "HTTP $codice\n$risposta\n\nFirma originale:\n${v.grezzo}"))
+                            }.show()
+                    }
+                }
+            }
+        }
+        dialogo.show()
+        lifecycleScope.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { Impostazioni(ctx).client().opzioniModificaFirma(v.grezzo) } }
+            r.onSuccess { dati ->
+                opzioni = dati
+                val voci = dati.attivita.ifEmpty { listOf(tipoAttuale) }
+                attivita.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, voci)
+                attivita.setSelection(voci.indexOfFirst { it.equals(tipoAttuale, true) }.coerceAtLeast(0))
+                val progettiVoci = listOf("" to "nessun progetto") + dati.progetti
+                progetti.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, progettiVoci.map { it.second })
+                secondario.setText(dati.notaSecondaria)
+                uda.setText(dati.idUda)
+                stato.text = "opzioni lette dal registro web"
+            }.onFailure {
+                erroreCaricamento = it.message ?: "non riesco a leggere la finestra di ClasseViva"
+                stato.text = erroreCaricamento
+            }
+        }
     }
 
     private fun testo(s: String, corpo: String = "") {
