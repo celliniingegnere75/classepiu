@@ -67,6 +67,7 @@ class StudentiScheda : Scheda() {
     /** Aperta dal pulsante «libro del docente» (linguetta «appello»); dalla tessera della classe è la scheda classe (linguetta «alunni»). */
     private var libroDocente = false
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
+    private fun dataOdierna(): String = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN).format(java.util.Date())
 
     // Colori della scheda e degli indicatori.
     private val verdePresente = 0xFFE3F3E5.toInt()
@@ -242,7 +243,7 @@ class StudentiScheda : Scheda() {
     /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
     private var appelloBloccati: Set<String> = emptySet()
     private fun appelloModificabile(studenteId: String) =
-        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == formatoApi.format(java.util.Date()) && studenteId !in appelloBloccati
+        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() && studenteId !in appelloBloccati
 
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
@@ -327,7 +328,7 @@ class StudentiScheda : Scheda() {
         val giornoSettimana = selezionato.get(Calendar.DAY_OF_WEEK)
         val giornoSenzaScuola = giornoSettimana == Calendar.SUNDAY ||
             (giornoSettimana == Calendar.SATURDAY && !Impostazioni(requireContext()).sabato)
-        val oggiSelezionato = formatoApi.format(java.util.Date())
+        val oggiSelezionato = dataOdierna()
         // Si può modificare l'appello esclusivamente per oggi: i giorni passati e futuri sono sempre in sola lettura.
         appelloGiornoBloccato = giorno != oggiSelezionato || giornoSenzaScuola
         appelloBloccati = emptySet()
@@ -390,7 +391,7 @@ class StudentiScheda : Scheda() {
             val esitoWeb = statiWeb?.await()
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
-                val oggi = formatoApi.format(java.util.Date())
+                val oggi = dataOdierna()
                 val bloccati = mutableSetOf<String>()
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
@@ -764,7 +765,7 @@ class StudentiScheda : Scheda() {
      */
     private suspend fun inviaCambioAppello(cambio: CambioAppelloPending) {
         if (cambiAppelloPendenti[cambio.chiave] !== cambio || cambio.invioInCorso) return
-        if (cambio.giorno != formatoApi.format(java.util.Date())) {
+        if (cambio.giorno != dataOdierna()) {
             cambiAppelloPendenti.remove(cambio.chiave)
             cambio.callbackEsito?.invoke(false, "modifica consentita solo per la data odierna", cambio.statoConfermato)
             return
@@ -775,7 +776,7 @@ class StudentiScheda : Scheda() {
         val statoInviato = cambio.statoDesiderato
         val esito = withContext(Dispatchers.IO) {
             runCatching {
-                check(cambio.giorno == formatoApi.format(java.util.Date())) { "modifica consentita solo per la data odierna" }
+                check(cambio.giorno == dataOdierna()) { "modifica consentita solo per la data odierna" }
                 client.cambiaStatoAppello(classeId, gruppoWeb(), cambio.studenteId, cambio.giorno, codiceEvento)
             }
         }
@@ -1219,7 +1220,7 @@ class StudentiScheda : Scheda() {
      * mie (classes/mine): sulle altre non si può firmare. Nelle linguette delle lezioni le firme hanno «modifica firma» e la X.
      */
     private fun aggiornaPulsanteFirma() {
-        val oggi = formatoApi.format(java.util.Date())
+        val oggi = dataOdierna()
         val giornoCorrente = runCatching { formatoApi.format(selezionato.time) == oggi }.getOrDefault(false)
         fabFirma?.visibility = if (libroDocente && miaClasse && linguettaAttiva == 0 && giornoCorrente) View.VISIBLE else View.GONE
     }
@@ -1247,7 +1248,7 @@ class StudentiScheda : Scheda() {
     private fun descriviData(data: java.util.Date) = SimpleDateFormat("EEEE d/M/yyyy", Locale.ITALIAN).format(data)
 
     private fun preparaFirma() {
-        if (formatoApi.format(selezionato.time) != formatoApi.format(java.util.Date())) {
+        if (formatoApi.format(selezionato.time) != dataOdierna()) {
             aggiornaPulsanteFirma()
             view?.let { Snackbar.make(it, "la firma è consentita solo per la data odierna", Snackbar.LENGTH_LONG).show() }
             return
@@ -1583,7 +1584,7 @@ class StudentiScheda : Scheda() {
     }
 
     private fun inviaFirma(registro: FirmaLezione.Registro, s: SceltaFirma, data: String) {
-        if (data != formatoApi.format(java.util.Date())) {
+        if (data != dataOdierna()) {
             bloccaFirma(false)
             view?.let { Snackbar.make(it, "la firma è consentita solo per la data odierna", Snackbar.LENGTH_LONG).show() }
             return
@@ -1599,7 +1600,7 @@ class StudentiScheda : Scheda() {
         lavoroFirma = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 val esito = runCatching {
-                    check(data == formatoApi.format(java.util.Date())) { "firma consentita solo per la data odierna" }
+                    check(data == dataOdierna()) { "firma consentita solo per la data odierna" }
                     val mioId = client.idDocente()
                     // controllo appena prima di inviare: se nel frattempo una delle ore è stata firmata non si manda niente
                     val (codicePrima, prima) = client.lezioniGrezze(data, data)
