@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 25910)
+Total output lines: 1795
+
 package it.cellini.classepiu
 
 import android.content.res.ColorStateList
@@ -242,8 +245,18 @@ class StudentiScheda : Scheda() {
     private var appelloGiornoBloccato = false
     /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
     private var appelloBloccati: Set<String> = emptySet()
-    private fun appelloModificabile(studenteId: String) =
-        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() && studenteId !in appelloBloccati
+    /** Stato letto dal registro web: senza una lettura positiva dell'alunno lo swipe resta disabilitato. */
+    private var appelloStatiWeb: Map<String, String> = emptyMap()
+    private fun statoWebSenzaLezione(stato: String): Boolean {
+        val normalizzato = stato.uppercase(Locale.ROOT).replace(Regex("[^A-Z0-9]+"), " ").trim()
+        return normalizzato.split(' ').any { it == "X" || it == "XG" || it == "NOLESSON" || it == "NO_LESSON" } ||
+            normalizzato.contains("NO LEZ") || normalizzato.contains("NO LESSON")
+    }
+    private fun appelloModificabile(studenteId: String): Boolean {
+        val statoWeb = appelloStatiWeb[studenteId] ?: return false
+        return !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() &&
+            studenteId !in appelloBloccati && !statoWebSenzaLezione(statoWeb)
+    }
 
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
@@ -332,6 +345,7 @@ class StudentiScheda : Scheda() {
         // Si può modificare l'appello esclusivamente per oggi: i giorni passati e futuri sono sempre in sola lettura.
         appelloGiornoBloccato = giorno != oggiSelezionato || giornoSenzaScuola
         appelloBloccati = emptySet()
+        appelloStatiWeb = emptyMap()
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
@@ -391,6 +405,7 @@ class StudentiScheda : Scheda() {
             val esitoWeb = statiWeb?.await()
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
+                appelloStatiWeb = web.mapValues { (_, valore) -> valore.stato }
                 val oggi = dataOdierna()
                 val bloccati = mutableSetOf<String>()
                 stato = stato.toMutableMap().apply {
@@ -398,6 +413,12 @@ class StudentiScheda : Scheda() {
                         val esito = web[al.id] ?: continue
                         val (statoWeb, oraEvento, giornoDiScuola) = esito
                         val valoreAttuale = this[al.id]?.valore ?: -1
+                        if (statoWebSenzaLezione(statoWeb)) {
+                            // Le pagine possono esporre una dicitura composta, ad esempio "XG / no lez.".
+                            if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
+                            bloccati += al.id
+                            continue
+                        }
                         when (statoWeb) {
                             "PS" -> if (valoreAttuale != 3) this[al.id] = StatoGiornaliero(3)
                             "PV" -> if (valoreAttuale != 4) this[al.id] = StatoGiornaliero(4)
@@ -412,11 +433,6 @@ class StudentiScheda : Scheda() {
                                     // e mai nei giorni in sola lettura (sabato senza scuola, domenica)
                                     if (oraEvento.isEmpty() && giorno <= oggi && !giornoSenzaScuola) daRegistrare += al.id
                                 }
-                            }
-                            "X", "XG", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
-                                // X / XG / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
-                                if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
-                                bloccati += al.id
                             }
                             else -> {} // altro: resta come letto dalle API, o grigio se senza codice
                         }
@@ -765,6 +781,11 @@ class StudentiScheda : Scheda() {
      */
     private suspend fun inviaCambioAppello(cambio: CambioAppelloPending) {
         if (cambiAppelloPendenti[cambio.chiave] !== cambio || cambio.invioInCorso) return
+        if (!appelloModificabile(cambio.studenteId)) {
+            cambiAppelloPendenti.remove(cambio.chiave)
+            cambio.callbackEsito?.invoke(false, "stato non modificabile: verifica X / no lez. sul registro web", cambio.statoConfermato)
+            return
+        }
         if (cambio.giorno != dataOdierna()) {
             cambiAppelloPendenti.remove(cambio.chiave)
             cambio.callbackEsito?.invoke(false, "modifica consentita solo per la data odierna", cambio.statoConfermato)
@@ -876,121 +897,7 @@ class StudentiScheda : Scheda() {
                 alpha = if (cambiAppelloPendenti.containsKey("${formatoApi.format(selezionato.time)}|${s.id}")) 0.55f else 1f
             }
             rigaNome.addView(badgeStato, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28)))
-            scheda.addView(rigaNome, LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
-            ))
-
-            // Lo swipe agisce esclusivamente sull'Appello del Libro del docente, e mai nei giorni in sola lettura
-            // (domenica, sabato con «settimana fino a sabato» spenta) né sugli alunni con X / no lez.
-            if (!caricamento && libroDocente && appelloModificabile(s.id)) {
-                var valoreVisivo = valore
-                var inizioX = 0f
-                var inizioY = 0f
-                val sogliaMovimento = (android.view.ViewConfiguration.get(ctx).scaledTouchSlop * 0.7f).toInt().coerceAtLeast(dp(3))
-                rigaNome.setOnTouchListener { v, evento ->
-                    when (evento.actionMasked) {
-                        android.view.MotionEvent.ACTION_DOWN -> {
-                            inizioX = evento.x
-                            inizioY = evento.y
-                            true
-                        }
-                        android.view.MotionEvent.ACTION_MOVE -> {
-                            val dx = evento.x - inizioX
-                            val dy = evento.y - inizioY
-                            if (kotlin.math.abs(dx) > sogliaMovimento && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.05f) {
-                                v.parent?.requestDisallowInterceptTouchEvent(true)
-                                v.translationX = (dx * 0.18f).coerceIn(-dp(32).toFloat(), dp(32).toFloat())
-                            } else {
-                                v.parent?.requestDisallowInterceptTouchEvent(false)
-                            }
-                            true
-                        }
-                        android.view.MotionEvent.ACTION_UP -> {
-                            if (!appelloModificabile(s.id)) {
-                                v.parent?.requestDisallowInterceptTouchEvent(false)
-                                v.animate().translationX(0f).setDuration(120).start()
-                                return@setOnTouchListener true
-                            }
-                            val dx = evento.x - inizioX
-                            val dy = evento.y - inizioY
-                            v.parent?.requestDisallowInterceptTouchEvent(false)
-                            if (kotlin.math.abs(dx) >= dp(28) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.05f) {
-                                val direzione = if (dx > 0) 1 else -1
-                                v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
-                                val precedente = datiGiorno?.stato?.get(s.id) ?: StatoGiornaliero(-1)
-                                val nuovoValore = prossimoStatoAppello(valoreVisivo, direzione)
-                                val codiceEvento = codiceEventoAppello(nuovoValore)
-                                if (codiceEvento != null) {
-                                    val giornoCambio = formatoApi.format(selezionato.time)
-                                    val nuovoStato = StatoGiornaliero(nuovoValore)
-                                    valoreVisivo = nuovoValore
-                                    datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to nuovoStato)) }
-                                    badgeStato.alpha = 0.55f // indicazione discreta: stato in attesa di salvataggio
-                                    badgeStato.contentDescription = "Stato: ${etichettaStatoAppello(nuovoValore)}, in attesa di salvataggio"
-                                    animaCambioStatoAppello(rigaNome, badgeStato, precedente.valore, nuovoValore, direzione)
-                                    programmaInvioAppello(s.id, giornoCambio, precedente, nuovoValore, badgeStato) { confermato, messaggio, statoRipristino ->
-                                        badgeStato.alpha = 1f
-                                        badgeStato.contentDescription = "Stato: ${etichettaStatoAppello(if (confermato) nuovoValore else precedente.valore)}"
-                                        if (!confermato && formatoApi.format(selezionato.time) == giornoCambio) {
-                                            val ripristino = statoRipristino
-                                            valoreVisivo = ripristino.valore
-                                            datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to ripristino)) }
-                                            animaCambioStatoAppello(rigaNome, badgeStato, nuovoValore, ripristino.valore, -direzione)
-                                        }
-                                        if (!messaggio.isNullOrBlank()) {
-                                            view?.let { Snackbar.make(it, messaggio, Snackbar.LENGTH_LONG).show() }
-                                        }
-                                    }
-                                } else {
-                                    v.animate().translationX(0f).setDuration(120).start()
-                                }
-                            } else {
-                                v.animate().translationX(0f).setDuration(120).start()
-                            }
-                            true
-                        }
-                        android.view.MotionEvent.ACTION_CANCEL -> {
-                            v.parent?.requestDisallowInterceptTouchEvent(false)
-                            v.animate().translationX(0f).setDuration(120).start()
-                            true
-                        }
-                        else -> true
-                    }
-                }
-            }
-
-            val cellaOre = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(12), dp(9), dp(12), dp(9))
-                setBackgroundColor(0xFFFFFFFF.toInt())
-            }
-
-            // Mostra solo le ore effettivamente presenti nel registro per la giornata selezionata.
-            val filaPallini = LinearLayout(ctx).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-            }
-            repeat(numeroOre.coerceIn(1, 9)) { ora ->
-                val pallino = View(ctx).apply {
-                    background = GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(coloreOraPerStudente(statiOre, s.id, ora))
-                    }
-                    contentDescription = "Ora ${ora + 1}: ${descrizioneOra(statiOre[s.id]?.getOrNull(ora) ?: -1)}"
-                }
-                filaPallini.addView(pallino, LinearLayout.LayoutParams(dp(14), dp(14)).apply {
-                    if (ora > 0) leftMargin = dp(3)
-                })
-            }
-            cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16)))
-            if (statoStudente.isRitardoBreve && statoStudente.isRitardoLungo) {
-                // Ritardo normale: se il popup web non ha dato l'ora di entrata, la deduciamo dalla
-                // prima ora in cui lo studente risulta presente nelle presenze per ora.
-                val entrata = statoStudente.oraEntrata ?: statiOre[s.id]
-                    ?.indexOfFirst { it == 0 || it == 1 }?.takeIf { it > 0 }?.let { (it + 1).toString() }
-                cellaOre.addView(TextView(ctx).apply {
-                    text = "R" + (entrata?.let { " ${it}ª ora" } ?: "")
+            scheda.…1910 tokens truncated…} ?: "")
                     textSize = 12f
                     typeface = outfitBold
                     setTextColor(0xFF8A6D00.toInt())
@@ -1774,3 +1681,4 @@ class LinguetteView(
         return true
     }
 }
+
