@@ -758,7 +758,7 @@ class StudentiScheda : Scheda() {
                 var valoreVisivo = valore
                 var inizioX = 0f
                 var inizioY = 0f
-                val sogliaMovimento = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+                val sogliaMovimento = (android.view.ViewConfiguration.get(ctx).scaledTouchSlop * 0.7f).toInt().coerceAtLeast(dp(3))
                 rigaNome.setOnTouchListener { v, evento ->
                     when (evento.actionMasked) {
                         android.view.MotionEvent.ACTION_DOWN -> {
@@ -769,9 +769,9 @@ class StudentiScheda : Scheda() {
                         android.view.MotionEvent.ACTION_MOVE -> {
                             val dx = evento.x - inizioX
                             val dy = evento.y - inizioY
-                            if (kotlin.math.abs(dx) > sogliaMovimento && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.15f) {
+                            if (kotlin.math.abs(dx) > sogliaMovimento && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.05f) {
                                 v.parent?.requestDisallowInterceptTouchEvent(true)
-                                v.translationX = (dx * 0.12f).coerceIn(-dp(24).toFloat(), dp(24).toFloat())
+                                v.translationX = (dx * 0.18f).coerceIn(-dp(32).toFloat(), dp(32).toFloat())
                             } else {
                                 v.parent?.requestDisallowInterceptTouchEvent(false)
                             }
@@ -781,7 +781,7 @@ class StudentiScheda : Scheda() {
                             val dx = evento.x - inizioX
                             val dy = evento.y - inizioY
                             v.parent?.requestDisallowInterceptTouchEvent(false)
-                            if (kotlin.math.abs(dx) >= dp(48) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.2f) {
+                            if (kotlin.math.abs(dx) >= dp(28) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.05f) {
                                 val direzione = if (dx > 0) 1 else -1
                                 v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
                                 val precedente = datiGiorno?.stato?.get(s.id) ?: StatoGiornaliero(-1)
