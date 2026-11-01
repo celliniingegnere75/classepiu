@@ -413,9 +413,12 @@ class StudentiScheda : Scheda() {
                                 }
                             }
                             "X", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
-                                // X / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
-                                if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
-                                bloccati += al.id
+                                // Nella data odierna conserva il dato valido di status2: l'appello può essere già stato registrato
+                                // anche se il registro web marca la giornata come festiva. I giorni non odierni restano grigi e bloccati.
+                                if (giorno != oggi) {
+                                    if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
+                                    bloccati += al.id
+                                }
                             }
                             else -> {} // altro: resta come letto dalle API, o grigio se senza codice
                         }
