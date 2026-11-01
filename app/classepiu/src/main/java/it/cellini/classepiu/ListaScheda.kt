@@ -243,12 +243,19 @@ class ListaScheda : Scheda() {
                     text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt())
                 }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
                 // La X è presente solo sulle firme del docente corrente.
-                if (v.mia) addView(TextView(ctx).apply {
-                    text = "✕"; textSize = 18f; gravity = Gravity.CENTER; setTextColor(0xFF666666.toInt())
-                    setPadding(dp(12), dp(2), dp(2), dp(2))
+                if (v.mia) addView(android.widget.ImageView(ctx).apply {
+                    setImageResource(R.drawable.ic_cancella_firma)
+                    scaleType = android.widget.ImageView.ScaleType.FIT_CENTER
+                    // icona di 24 dp con un'area di tocco di 40 dp
+                    setPadding(dp(8), dp(8), dp(8), dp(8))
                     contentDescription = "cancella firma"
+                    isClickable = true
+                    background = android.util.TypedValue().let { tv ->
+                        ctx.theme.resolveAttribute(android.R.attr.selectableItemBackgroundBorderless, tv, true)
+                        androidx.core.content.ContextCompat.getDrawable(ctx, tv.resourceId)
+                    }
                     setOnClickListener { cancellaFirma(v) }
-                }, LinearLayout.LayoutParams(dp(36), dp(36)))
+                }, LinearLayout.LayoutParams(dp(40), dp(40)))
             })
             if (v.tipo.isNotEmpty()) addView(TextView(ctx).apply { text = v.tipo; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore); setPadding(0, dp(2), 0, 0) })
             addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
