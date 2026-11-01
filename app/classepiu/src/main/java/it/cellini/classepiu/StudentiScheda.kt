@@ -335,11 +335,9 @@ class StudentiScheda : Scheda() {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
             // questa seconda lettura, separata dalle API REST, non è riuscita (es. login web fallito).
-            val statiWeb: kotlinx.coroutines.Deferred<Result<Map<String, ClasseViva.StatoWeb>>>? = if (libroDocente) {
-                async(Dispatchers.IO) {
-                    runCatching { client.statiRegistroWeb(classeId, gruppoWeb(), giorno) }
-                }
-            } else null
+            val statiWeb = async(Dispatchers.IO) {
+                runCatching { client.statiRegistroWeb(classeId, gruppoWeb(), giorno) }
+            }
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     // Le due letture sono indipendenti: eseguirle in parallelo evita di sommare
@@ -387,8 +385,22 @@ class StudentiScheda : Scheda() {
             // Il registro web (regclasse.php, stesso "stato" mostrato al docente) è la fonte di verità: le API REST (status2)
             // a volte non segnalano stage/gita (PS/PV), mostrando un normale presente. Il valore letto dal web corregge quello.
             val daRegistrare = mutableListOf<String>()
-            val esitoWeb = statiWeb?.await()
-            val web = esitoWeb?.getOrNull().orEmpty()
+            val esitoWeb = statiWeb.await()
+            val web = esitoWeb.getOrNull().orEmpty()
+            if (!libroDocente && web.isNotEmpty()) {
+                // La lista aperta dalla tessera classe deve distinguere gita/stage anche quando status2 li riduce a P.
+                stato = stato.toMutableMap().apply {
+                    for (al in studenti) {
+                        val webStatus = web[al.id]?.stato?.trim()?.uppercase().orEmpty()
+                        when {
+                            webStatus.startsWith("PS") -> this[al.id] =
+                                (this[al.id] ?: StatoGiornaliero(3)).copy(valore = 3)
+                            webStatus.startsWith("PV") -> this[al.id] =
+                                (this[al.id] ?: StatoGiornaliero(4)).copy(valore = 4)
+                        }
+                    }
+                }
+            }
             if (libroDocente) {
                 val oggi = dataOdierna()
                 val bloccati = mutableSetOf<String>()
@@ -485,6 +497,8 @@ class StudentiScheda : Scheda() {
             val coloreAnagrafica = when {
                 caricamento -> 0xFFFCFCFC.toInt()
                 valore == 2 -> rosaAssente
+                valore == 3 -> marroneStage
+                valore == 4 -> ambraGita
                 valore == 0 || valore == 1 -> verdePresente
                 else -> 0xFFEEEEEE.toInt()
             }
@@ -500,7 +514,11 @@ class StudentiScheda : Scheda() {
             }
 
             val cellaNome = TextView(ctx).apply {
-                text = s.nome
+                text = s.nome + when (valore) {
+                    3 -> " · PS"
+                    4 -> " · PV"
+                    else -> ""
+                }
                 textSize = 17f
                 typeface = outfitBold
                 setTextColor(0xFF111111.toInt())
