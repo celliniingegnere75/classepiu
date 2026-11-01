@@ -523,15 +523,15 @@ class ClasseViva(private val utente: String, private val password: String, priva
             val (codice, html) = web.chiama(url)
             if (codice !in 200..299) throw ClasseVivaException("finestra di modifica non leggibile (HTTP $codice)")
             fun opzioni(id: String): List<Pair<String, String>> {
-                val select = Regex("""<select\\b(?=[^>]*\\bid=["']${Regex.escape(id)}["'])[^>]*>(.*?)</select>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                val select = Regex("""<select\b(?=[^>]*\bid=["']${Regex.escape(id)}["'])[^>]*>(.*?)</select>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
                     .find(html)?.groupValues?.get(1).orEmpty()
-                return Regex("""<option\\b[^>]*value=["']([^"']*)["'][^>]*>(.*?)</option>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
+                return Regex("""<option\b[^>]*value=["']([^"']*)["'][^>]*>(.*?)</option>""", setOf(RegexOption.IGNORE_CASE, RegexOption.DOT_MATCHES_ALL))
                     .findAll(select).map { m ->
                         android.text.Html.fromHtml(m.groupValues[1], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim() to
                             android.text.Html.fromHtml(m.groupValues[2], android.text.Html.FROM_HTML_MODE_LEGACY).toString().trim()
                     }.filter { it.first.isNotEmpty() || it.second.isNotEmpty() }.toList()
             }
-            fun valore(id: String): String = Regex("""<(?:input|textarea)\\b(?=[^>]*(?:id|name)=["']${Regex.escape(id)}["'])[^>]*value=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
+            fun valore(id: String): String = Regex("""<(?:input|textarea)\b(?=[^>]*(?:id|name)=["']${Regex.escape(id)}["'])[^>]*value=["']([^"']*)["']""", RegexOption.IGNORE_CASE)
                 .find(html)?.groupValues?.get(1)?.let { android.text.Html.fromHtml(it, android.text.Html.FROM_HTML_MODE_LEGACY).toString() }.orEmpty()
             val progetti = opzioni("progetto_set_modifica").ifEmpty { opzioni("id_progetto_set") }
             val attivita = opzioni("tipo_attivita_modifica").map { it.second.ifEmpty { it.first } }.filter { it.isNotEmpty() }.distinct()
