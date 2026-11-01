@@ -215,6 +215,13 @@ class StudentiScheda : Scheda() {
     private var linguettaAttiva = 0
     private var pannelloAlunni: SwipeRefreshLayout? = null
     private var contenitoreLezioni: View? = null
+    private var caricamentoElencoStudenti = false
+    private var caricamentoStato = false
+    private var generazioneCaricamentoStato = 0
+
+    private fun aggiornaRotellinaCaricamento() {
+        pannelloAlunni?.isRefreshing = caricamentoElencoStudenti || caricamentoStato
+    }
 
     /** Il giorno scelto nella striscia, usato anche dalle lezioni incorporate. */
     fun giornoSelezionato(): Calendar = striscia.selezionato
@@ -289,9 +296,12 @@ class StudentiScheda : Scheda() {
         studenti = if (gruppo.isNotEmpty() && mieiSalvati.isEmpty()) emptyList()
             else soloMiei(runCatching { leggiStudenti(fileStudenti().readText()) }.getOrDefault(emptyList()), mieiSalvati)
         if (studenti.isEmpty()) testo("carico gli studenti…") else ridisegna()
+        caricamentoElencoStudenti = true
+        aggiornaRotellinaCaricamento()
         caricaStato()
         lifecycleScope.launch {
-            val r = withContext(Dispatchers.IO) {
+            try {
+                val r = withContext(Dispatchers.IO) {
                 runCatching {
                     val (miei, errore) = if (gruppo.isEmpty()) emptySet<String>() to ""
                         else FiltroArticolate.alunniGruppo(client, requireContext().filesDir, tipo, classeId, gruppo)
@@ -317,9 +327,13 @@ class StudentiScheda : Scheda() {
                 return@launch
             }
             withContext(Dispatchers.IO) { runCatching { fileStudenti().writeText(corpo) } }
-            if (nuovi != studenti) {
-                studenti = nuovi
-                ridisegna()
+                if (nuovi != studenti) {
+                    studenti = nuovi
+                    ridisegna()
+                }
+            } finally {
+                caricamentoElencoStudenti = false
+                aggiornaRotellinaCaricamento()
             }
         }
     }
@@ -332,6 +346,9 @@ class StudentiScheda : Scheda() {
     private fun gruppoWeb(): String = gruppo.ifBlank { if (tipo.equals("G", true)) nome.trim() else "" }
 
     private fun caricaStato() {
+        val generazioneStato = ++generazioneCaricamentoStato
+        caricamentoStato = true
+        aggiornaRotellinaCaricamento()
         lavoro?.cancel()
         datiGiorno = null
         val giorno = formatoApi.format(selezionato.time)
@@ -344,6 +361,7 @@ class StudentiScheda : Scheda() {
         appelloGiornoBloccato = giorno != oggiSelezionato
         appelloBloccati = emptySet()
         lavoro = lifecycleScope.launch {
+            try {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
             // questa seconda lettura, separata dalle API REST, non è riuscita (es. login web fallito).
@@ -465,7 +483,6 @@ class StudentiScheda : Scheda() {
             // Presenze e pallini si vedono subito; gli orari di Rb/U dal registro web arrivano dopo.
             datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(""))
             ridisegna()
-            pannelloAlunni?.isRefreshing = false
             daRegistrare.forEach { registraPresenteIniziale(it, giorno) }
 
             // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web
@@ -496,6 +513,12 @@ class StudentiScheda : Scheda() {
             val popup = if (debugOrari.isEmpty()) "" else "\n\nPOPUP WEB ORARIO RITARDO/USCITA\n$debugOrari"
             datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(popup))
             ridisegna()
+            } finally {
+                if (generazioneStato == generazioneCaricamentoStato) {
+                    caricamentoStato = false
+                    aggiornaRotellinaCaricamento()
+                }
+            }
         }
     }
 
