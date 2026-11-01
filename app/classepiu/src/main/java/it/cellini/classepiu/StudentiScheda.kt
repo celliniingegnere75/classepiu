@@ -158,7 +158,7 @@ class StudentiScheda : Scheda() {
 
     /** Id delle linguette mostrate: 0 alunni, 1 le mie lezioni (solo per le mie classi), 2 tutte le lezioni. */
     private fun idLinguette() = if (miaClasse) listOf(0, 1, 2) else listOf(0, 2)
-    private fun nomiLinguette() = idLinguette().map { listOf("alunni", "le mie lezioni", "tutte le lezioni")[it] }
+    private fun nomiLinguette() = idLinguette().map { listOf("appello", "le mie lezioni", "tutte le lezioni")[it] }
 
     private fun verificaMiaClasse() {
         val files = requireContext().filesDir
@@ -1188,8 +1188,8 @@ class LinguetteView(
         pennaTesto.textSize = dimensione * d
         while (dimensione > 11f && voci.maxOf { pennaTesto.measureText(it) } > lw - 20f * d) { dimensione -= 0.5f; pennaTesto.textSize = dimensione * d }
         val y = h / 2f - (pennaTesto.ascent() + pennaTesto.descent()) / 2f
-        // le linguette di mezzo hanno entrambi i bordi curvi verso sinistra: l'etichetta va spostata di 5 dp a sinistra per restare al centro
-        voci.forEachIndexed { i, t -> c.drawText(t, lw * i + lw / 2f - (if (i in 1 until voci.size - 1) 5f * d else 0f), y, pennaTesto) }
+        // le linguette di mezzo hanno entrambi i bordi curvi verso sinistra: l'etichetta va spostata di 8 dp a sinistra per restare al centro
+        voci.forEachIndexed { i, t -> c.drawText(t, lw * i + lw / 2f - (if (i in 1 until voci.size - 1) 8f * d else 0f), y, pennaTesto) }
     }
 
     override fun onTouchEvent(e: android.view.MotionEvent): Boolean {
