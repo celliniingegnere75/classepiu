@@ -238,9 +238,9 @@ class StudentiScheda : Scheda() {
     )
     private var datiGiorno: DatiGiorno? = null
 
-    /** Giorno dell'appello in sola lettura (domenica, sabato con «settimana fino a sabato» spenta): si vede, non si scrive. */
+    /** I giorni diversi da oggi sono in sola lettura; oggi si può intervenire anche se ClasseViva mostra X / festivo. */
     private var appelloGiornoBloccato = false
-    /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
+    /** Alunni con X / no lez. sul registro web: bloccati solo nei giorni diversi da oggi. */
     private var appelloBloccati: Set<String> = emptySet()
     private fun appelloModificabile(studenteId: String) =
         !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() && studenteId !in appelloBloccati
@@ -421,7 +421,7 @@ class StudentiScheda : Scheda() {
                         }
                     }
                 }
-                appelloBloccati = bloccati
+                appelloBloccati = if (giorno == oggi) emptySet() else bloccati
             }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             // Esito della lettura del registro web (solo libro del docente): visibile copiando la risposta,
@@ -884,8 +884,7 @@ class StudentiScheda : Scheda() {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
 
-            // Lo swipe agisce esclusivamente sull'Appello del Libro del docente, e mai nei giorni in sola lettura
-            // (domenica, sabato con «settimana fino a sabato» spenta) né sugli alunni con X / no lez.
+            // Lo swipe agisce solo nell'Appello del libro docente e nella data odierna; X / no lez. resta modificabile oggi.
             if (!caricamento && libroDocente && appelloModificabile(s.id)) {
                 var valoreVisivo = valore
                 var inizioX = 0f
