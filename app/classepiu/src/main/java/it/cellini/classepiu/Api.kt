@@ -474,7 +474,11 @@ class ClasseViva(private val utente: String, private val password: String, priva
         tipo: String, classeId: String, materia: String, data: String, ora: Int, log: StringBuilder = StringBuilder(),
         nomeClasse: String = "", educazioneCivica: Boolean = false, argomento: String = "", compresenza: Boolean = false,
         /** voce del menu "tipo attività" del registro web, scritta esattamente come lì (HAR: "Lezione", "Spiegazione") */
-        tipoAttivita: String = "Lezione"
+        tipoAttivita: String = "Lezione",
+        /** ore consecutive coperte dalla firma a partire da [ora] (campo numero_ore del sito: una sola firma) */
+        numeroOre: Int = 1,
+        /** progetto di scuola e territorio per PCTO/FSL (id_progetto_set del sito, HAR del 1/11/2026); vuoto = nessuno */
+        idProgetto: String = ""
     ): Pair<Int, String> {
         assicuraLogin()
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
@@ -503,8 +507,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
             if (tipo == "G" && nomeClasse.isNotBlank()) return firmaCompresenza("", nomeClasse, sid.toString(), data, ora, argomento, log)
             return 422 to "compresenza non disponibile per questo tipo di classe"
         }
-        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, argomento, tipoAttivita)
-        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, argomento, tipoAttivita)
+        if (tipo == "C") return firmaWeb(classeId, "", sid.toString(), data, ora, log, argomento, tipoAttivita, numeroOre, idProgetto)
+        if (tipo == "G" && nomeClasse.isNotBlank()) return firmaWeb("", nomeClasse, sid.toString(), data, ora, log, argomento, tipoAttivita, numeroOre, idProgetto)
         val tipi = runCatching { tipiLezione().first }.getOrDefault(emptyList())
         log.append("tipi di lezione: ${tipi.joinToString { "${it.codice}=${it.nome}" }.ifEmpty { "non letti" }}\n\n")
         val lezione = tipi.firstOrNull { it.nome.equals("Lezione", ignoreCase = true) } ?: TipoLezione("1", "Lezione")
@@ -515,8 +519,8 @@ class ClasseViva(private val utente: String, private val password: String, priva
             .put("evtCode", "LSF0")
             .put("evtDate", "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}")
             .put("evtHPos", ora)
-            .put("evtDuration", 1)
-            .put("evtNumH", 1)
+            .put("evtDuration", numeroOre.coerceAtLeast(1))
+            .put("evtNumH", numeroOre.coerceAtLeast(1))
             .put("authorId", numero(id))
             .put("classType", tipo)
             .put("classId", numero(classeId))
@@ -588,6 +592,22 @@ class ClasseViva(private val utente: String, private val password: String, priva
      * che il sito manda come classe_id insieme a gruppo=1, e la pagina del registro si apre con gruppo_id.
      * Il sito risponde {"status":"OK","evento_id":...} se la firma è inserita.
      */
+    /**
+     * Pagina del registro web (regclasse.php) del giorno [data] (yyyyMMdd), in sola lettura: da qui si leggono le voci
+     * "tipo attività" e i progetti di scuola e territorio per PCTO/FSL (FirmaLezione.leggiOpzioniFirma).
+     * Classe intera: [classeId] e [gruppo] vuoto; gruppo di classe articolata: [classeId] vuoto e [gruppo] la sigla.
+     */
+    fun paginaRegistroWeb(classeId: String, gruppo: String, data: String): Pair<Int, String> {
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
+        val web = sessioneWeb()
+        try {
+            return web.chiama("https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=${enc(gruppo)}&data_start=$giorno&corsoextra=0")
+        } finally {
+            web.close()
+        }
+    }
+
     /**
      * Voci del menu "tipo attività" della finestra "Nuova lezione", lette dalla pagina del registro web (regclasse.php,
      * <select id="tipo_attivita">): il valore da inviare è uguale al testo di ogni voce. Lista vuota se la pagina non si legge.
@@ -666,15 +686,16 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
     }
 
-    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder, argomento: String = "", tipoAttivita: String = "Lezione"): Pair<Int, String> {
+    private fun firmaWeb(classeId: String, gruppo: String, materiaId: String, data: String, ora: Int, log: StringBuilder, argomento: String = "", tipoAttivita: String = "Lezione",
+                         numeroOre: Int = 1, idProgetto: String = ""): Pair<Int, String> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val giorno = "${data.take(4)}-${data.substring(4, 6)}-${data.substring(6, 8)}"
         val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(classeId)}&gruppo_id=${enc(gruppo)}&data_start=$giorno&corsoextra=0"
         val corpo = listOf(
             "action" to "FIRMA_INSERT", "classe_id" to gruppo.ifEmpty { classeId }, "data_start" to giorno,
             "conteggioassenze" to "conteggiaora", "materia" to materiaId, "tipo_attivita" to tipoAttivita,
-            "ora_posizione" to ora.toString(), "numero_ore" to "1", "uda_firma" to "", "fase_firma" to "",
-            "id_progetto_set" to "", "peso_ora" to "1", "text_nota" to argomento.trim(), "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
+            "ora_posizione" to ora.toString(), "numero_ore" to numeroOre.coerceAtLeast(1).toString(), "uda_firma" to "", "fase_firma" to "",
+            "id_progetto_set" to idProgetto, "peso_ora" to "1", "text_nota" to argomento.trim(), "output" to "", "gruppo" to if (gruppo.isEmpty()) "0" else "1"
         ).joinToString("&") { (k, v) -> "$k=${enc(v)}" }
         val web = sessioneWeb()
         try {
