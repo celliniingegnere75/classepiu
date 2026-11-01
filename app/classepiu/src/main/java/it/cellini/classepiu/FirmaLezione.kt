@@ -102,6 +102,49 @@ object FirmaLezione {
     }
 
     /**
+     * Firme già presenti da qualunque docente nella classe, limitate alle ore richieste.
+     * Ritorna null se la risposta di lessons2/students non è leggibile.
+     */
+    fun firmeClasseNelleOre(grezzo: String, data: String, ora: Int, ore: Int): Map<Int, String>? {
+        val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return null
+        if (radice !is JSONObject && radice !is JSONArray) return null
+
+        fun testo(o: JSONObject, vararg chiavi: String): String {
+            for (k in chiavi) {
+                val v = o.opt(k)
+                if (v != null && v != JSONObject.NULL && v !is JSONObject && v !is JSONArray) {
+                    val s = v.toString().trim()
+                    if (s.isNotEmpty() && s != "null") return s
+                }
+            }
+            return ""
+        }
+
+        val oreRichieste = ora until ora + ore.coerceAtLeast(1)
+        val trovate = linkedMapOf<Int, String>()
+        fun cammina(v: Any?, livello: Int) {
+            if (livello > 7) return
+            when (v) {
+                is JSONArray -> for (i in 0 until v.length()) cammina(v.opt(i), livello + 1)
+                is JSONObject -> {
+                    val inizio = testo(v, "evtHPos", "hourPos", "evtHour").toDoubleOrNull()?.toInt()
+                    val giorno = testo(v, "evtDate", "lessonDate", "date").take(10).replace("-", "")
+                    val firmata = testo(v, "subjectDesc", "subjectId", "authorId", "teacherId", "evtCode", "authorName").isNotEmpty()
+                    if (inizio != null && inizio in 1..Orario.ORE && firmata && (giorno.isEmpty() || giorno == data)) {
+                        val durata = (testo(v, "evtDuration", "evtNumH", "duration").toDoubleOrNull()?.toInt() ?: 1).coerceAtLeast(1)
+                        val docente = testo(v, "authorName", "teacherName", "teacherId", "authorId")
+                            .ifEmpty { testo(v, "subjectDesc", "subjectName") }
+                            .ifEmpty { "firma già presente" }
+                        for (h in inizio until inizio + durata) if (h in oreRichieste) trovate.putIfAbsent(h, docente)
+                    }
+                    for (k in v.keys()) if (k != "studentStatus") cammina(v.opt(k), livello + 1)
+                }
+            }
+        }
+        cammina(radice, 0)
+        return trovate
+    }
+    /**
      * L'ora subito dopo l'ultima firma del giorno [data] (yyyyMMdd) nel registro della classe (lessons2/students, firme di
      * tutti i docenti): 1 se non c'è ancora nessuna firma, null se l'ultima arriva già all'ultima ora o la risposta non si legge.
      * Una firma di più ore (evtDuration) conta fino alla sua ultima ora. Serve quando l'orario non indica la classe.
