@@ -376,7 +376,7 @@ class RegistroFragment : Fragment() {
                 orientation = LinearLayout.VERTICAL
                 // "appello veloce" ha l'altezza che gli serve; i tre pulsanti prendono tutto lo spazio che resta
                 addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(56)).apply { topMargin = ctx.dp(2) })
+                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(58)).apply { topMargin = ctx.dp(2) })
             }
             val riga = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
@@ -409,6 +409,8 @@ class RegistroFragment : Fragment() {
             val codice = senzaPrefisso(c.codice, c.nome)
             h.codice.text = codice
             h.codice.visibility = if (codice.isEmpty()) View.GONE else View.VISIBLE
+            // senza codice "appello veloce" è alto 46 dp; con la riga del codice sotto ne resta 42 perché tutto stia nella scheda
+            h.appello.minHeight = h.appello.context.dp(if (codice.isEmpty()) 46 else 42)
             val apriStudenti = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 (requireActivity() as MainActivity).apri(StudentiScheda(),
