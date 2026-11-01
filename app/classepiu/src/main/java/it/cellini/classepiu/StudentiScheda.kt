@@ -775,6 +775,7 @@ class StudentiScheda : Scheda() {
         val statoInviato = cambio.statoDesiderato
         val esito = withContext(Dispatchers.IO) {
             runCatching {
+                check(cambio.giorno == formatoApi.format(java.util.Date())) { "modifica consentita solo per la data odierna" }
                 client.cambiaStatoAppello(classeId, gruppoWeb(), cambio.studenteId, cambio.giorno, codiceEvento)
             }
         }
@@ -904,6 +905,11 @@ class StudentiScheda : Scheda() {
                             true
                         }
                         android.view.MotionEvent.ACTION_UP -> {
+                            if (!appelloModificabile(s.id)) {
+                                v.parent?.requestDisallowInterceptTouchEvent(false)
+                                v.animate().translationX(0f).setDuration(120).start()
+                                return@setOnTouchListener true
+                            }
                             val dx = evento.x - inizioX
                             val dy = evento.y - inizioY
                             v.parent?.requestDisallowInterceptTouchEvent(false)
