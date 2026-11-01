@@ -249,7 +249,7 @@ class StudentiScheda : Scheda() {
     private fun studentiConNoLezioneApi(grezzo: String): Set<String> {
         val radice = runCatching { JSONObject(grezzo) }.getOrNull() ?: return emptySet()
         val elenco = radice.optJSONArray("students") ?: return emptySet()
-        val statiBloccanti = setOf("XG", "NN01")
+        val statiBloccanti = setOf("XG")
         return buildSet {
             for (i in 0 until elenco.length()) {
                 val alunno = elenco.optJSONObject(i) ?: continue
@@ -342,14 +342,13 @@ class StudentiScheda : Scheda() {
         lavoro?.cancel()
         datiGiorno = null
         val giorno = formatoApi.format(selezionato.time)
-        // Domenica, e sabato con «settimana fino a sabato» spenta: l'appello si vede con i colori di ClasseViva
-        // ma è in sola lettura (niente swipe e nessuna registrazione automatica della presenza).
+        // Gli stati si possono modificare solo nella data odierna, anche se cade nel fine settimana.
         val giornoSettimana = selezionato.get(Calendar.DAY_OF_WEEK)
         val giornoSenzaScuola = giornoSettimana == Calendar.SUNDAY ||
             (giornoSettimana == Calendar.SATURDAY && !Impostazioni(requireContext()).sabato)
         val oggiSelezionato = dataOdierna()
         // Si può modificare l'appello esclusivamente per oggi: i giorni passati e futuri sono sempre in sola lettura.
-        appelloGiornoBloccato = giorno != oggiSelezionato || giornoSenzaScuola
+        appelloGiornoBloccato = giorno != oggiSelezionato
         appelloBloccati = emptySet()
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
@@ -429,7 +428,7 @@ class StudentiScheda : Scheda() {
                                     this[al.id] = StatoGiornaliero(0)
                                     // registrata solo se presenza predefinita (nessun evento), mai per i giorni futuri
                                     // e mai nei giorni in sola lettura (sabato senza scuola, domenica)
-                                    if (oraEvento.isEmpty() && giorno <= oggi && !giornoSenzaScuola) daRegistrare += al.id
+                                    if (oraEvento.isEmpty() && giorno == oggi && !giornoSenzaScuola) daRegistrare += al.id
                                 }
                             }
                             "X", "XG", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
