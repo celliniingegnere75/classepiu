@@ -309,10 +309,11 @@ class StudentiScheda : Scheda() {
         val giorno = formatoApi.format(selezionato.time)
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
-            val statiWeb: kotlinx.coroutines.Deferred<Map<String, Pair<String, String>>>? = if (libroDocente) {
+            // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
+            // questa seconda lettura, separata dalle API REST, non è riuscita (es. login web fallito).
+            val statiWeb: kotlinx.coroutines.Deferred<Result<Map<String, Pair<String, String>>>>? = if (libroDocente) {
                 async(Dispatchers.IO) {
                     runCatching { client.statiRegistroWeb(classeId, gruppo, giorno) }
-                        .getOrDefault(emptyMap<String, Pair<String, String>>())
                 }
             } else null
             val r = withContext(Dispatchers.IO) {
@@ -362,8 +363,9 @@ class StudentiScheda : Scheda() {
             // Il registro web (regclasse.php, stesso "stato" mostrato al docente) è la fonte di verità: le API REST (status2)
             // a volte non segnalano stage/gita (PS/PV), mostrando un normale presente. Il valore letto dal web corregge quello.
             val daRegistrare = mutableListOf<String>()
+            val esitoWeb = statiWeb?.await()
+            val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
-                val web = statiWeb?.await().orEmpty()
                 val oggi = formatoApi.format(java.util.Date())
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
@@ -388,8 +390,16 @@ class StudentiScheda : Scheda() {
                 }
             }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
+            // Esito della lettura del registro web (solo libro del docente): visibile copiando la risposta,
+            // per capire dal telefono se e perché non corregge lo stato (es. P di default oppure PS/PV/A).
+            val diagnosticoWeb = if (libroDocente) {
+                "\n\nREGISTRO WEB (stato, evento_ora): " + if (esitoWeb?.isSuccess == true) {
+                    if (web.isEmpty()) "nessun alunno letto (pagina vuota o cambiata)"
+                    else web.entries.joinToString("; ") { (id, v) -> "$id=${v.first}/${v.second.ifEmpty { "-" }}" }
+                } else "ERRORE: ${esitoWeb?.exceptionOrNull()?.message ?: "nessuna risposta"}"
+            } else ""
             fun diagnostica(popup: String) = coppia?.let { (g, l) ->
-                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$popup")
+                (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$diagnosticoWeb$popup")
             }
             // Presenze e pallini si vedono subito; gli orari di Rb/U dal registro web arrivano dopo.
             datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(""))
