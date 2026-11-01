@@ -53,7 +53,7 @@ class StudentiScheda : Scheda() {
         var invioInCorso: Boolean = false,
         var timerScaduto: Boolean = false,
         var timer: Job? = null,
-        var callbackEsito: ((Boolean, String?) -> Unit)? = null
+        var callbackEsito: ((Boolean, String?, StatoGiornaliero) -> Unit)? = null
     )
     private val cambiAppelloPendenti = mutableMapOf<String, CambioAppelloPending>()
     private var tipo = ""
@@ -619,7 +619,7 @@ class StudentiScheda : Scheda() {
         statoPrecedente: StatoGiornaliero,
         nuovoValore: Int,
         badge: TextView,
-        callback: (Boolean, String?) -> Unit
+        callback: (Boolean, String?, StatoGiornaliero) -> Unit
     ) {
         val chiave = "$giorno|$studenteId"
         val cambio = cambiAppelloPendenti.getOrPut(chiave) {
@@ -667,7 +667,7 @@ class StudentiScheda : Scheda() {
                 if (cambio.timerScaduto) inviaCambioAppello(cambio)
             } else {
                 cambiAppelloPendenti.remove(cambio.chiave)
-                cambio.callbackEsito?.invoke(true, null)
+                cambio.callbackEsito?.invoke(true, null, cambio.statoConfermato)
             }
             return
         }
@@ -682,7 +682,7 @@ class StudentiScheda : Scheda() {
         val messaggio = risposta?.let {
             "ClasseViva non ha accettato il cambio stato (HTTP ${it.first}). ${it.second.take(120)}"
         } ?: "Cambio stato non riuscito: ${esito.exceptionOrNull()?.message ?: "errore di rete"}"
-        cambio.callbackEsito?.invoke(false, messaggio)
+        cambio.callbackEsito?.invoke(false, messaggio, cambio.statoConfermato)
     }
 
     /** Elenco «appello» del libro del docente (pulsante «libro del docente»). Parte come copia di [mostraAlunni], poi diverge. */
@@ -795,12 +795,11 @@ class StudentiScheda : Scheda() {
                                     badgeStato.alpha = 0.55f // indicazione discreta: stato in attesa di salvataggio
                                     badgeStato.contentDescription = "Stato: ${etichettaStatoAppello(nuovoValore)}, in attesa di salvataggio"
                                     animaCambioStatoAppello(rigaNome, badgeStato, precedente.valore, nuovoValore, direzione)
-                                    programmaInvioAppello(s.id, giornoCambio, precedente, nuovoValore, badgeStato) { confermato, messaggio ->
+                                    programmaInvioAppello(s.id, giornoCambio, precedente, nuovoValore, badgeStato) { confermato, messaggio, statoRipristino ->
                                         badgeStato.alpha = 1f
                                         badgeStato.contentDescription = "Stato: ${etichettaStatoAppello(if (confermato) nuovoValore else precedente.valore)}"
                                         if (!confermato && formatoApi.format(selezionato.time) == giornoCambio) {
-                                            val cambio = cambiAppelloPendenti["$giornoCambio|${s.id}"]
-                                            val ripristino = cambio?.statoConfermato ?: precedente
+                                            val ripristino = statoRipristino
                                             valoreVisivo = ripristino.valore
                                             datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to ripristino)) }
                                             animaCambioStatoAppello(rigaNome, badgeStato, nuovoValore, ripristino.valore, -direzione)
