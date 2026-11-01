@@ -374,7 +374,9 @@ class StudentiScheda : Scheda() {
                             "PV" -> if (valoreAttuale != 4) this[al.id] = StatoGiornaliero(4)
                             "A" -> if (valoreAttuale != 2) this[al.id] = (this[al.id] ?: StatoGiornaliero(2)).copy(valore = 2)
                             "P" -> {
-                                if (valoreAttuale == -1) {
+                                // solo se risulta anche almeno un'ora di lezione quel giorno (lessons2/students):
+                                // altrimenti è il default di ClasseViva per un giorno senza scuola (es. sabato), non una presenza vera.
+                                if (valoreAttuale == -1 && statiOre.containsKey(al.id)) {
                                     this[al.id] = StatoGiornaliero(0)
                                     // solo presenza predefinita (nessun evento) e mai per i giorni futuri
                                     if (oraEvento.isEmpty() && giorno <= oggi) daRegistrare += al.id
