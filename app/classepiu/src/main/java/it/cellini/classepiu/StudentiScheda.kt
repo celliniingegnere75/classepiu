@@ -407,7 +407,7 @@ class StudentiScheda : Scheda() {
                 background = GradientDrawable().apply {
                     setColor(coloreAnagrafica)
                 }
-                minHeight = dp(46)
+                minimumHeight = dp(46)
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }
@@ -627,7 +627,7 @@ class StudentiScheda : Scheda() {
                 gravity = Gravity.CENTER_VERTICAL
                 setPadding(dp(14), dp(9), dp(14), dp(9))
                 background = GradientDrawable().apply { setColor(coloreAnagrafica) }
-                minHeight = dp(46)
+                minimumHeight = dp(46)
             }
             val cellaNome = TextView(ctx).apply {
                 text = s.nome
