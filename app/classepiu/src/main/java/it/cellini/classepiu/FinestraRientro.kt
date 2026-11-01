@@ -790,9 +790,17 @@ object FinestraRientro {
         firmaRapida.visibility = View.GONE
         firmaRapida.isEnabled = false
         firmaRapida.alpha = .5f
-        // per ora "firma ordinaria" non fa nulla (conta solo come tocco: il tempo della notifica riparte);
-        // la finestra con materia e tipo attività è pronta in apriFirmaOrdinaria, da collegare quando serve
-        firmaOrdinaria.setOnClickListener { gestore.interagita(avviso) }
+        // La finestra di scelta è separata; la gestione della notifica e l'invio restano qui.
+        firmaOrdinaria.setOnClickListener {
+            FinestraFirmaOrdinaria.mostra(
+                activity = activity,
+                lezione = lezione,
+                onApri = { gestore.interagita(avviso); gestore.trattieni(avviso) }
+            ) { civica, argomento, tipoAttivita ->
+                firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
+                    scelta = SceltaFirma(civica, argomento, tipoAttivita))
+            }
+        }
         // I due pulsanti sono affiancati e compaiono solo se l'ora non è ancora firmata.
         radice.addView(rigaPulsanti, LinearLayout.LayoutParams(-2, -2).apply { topMargin = -activity.dp(37); bottomMargin = activity.dp(7) })
 
@@ -1066,99 +1074,6 @@ object FinestraRientro {
      * tipologia e argomento si scelgono qui per questa ora, invece di venire dalla scheda "firma" delle opzioni.
      * Educazione civica è una materia a sé (sul sito è una voce del menu "Materia"); tipo_attivita resta "Lezione".
      */
-    private fun apriFirmaOrdinaria(activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View) {
-        // la notifica resta aperta mentre si compila, come dopo la firma rapida
-        gestore.interagita(avviso)
-        gestore.trattieni(avviso)
-        val imp = Impostazioni(activity)
-        val azzurro = 0xFF69BCE8.toInt()
-        // materia: quella dell'orario oppure educazione civica (sul sito è una voce del menu "Materia")
-        val ordinaria = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = lezione.materia.lowercase().ifBlank { "materia dell'orario" } }
-        val civica = android.widget.RadioButton(activity).apply { id = View.generateViewId(); text = "educazione civica" }
-        val sceltaMateria = android.widget.RadioGroup(activity).apply {
-            orientation = android.widget.RadioGroup.VERTICAL
-            addView(ordinaria)
-            addView(civica)
-            check(if (imp.firmaTipo.equals("Educazione civica", ignoreCase = true)) civica.id else ordinaria.id)
-        }
-        // tipo attività, elenco di riserva: le 43 voci del menu "Nuova lezione" del registro web, lette dalla pagina
-        // regclasse.php (HAR del 31/10/2026), usato finché il sito non risponde con le sue (il valore inviato è il testo)
-        val attivita = listOf(
-            "Lezione", "Spiegazione", "Interrogazione", "Interrogazione e spiegazione", "Prova pratica", "Compito in classe",
-            "Verifica scritta", "Verifiche orali", "Attività di laboratorio", "Orientamento", "Didattica a distanza",
-            "Video Lezione", "Video Verifica", "Video Interrogazione", "Didattica a Distanza Materiale", "Didattica a Distanza Compito",
-            "Didattica a Distanza Verifica", "Video Lezione Sostegno", "Video Compresenza Sostegno", "Video Compresenza ITP",
-            "Sorveglianza", "PCTO - Attività in aula", "FSL - Attività in aula", "Assemblea di classe", "Assemblea di istituto",
-            "Supplenza", "PCTO - Sicurezza", "PCTO - Orientamento", "FSL - Sicurezza", "FSL - Orientamento",
-            "Ore personalizzazione - attività di antidispersione", "Ore personalizzazione - attività di inclusione",
-            "Ore personalizzazione - attività di orientamento", "Ore personalizzazione - attività di riorientamento",
-            "Ore personalizzazione - attività di PCTO", "Ore personalizzazione - attività di apprendistato",
-            "Ore personalizzazione - attività di alfabetizzazione italiano L2", "Ore personalizzazione - attività per crediti IeFP",
-            "Ore personalizzazione - attività di recupero e consolidamento", "Ore personalizzazione - attività di potenziamento",
-            "Ore personalizzazione - attività su metodo di studio e stili di apprendimento", "Ore personalizzazione - attività di accoglienza",
-            "Ore personalizzazione - attività del bilancio personale iniziale"
-        )
-        // si apre subito con l'elenco di riserva; appena il sito risponde la tendina si aggiorna con le sue voci
-        var voci: List<String> = tipiAttivitaSito ?: attivita
-        val tipologia = android.widget.Spinner(activity).apply {
-            adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, voci)
-            setSelection(0)
-        }
-        if (tipiAttivitaSito == null) Thread {
-            val dalSito = runCatching {
-                val client = imp.client().also { it.login() }
-                val classe = leggiClassi(client.classiGrezze(false).second)
-                    .firstOrNull { it.nome.equals(siglaClasse(lezione.classe), ignoreCase = true) } ?: return@runCatching emptyList<String>()
-                val parti = classe.chiave.split("|", limit = 3)
-                val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
-                client.tipiAttivita(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, data)
-            }.getOrDefault(emptyList())
-            if (dalSito.isEmpty()) return@Thread
-            tipiAttivitaSito = dalSito
-            activity.runOnUiThread {
-                if (!tipologia.isAttachedToWindow) return@runOnUiThread
-                val scelta = voci.getOrNull(tipologia.selectedItemPosition)
-                voci = dalSito
-                tipologia.adapter = android.widget.ArrayAdapter(activity, android.R.layout.simple_spinner_dropdown_item, voci)
-                tipologia.setSelection(voci.indexOf(scelta).coerceAtLeast(0))
-            }
-        }.start()
-        val argomento = android.widget.EditText(activity).apply {
-            hint = "argomento della lezione"
-            setText(imp.firmaArgomento)
-            minLines = 2
-            maxLines = 5
-            gravity = Gravity.TOP or Gravity.START
-            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
-                android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
-        }
-        val corpo = LinearLayout(activity).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(activity.dp(22), activity.dp(8), activity.dp(22), 0)
-            addView(TextView(activity).apply { text = "materia"; setTextColor(azzurro); textSize = 14f })
-            addView(sceltaMateria)
-            addView(TextView(activity).apply { text = "tipo attività"; setTextColor(azzurro); textSize = 14f },
-                LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
-            addView(tipologia, LinearLayout.LayoutParams(-1, -2))
-            addView(TextView(activity).apply { text = "argomento"; setTextColor(azzurro); textSize = 14f },
-                LinearLayout.LayoutParams(-2, -2).apply { topMargin = activity.dp(12) })
-            addView(argomento, LinearLayout.LayoutParams(-1, -2))
-        }
-        com.google.android.material.dialog.MaterialAlertDialogBuilder(activity)
-            .setTitle("firma ordinaria · ${lezione.ora}° ora, ${lezione.classe}")
-            .setView(corpo)
-            .setPositiveButton("firma") { _, _ ->
-                firmaRapida(activity, avviso, lezione, etichetta, materia, pulsante,
-                    scelta = SceltaFirma(sceltaMateria.checkedRadioButtonId == civica.id, argomento.text.toString(),
-                        voci.getOrElse(tipologia.selectedItemPosition) { "Lezione" }))
-            }
-            .setNegativeButton("annulla", null)
-            .show()
-    }
-
-    /** Voci del tipo attività lette dal sito, tenute finché l'app è aperta. */
-    private var tipiAttivitaSito: List<String>? = null
-
     /** Scelte della firma ordinaria per una sola ora. */
     private data class SceltaFirma(val civica: Boolean, val argomento: String, val tipoAttivita: String)
 
