@@ -551,47 +551,46 @@ class StudentiScheda : Scheda() {
         else -> null
     }
 
-    /** Scivolata breve, rientro elastico e comparsa a scatto della sigla con transizione del colore. */
+    /**
+     * Effetto "passaggio": la riga schizza fuori dal lato dello swipe e rientra dal lato opposto
+     * già aggiornata con la nuova sigla e il nuovo colore.
+     */
     private fun animaCambioStatoAppello(riga: View, badge: TextView, da: Int, a: Int, direzione: Int) {
-        val coloreDa = coloreRigaAppello(da)
         val coloreA = coloreRigaAppello(a)
-        val sfondo = GradientDrawable().apply { setColor(coloreDa) }
-        riga.background = sfondo
-        android.animation.ValueAnimator.ofObject(android.animation.ArgbEvaluator(), coloreDa, coloreA).apply {
-            duration = 260
-            addUpdateListener { sfondo.setColor(it.animatedValue as Int) }
-            start()
-        }
-
         val sigla = etichettaStatoAppello(a)
-        badge.animate().cancel()
-        if (sigla.isEmpty()) {
-            badge.animate().alpha(0f).scaleX(0.7f).scaleY(0.7f).setDuration(120).withEndAction {
-                badge.text = ""
-                badge.visibility = View.GONE
-                badge.alpha = 1f
-                badge.scaleX = 1f
-                badge.scaleY = 1f
-            }.start()
-        } else {
-            badge.visibility = View.VISIBLE
-            badge.text = sigla
-            badge.setTextColor(coloreTestoBadgeAppello(a))
-            badge.background = sfondoBadgeAppello(a)
-            badge.contentDescription = "Stato: $sigla"
-            badge.alpha = 0f
-            badge.scaleX = 0.72f
-            badge.scaleY = 0.72f
-            badge.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(280)
-                .setInterpolator(android.view.animation.OvershootInterpolator(1.25f)).start()
-        }
+        val distanza = riga.width.toFloat().coerceAtLeast(riga.resources.displayMetrics.widthPixels.toFloat()) + dp(24)
 
         riga.animate().cancel()
-        riga.translationX = direzione * dp(18).toFloat()
-        riga.rotationY = direzione * 5f
-        riga.alpha = 0.78f
-        riga.animate().translationX(0f).rotationY(0f).alpha(1f).setDuration(280)
-            .setInterpolator(android.view.animation.OvershootInterpolator(0.85f)).start()
+        riga.animate()
+            .translationX(direzione * distanza)
+            .alpha(0f)
+            .setDuration(115)
+            .withEndAction {
+                // La nuova presenza compare mentre la riga è fuori schermo.
+                riga.background = GradientDrawable().apply { setColor(coloreA) }
+                if (sigla.isEmpty()) {
+                    badge.text = ""
+                    badge.visibility = View.GONE
+                    badge.contentDescription = null
+                } else {
+                    badge.text = sigla
+                    badge.visibility = View.VISIBLE
+                    badge.setTextColor(coloreTestoBadgeAppello(a))
+                    badge.background = sfondoBadgeAppello(a)
+                    badge.contentDescription = "Stato: $sigla"
+                }
+
+                // Swipe a destra: esce a destra e rientra da sinistra. Viceversa per lo swipe a sinistra.
+                riga.translationX = -direzione * distanza
+                riga.alpha = 0f
+                riga.animate()
+                    .translationX(0f)
+                    .alpha(1f)
+                    .setDuration(190)
+                    .setInterpolator(android.view.animation.DecelerateInterpolator(1.6f))
+                    .start()
+            }
+            .start()
     }
 
     /** Elenco «appello» del libro del docente (pulsante «libro del docente»). Parte come copia di [mostraAlunni], poi diverge. */
@@ -706,7 +705,7 @@ class StudentiScheda : Scheda() {
                                         cambiStatoInCorso.remove(s.id)
                                         val risposta = esito.getOrNull()
                                         if (risposta != null && risposta.first == 200 && risposta.second.trim().equals("OK", true)) {
-                                            if (formatoApi.format(selezionato.time) == giornoCambio) caricaStato()
+                                            // Lo stato è già stato aggiornato in modo ottimistico: evitiamo di rileggere tutta la classe.
                                         } else {
                                             if (formatoApi.format(selezionato.time) == giornoCambio) {
                                                 valoreVisivo = precedente.valore
