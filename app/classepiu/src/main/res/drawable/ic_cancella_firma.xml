@@ -1,0 +1,15 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- X bianca in un cerchio rosso: cancella la mia firma nelle liste delle lezioni -->
+    <path
+        android:fillColor="#FFE53935"
+        android:pathData="M12,1A11,11 0,1 1,12,23A11,11 0,1 1,12,1Z" />
+    <path
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="2.4"
+        android:strokeLineCap="round"
+        android:pathData="M8,8L16,16M16,8L8,16" />
+</vector>
