@@ -343,7 +343,7 @@ class RegistroFragment : Fragment() {
                 gravity = Gravity.CENTER; setSingleLine(true); includeFontPadding = false
                 setPadding(ctx.dp(8), ctx.dp(6), ctx.dp(8), ctx.dp(6))
                 background = GradientDrawable().apply { setColor(0xFF81C784.toInt()); cornerRadius = ctx.dp(10).toFloat() }
-                minHeight = ctx.dp(42) // più alto, così il bordo superiore sta in linea con quello della scheda classe
+                minHeight = ctx.dp(44) // più alto, così il bordo superiore sta in linea con quello della scheda classe
             }
             val codice = TextView(ctx).apply {
                 textSize = 10.5f; typeface = outfitRegular; setTextColor(celeste); setPadding(ctx.dp(2), ctx.dp(3), ctx.dp(2), 0)
@@ -376,7 +376,7 @@ class RegistroFragment : Fragment() {
                 orientation = LinearLayout.VERTICAL
                 // "appello veloce" ha l'altezza che gli serve; i tre pulsanti prendono tutto lo spazio che resta
                 addView(sopra, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
-                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(54)).apply { topMargin = ctx.dp(6) })
+                addView(sotto, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(56)).apply { topMargin = ctx.dp(2) })
             }
             val riga = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
