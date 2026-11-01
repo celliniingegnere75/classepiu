@@ -47,7 +47,7 @@ class StudentiScheda : Scheda() {
     /** Da "tutti i registri": un gruppo di classe articolata (es. 5EA_ENA) aperto sulla classe intera. */
     private var gruppo = ""
     private var soloMieLezioni = false
-    /** Vero solo se la scheda è stata aperta dal pulsante "libro del docente" (non dalla tessera della classe). */
+    /** Aperta dal pulsante «libro del docente» (linguetta «appello»); dalla tessera della classe è la scheda classe (linguetta «alunni»). */
     private var libroDocente = false
     private val formatoApi = SimpleDateFormat("yyyyMMdd", Locale.ITALIAN)
 
@@ -161,7 +161,7 @@ class StudentiScheda : Scheda() {
 
     /** Id delle linguette mostrate: 0 alunni, 1 le mie lezioni (solo per le mie classi), 2 tutte le lezioni. */
     private fun idLinguette() = if (miaClasse) listOf(0, 1, 2) else listOf(0, 2)
-    private fun nomiLinguette() = idLinguette().map { listOf("appello", "le mie lezioni", "tutte le lezioni")[it] }
+    private fun nomiLinguette() = idLinguette().map { listOf(if (libroDocente) "appello" else "alunni", "le mie lezioni", "tutte le lezioni")[it] }
 
     private fun verificaMiaClasse() {
         val files = requireContext().filesDir
@@ -225,8 +225,13 @@ class StudentiScheda : Scheda() {
     private fun ridisegna() {
         if (studenti.isEmpty()) return
         val d = datiGiorno
-        if (d == null) mostra(emptyMap(), caricamento = true)
-        else mostra(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
+        if (libroDocente) {
+            if (d == null) mostraAppello(emptyMap(), caricamento = true)
+            else mostraAppello(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
+        } else {
+            if (d == null) mostraAlunni(emptyMap(), caricamento = true)
+            else mostraAlunni(d.stato, statiOre = d.statiOre, numeroOre = d.numeroOre, caricamento = false, grezzo = d.grezzo)
+        }
     }
 
     private fun soloMiei(lista: List<Studente>, miei: Set<String>) = if (miei.isEmpty()) lista else lista.filter { it.id in miei }
@@ -360,7 +365,134 @@ class StudentiScheda : Scheda() {
         }
     }
 
-    private fun mostra(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), numeroOre: Int = 9, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
+    /** Elenco «alunni» della scheda classe (tessera della classe). Separato da [mostraAppello]: le due liste si modificano per conto loro. */
+    private fun mostraAlunni(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), numeroOre: Int = 9, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
+        lista.removeAllViews()
+        val ctx = requireContext()
+
+        studenti.forEach { s ->
+            val statoStudente = stato[s.id] ?: StatoGiornaliero(-1)
+            val valore = statoStudente.valore
+            val coloreAnagrafica = when {
+                caricamento -> 0xFFFCFCFC.toInt()
+                valore == 2 -> rosaAssente
+                valore == 0 || valore == 1 -> verdePresente
+                else -> 0xFFEEEEEE.toInt()
+            }
+
+            // Scheda unica con due celle sovrapposte: anagrafica sopra, ore effettive del giorno sotto.
+            val scheda = LinearLayout(ctx).apply {
+                orientation = LinearLayout.VERTICAL
+                background = GradientDrawable().apply {
+                    setColor(0xFFFCFCFC.toInt())
+                    cornerRadius = dp(14).toFloat()
+                }
+                clipToOutline = true
+            }
+
+            val cellaNome = TextView(ctx).apply {
+                text = s.nome
+                textSize = 17f
+                typeface = outfitBold
+                setTextColor(0xFF111111.toInt())
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(11), dp(14), dp(11))
+                background = GradientDrawable().apply {
+                    setColor(coloreAnagrafica)
+                }
+                minHeight = dp(46)
+                maxLines = 2
+                ellipsize = android.text.TextUtils.TruncateAt.END
+            }
+            scheda.addView(cellaNome, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+
+            val cellaOre = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(12), dp(9), dp(12), dp(9))
+                setBackgroundColor(0xFFFFFFFF.toInt())
+            }
+
+            // Mostra solo le ore effettivamente presenti nel registro per la giornata selezionata.
+            val filaPallini = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+            repeat(numeroOre.coerceIn(1, 9)) { ora ->
+                val pallino = View(ctx).apply {
+                    background = GradientDrawable().apply {
+                        shape = GradientDrawable.OVAL
+                        setColor(coloreOraPerStudente(statiOre, s.id, ora))
+                    }
+                    contentDescription = "Ora ${ora + 1}: ${descrizioneOra(statiOre[s.id]?.getOrNull(ora) ?: -1)}"
+                }
+                filaPallini.addView(pallino, LinearLayout.LayoutParams(dp(14), dp(14)).apply {
+                    if (ora > 0) leftMargin = dp(3)
+                })
+            }
+            cellaOre.addView(filaPallini, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(16)))
+            if (statoStudente.isRitardoBreve && statoStudente.isRitardoLungo) {
+                // Ritardo normale: se il popup web non ha dato l'ora di entrata, la deduciamo dalla
+                // prima ora in cui lo studente risulta presente nelle presenze per ora.
+                val entrata = statoStudente.oraEntrata ?: statiOre[s.id]
+                    ?.indexOfFirst { it == 0 || it == 1 }?.takeIf { it > 0 }?.let { (it + 1).toString() }
+                cellaOre.addView(TextView(ctx).apply {
+                    text = "R" + (entrata?.let { " ${it}ª ora" } ?: "")
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                    translationY = -dp(4).toFloat()
+                    contentDescription = "Ritardo" + (entrata?.let { ", entrato alla ${it}ª ora" } ?: "")
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            } else if (statoStudente.isRitardoBreve) {
+                cellaOre.addView(TextView(ctx).apply {
+                    text = "Rb" + (statoStudente.ritardoBreve?.let { " $it" } ?: "")
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                    translationY = -dp(4).toFloat()
+                    contentDescription = "Ritardo breve" + (statoStudente.ritardoBreve?.let { " alle $it" } ?: "")
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            if (statoStudente.isUscita) {
+                cellaOre.addView(TextView(ctx).apply {
+                    text = "U" + (statoStudente.uscita?.let { " $it" } ?: "")
+                    textSize = 12f
+                    typeface = outfitBold
+                    setTextColor(0xFF8A6D00.toInt())
+                    gravity = Gravity.CENTER_VERTICAL
+                    setPadding(dp(8), 0, dp(4), 0)
+                    translationY = -dp(4).toFloat()
+                    contentDescription = "Uscita anticipata" + (statoStudente.uscita?.let { " alle $it" } ?: "")
+                }, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT))
+            }
+            cellaOre.addView(View(ctx), LinearLayout.LayoutParams(0, dp(1), 1f))
+            scheda.addView(cellaOre, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ))
+
+            lista.addView(scheda, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            ).apply { bottomMargin = dp(10) })
+        }
+
+        if (!caricamento && grezzo != null) {
+            copiaRisposta(
+                "copia la risposta di classeviva di questo giorno",
+                grezzo.first,
+                "giorno ${formatoApi.format(selezionato.time)}\n${grezzo.second}"
+            )
+        }
+    }
+
+    /** Elenco «appello» del libro del docente (pulsante «libro del docente»). Parte come copia di [mostraAlunni], poi diverge. */
+    private fun mostraAppello(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), numeroOre: Int = 9, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
         val ctx = requireContext()
 

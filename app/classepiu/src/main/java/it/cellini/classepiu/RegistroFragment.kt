@@ -411,8 +411,7 @@ class RegistroFragment : Fragment() {
             h.codice.visibility = if (codice.isEmpty()) View.GONE else View.VISIBLE
             // senza codice "libro studenti" è alto 46 dp; con la riga del codice sotto ne resta 42 perché tutto stia nella scheda
             h.appello.minHeight = h.appello.context.dp(if (codice.isEmpty()) 46 else 42)
-            // la stessa scheda si apre dalla tessera della classe e dal pulsante "libro del docente":
-            // solo dal libro del docente porta il pulsante «firma la lezione»
+            // la tessera apre la scheda classe («alunni»), il pulsante «libro del docente» apre il libro («appello»)
             fun apriStudenti(libroDocente: Boolean) = View.OnClickListener {
                 val p = c.chiave.split("|", limit = 3)
                 (requireActivity() as MainActivity).apri(StudentiScheda(),
