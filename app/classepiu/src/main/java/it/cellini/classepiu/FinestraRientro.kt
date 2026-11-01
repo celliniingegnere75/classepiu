@@ -91,7 +91,7 @@ object FinestraRientro {
     /** Una notifica (scheda bianca estesa + striscia ridotta) con il suo controller. */
     private class Avviso(val lezione: Lezione, val notifica: NotificaPianificata, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
         // La notifica appartiene al giorno in cui è stata creata: se resta aperta oltre mezzanotte non può firmare il giorno nuovo.
-        val dataCreazione = dataOdierna()
+        val dataCreazione = FinestraRientro.dataOdierna()
         lateinit var controllo: ControlloNotificaRiducibile
         var applicaVerifica: (Result<EsitoFirma?>) -> Unit = {}
 
