@@ -198,4 +198,81 @@ class FirmaLezioneTest {
         assertEquals("classe non tua", FirmaLezione.descriviErrore(IllegalStateException("classe non tua")))
         assertEquals("IllegalStateException", FirmaLezione.descriviErrore(IllegalStateException()))
     }
+
+    // Finestra di modifica come la manda il sito (regclasse_update_firma.php, HAR del 1/11/2026), ridotta
+    private val formModifica = """
+        <select id="tipo_attivita_modifica" class="styled-select" name="tipo_attivita" >
+        <option value="Lezione" :selected: >Lezione</option>
+        <option value="FSL - Sicurezza" selected=&quot;selected&quot; >FSL - Sicurezza</option>
+        <option value="Ore personalizzazione - attivit&agrave; di PCTO" :selected: >Ore personalizzazione - attivit&agrave; di PCTO</option>
+        </select>
+        <input type="hidden" id="set_enable" value="1">
+        <select id="progetto_set_modifica" name="id_progetto_set" class="styled-select">
+        <option value="">
+        <option value="1298129">2022/23 - Progetto A</option>
+        <option value="1078814" selected>2025/26 - Sicurezza 4ETA</option>
+        </select>
+        <select id="uda_firma_edit" class="styled-select" name="uda_firma_edit"><option value=""> - seleziona l'uda -</option></select>
+        <textarea rows="3" cols="48" id="popup_text_nota" name="text_nota" class="textstyle" >Prova &amp; verifica
+        seconda riga</textarea>
+        <textarea rows="3" cols="48" id="popup_text_nota_2" name="text_nota_2" class="textstyle" >nota mia</textarea>
+    """.trimIndent()
+
+    @Test
+    fun formModificaValoriAttuali() {
+        val f = FirmaLezione.leggiFormModifica(formModifica)
+        assertEquals(listOf("Lezione", "FSL - Sicurezza", "Ore personalizzazione - attività di PCTO"), f.attivita)
+        assertEquals("FSL - Sicurezza", f.attivitaScelta)
+        assertEquals(listOf("1298129", "1078814"), f.progetti.map { it.id })
+        assertEquals("1078814", f.progettoScelto)
+        assertTrue(f.progettiAttivi)
+        assertEquals("Prova & verifica\nseconda riga", f.argomento)
+        assertEquals("nota mia", f.notaPrivata)
+        assertTrue(f.uda.isEmpty())
+        assertNull(f.udaScelta)
+    }
+
+    @Test
+    fun formModificaSenzaSceltaNeNota() {
+        val f = FirmaLezione.leggiFormModifica(formModifica.replace(" selected=&quot;selected&quot;", " :selected:").replace(" selected>", ">")
+            .replace(">nota mia<", "><").replace("value=\"1\">", "value=\"0\">"))
+        assertNull(f.attivitaScelta)
+        assertNull(f.progettoScelto)
+        assertFalse(f.progettiAttivi)
+        assertEquals("", f.notaPrivata)
+    }
+
+    @Test
+    fun udaComeRegclasseJs() {
+        assertTrue(FirmaLezione.leggiUda("[]").isEmpty())
+        assertTrue(FirmaLezione.leggiUda("").isEmpty())
+        val u = FirmaLezione.leggiUda("""[{"uda_id":"12","codice":"U1","shortdesc":"Circuiti","current":"0","lista_fasi":[{"id":"7","id_uda":"12","fase":"avvio"}]},
+            {"uda_id":"15","codice":"U2","shortdesc":"Motori","current":"1","lista_fasi":[]}]""")
+        assertEquals(listOf("12", "15"), u.map { it.id })
+        assertEquals("(U1) - Circuiti", u[0].nome)
+        assertEquals(listOf("7" to "avvio"), u[0].fasi)
+        assertTrue(u[1].corrente)
+        assertEquals(listOf("3"), FirmaLezione.leggiUda("""{"a":{"uda_id":3,"shortdesc":"x"}}""").map { it.id })
+    }
+
+    @Test
+    fun corpoFirmaInsertComeIlSito() {
+        // stesso ordine e stessi valori del POST del HAR (PCTO - Orientamento, 1ª ora, un'ora)
+        val c = FirmaLezione.campiFirmaInsert("2176299", "", "265663", "2026-11-01", 1,
+            FirmaLezione.CampiFirma(tipoAttivita = "PCTO - Orientamento", idProgetto = "473167", argomento = " prova "))
+        assertEquals(listOf("action" to "FIRMA_INSERT", "classe_id" to "2176299", "data_start" to "2026-11-01",
+            "conteggioassenze" to "conteggiaora", "materia" to "265663", "tipo_attivita" to "PCTO - Orientamento",
+            "ora_posizione" to "1", "numero_ore" to "1", "uda_firma" to "", "fase_firma" to "", "id_progetto_set" to "473167",
+            "peso_ora" to "1", "text_nota" to "prova", "output" to "", "gruppo" to "0"), c)
+        val g = FirmaLezione.campiFirmaInsert("", "5EA_AUA", "7", "2026-11-02", 3,
+            FirmaLezione.CampiFirma(numeroOre = 2, pesoOra = "0.5", udaId = "12", faseId = "7", supplenza = true, conteggiaAssenze = false)).toMap()
+        assertEquals("5EA_AUA", g["classe_id"]); assertEquals("1", g["gruppo"]); assertEquals("2", g["numero_ore"])
+        assertEquals("0.5", g["peso_ora"]); assertEquals("12", g["uda_firma"]); assertEquals("7", g["fase_firma"])
+        assertEquals("on", g["supplenza"]); assertEquals("noconteggiaora", g["conteggioassenze"])
+        // valore sconosciuto → un'ora; fase senza uda non si manda; senza supplenza si conteggia sempre
+        val x = FirmaLezione.campiFirmaInsert("1", "", "2", "2026-11-02", 1,
+            FirmaLezione.CampiFirma(pesoOra = "9", faseId = "7", conteggiaAssenze = false)).toMap()
+        assertEquals("1", x["peso_ora"]); assertEquals("", x["fase_firma"]); assertEquals("conteggiaora", x["conteggioassenze"])
+        assertFalse(x.containsKey("supplenza"))
+    }
 }

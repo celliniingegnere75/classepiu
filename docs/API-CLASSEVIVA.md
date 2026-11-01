@@ -68,3 +68,8 @@ Codici: `NTTE` docente, `NTCL` registro, `NTWN` richiami, `NTNT` annotazioni.
 |---|---|
 | `auth-p7/app/default/AuthApi4.php?a=aLoginPwd` | Login al portale |
 | `auth/app/default/OtpApi.php?a=recStatus` | Email del docente (`data.emailAddress`) |
+| `cvv/app/default/regclasse.php` (GET) | Registro di classe: voci «tipo attività» e progetti di scuola e territorio |
+| `cvv/app/default/regclasse_io.php` (POST `action=FIRMA_INSERT`) | Nuova firma: `materia`, `tipo_attivita`, `ora_posizione`, `numero_ore`, `peso_ora`, `uda_firma`, `fase_firma`, `id_progetto_set`, `text_nota`, `supplenza`/`conteggioassenze` |
+| `cmp/app/default/rubrica_io.php?ope=getUdaFirma` (GET) | UDA proposte per materia e classe |
+| `cvv/app/default/regclasse_update_firma.php` (GET, poi POST `ope=UPD`) | Modifica firma: `ids`, `data`, `evento_id`, `text_nota`, `text_nota_2`, `attivita`, `id_progetto_set`, `id_uda` |
+| `cvv/app/default/regclasse_cancella_firma.php` (POST `ope=DEL`) | Cancella firma: `posizioni` (sigStamp), `evento_codice=FR`, `ora_posizione`, `evento_data_ora`, `materia_id`, `autore_id`, `classe_ident`, `evento=--`, `isgruppo` |

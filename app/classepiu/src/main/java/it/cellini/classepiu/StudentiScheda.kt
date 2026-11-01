@@ -186,6 +186,7 @@ class StudentiScheda : Scheda() {
         val fm = childFragmentManager
         if (fm.isStateSaved) return
         val vecchio = fm.findFragmentById(idLezioni)
+        aggiornaPulsanteFirma()
         if (linguettaAttiva == 0) {
             pannelloAlunni?.visibility = View.VISIBLE
             contenitoreLezioni?.visibility = View.GONE
@@ -653,9 +654,12 @@ class StudentiScheda : Scheda() {
     private var firmaInCorso = false
     private var lavoroFirma: Job? = null
 
-    /** Il pulsante c'è solo se la classe aperta è tra le mie (classes/mine): sulle altre non si può firmare. */
+    /**
+     * Il pulsante c'è solo nel libro del docente vero e proprio, la linguetta «alunni», e solo se la classe aperta è tra le
+     * mie (classes/mine): sulle altre non si può firmare. Nelle linguette delle lezioni le firme hanno «modifica firma» e la X.
+     */
     private fun aggiornaPulsanteFirma() {
-        fabFirma?.visibility = if (miaClasse) View.VISIBLE else View.GONE
+        fabFirma?.visibility = if (miaClasse && linguettaAttiva == 0) View.VISIBLE else View.GONE
     }
 
     private fun bloccaFirma(si: Boolean) {
@@ -762,6 +766,8 @@ class StudentiScheda : Scheda() {
     private data class SceltaFirma(
         val ora: Int, val ore: Int, val materia: String, val tipoAttivita: String,
         val progetto: FirmaLezione.Progetto?, val argomento: String,
+        /** valore dell'ora (peso_ora), UDA e fase, supplenza: gli altri campi della firma del sito */
+        val altri: FirmaLezione.CampiFirma = FirmaLezione.CampiFirma(),
     )
 
     /** Tipi attività e progetti letti dal registro web, per registro ("tipo|id"): si leggono una volta per scheda. */
@@ -856,6 +862,54 @@ class StudentiScheda : Scheda() {
             inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_FLAG_MULTI_LINE or
                 android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES
         }
+        // valore dell'ora, come i pulsanti "mezz'ora / un'ora / un'ora e mezza" del sito (predefinito un'ora)
+        val valore = spinner(FirmaLezione.PESI_ORA.map { it.second }).apply {
+            setSelection(FirmaLezione.PESI_ORA.indexOfFirst { it.first == "1" }.coerceAtLeast(0))
+        }
+        // supplenza: come sul sito, spuntandola compare la scelta sulle ore di assenza
+        val conteggia = android.widget.RadioButton(ctx).apply { id = View.generateViewId(); text = "conteggia ore assenza"; isChecked = true }
+        val ignora = android.widget.RadioButton(ctx).apply { id = View.generateViewId(); text = "ignora ore assenza" }
+        val sceltaAssenze = android.widget.RadioGroup(ctx).apply {
+            orientation = android.widget.RadioGroup.VERTICAL; visibility = View.GONE
+            addView(conteggia); addView(ignora)
+        }
+        val notaAssenze = TextView(ctx).apply {
+            text = "ignora: l'eventuale assenza non viene conteggiata e la lezione non va nel giornale del professore."
+            textSize = 12f; alpha = .7f; visibility = View.GONE
+        }
+        val supplenza = android.widget.CheckBox(ctx).apply {
+            text = "supplenza"
+            setOnCheckedChangeListener { _, si ->
+                sceltaAssenze.visibility = if (si) View.VISIBLE else View.GONE
+                notaAssenze.visibility = if (si) View.VISIBLE else View.GONE
+            }
+        }
+        // uda: le unità di apprendimento che il registro propone per materia e classe; la riga compare solo se ce ne sono
+        var udaElenco = emptyList<FirmaLezione.Uda>()
+        val uda = android.widget.Spinner(ctx)
+        val sezioneUda = LinearLayout(ctx).apply {
+            orientation = LinearLayout.VERTICAL; visibility = View.GONE
+            addView(etichetta("uda"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+            addView(uda, LinearLayout.LayoutParams(-1, -2))
+        }
+        fun udaScelta() = (uda.selectedItemPosition - 1).takeIf { it >= 0 }?.let { udaElenco.getOrNull(it) }
+        var udaLavoro: kotlinx.coroutines.Job? = null
+        fun caricaUda() {
+            if (!web) return
+            val nomeMateria = p.materie.getOrNull(materia.selectedItemPosition) ?: return
+            udaLavoro?.cancel()
+            udaLavoro = lifecycleScope.launch {
+                val lette = withContext(Dispatchers.IO) {
+                    runCatching { client.udaFirma(p.registro.tipo, p.registro.id, p.registro.nome, nomeMateria) }.getOrDefault(emptyList())
+                }
+                udaElenco = lette
+                uda.adapter = android.widget.ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item,
+                    listOf("nessuna uda") + lette.map { it.nome })
+                uda.setSelection(lette.indexOfFirst { it.corrente } + 1)
+                sezioneUda.visibility = if (lette.isEmpty()) View.GONE else View.VISIBLE
+            }
+        }
+        alCambio(materia) { caricaUda() }
         val errore = TextView(ctx).apply { setTextColor(rosso); textSize = 13f; visibility = View.GONE }
 
         val corpo = LinearLayout(ctx).apply {
@@ -883,6 +937,12 @@ class StudentiScheda : Scheda() {
             addView(tipo, LinearLayout.LayoutParams(-1, -2))
             addView(caricamento)
             addView(sezioneProgetto)
+            addView(sezioneUda)
+            addView(etichetta("valore"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
+            addView(valore, LinearLayout.LayoutParams(-1, -2))
+            addView(supplenza, LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(8) })
+            addView(sceltaAssenze, LinearLayout.LayoutParams(-1, -2).apply { leftMargin = dp(24) })
+            addView(notaAssenze, LinearLayout.LayoutParams(-1, -2).apply { leftMargin = dp(24) })
             addView(etichetta("argomento"), LinearLayout.LayoutParams(-2, -2).apply { topMargin = dp(12) })
             addView(argomento, LinearLayout.LayoutParams(-1, -2))
             addView(errore, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(8) })
@@ -909,7 +969,13 @@ class StudentiScheda : Scheda() {
             }
             if (messaggio != null) { errore.text = messaggio; errore.visibility = View.VISIBLE; return@setOnClickListener }
             dialogo.dismiss()
-            inviaFirma(p.registro, SceltaFirma(oraScelta(), numeroScelto(), m!!, tipoScelto(), progetto, argomento.text.toString()), data)
+            val u = udaScelta()
+            val altri = FirmaLezione.CampiFirma(
+                pesoOra = FirmaLezione.PESI_ORA.getOrNull(valore.selectedItemPosition)?.first ?: "1",
+                udaId = u?.id.orEmpty(), faseId = u?.fasi?.firstOrNull()?.first.orEmpty(),
+                supplenza = supplenza.isChecked, conteggiaAssenze = !ignora.isChecked
+            )
+            inviaFirma(p.registro, SceltaFirma(oraScelta(), numeroScelto(), m!!, tipoScelto(), progetto, argomento.text.toString(), altri), data)
         }
 
         if (opzioni == null && web) lifecycleScope.launch {
@@ -978,7 +1044,9 @@ class StudentiScheda : Scheda() {
         view?.let { Snackbar.make(it, "firma in corso…", Snackbar.LENGTH_SHORT).setAnchorView(fabFirma).show() }
         val log = StringBuilder("firma dal libro del docente classePiù ${BuildConfig.VERSION_NAME}\n")
             .append("data $data, $quando (${s.ore} ore), registro ${registro.tipo}|${registro.id}|${registro.nome}, materia ${s.materia}, ")
-            .append("attività ${s.tipoAttivita}, progetto ${s.progetto?.let { "${it.id} ${it.nome}" } ?: "nessuno"}, argomento \"${s.argomento.trim()}\"\n\n")
+            .append("attività ${s.tipoAttivita}, progetto ${s.progetto?.let { "${it.id} ${it.nome}" } ?: "nessuno"}, argomento \"${s.argomento.trim()}\", ")
+            .append("valore ${s.altri.pesoOra}, uda ${s.altri.udaId.ifEmpty { "nessuna" }}, ")
+            .append(if (s.altri.supplenza) "supplenza (${if (s.altri.conteggiaAssenze) "conteggia" else "ignora"} ore assenza)\n\n" else "nessuna supplenza\n\n")
         lavoroFirma = lifecycleScope.launch {
             val r = withContext(Dispatchers.IO) {
                 val esito = runCatching {
@@ -991,7 +1059,7 @@ class StudentiScheda : Scheda() {
                     if (firmate.isNotEmpty()) return@runCatching RisultatoFirma.GiaFirmata(firmate.entries.joinToString { "${it.key}ª ora (${it.value.lowercase()})" })
                     val (codice, testo) = client.firmaRapida(registro.tipo, registro.id, s.materia, data, s.ora, log,
                         nomeClasse = registro.nome, argomento = s.argomento, tipoAttivita = s.tipoAttivita,
-                        numeroOre = s.ore, idProgetto = s.progetto?.id.orEmpty())
+                        numeroOre = s.ore, idProgetto = s.progetto?.id.orEmpty(), altri = s.altri)
                     var verificata: Boolean? = null
                     if (codice in 200..299) {
                         val (codiceDopo, dopo) = runCatching { client.lezioniGrezze(data, data) }.getOrDefault(0 to "")
