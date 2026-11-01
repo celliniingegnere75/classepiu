@@ -102,11 +102,6 @@ object FirmaLezione {
     }
 
     /**
-     * L'ora subito dopo l'ultima firma del giorno [data] (yyyyMMdd) nel registro della classe (lessons2/students, firme di
-     * tutti i docenti): 1 se non c'è ancora nessuna firma, null se l'ultima arriva già all'ultima ora o la risposta non si legge.
-     * Una firma di più ore (evtDuration) conta fino alla sua ultima ora. Serve quando l'orario non indica la classe.
-     */
-    /**
      * Firme già presenti da qualunque docente nella classe, limitate alle ore richieste.
      * Ritorna null se la risposta di lessons2/students non è leggibile.
      */
@@ -149,6 +144,11 @@ object FirmaLezione {
         cammina(radice, 0)
         return trovate
     }
+    /**
+     * L'ora subito dopo l'ultima firma del giorno [data] (yyyyMMdd) nel registro della classe (lessons2/students, firme di
+     * tutti i docenti): 1 se non c'è ancora nessuna firma, null se l'ultima arriva già all'ultima ora o la risposta non si legge.
+     * Una firma di più ore (evtDuration) conta fino alla sua ultima ora. Serve quando l'orario non indica la classe.
+     */
     fun oraDopoUltimaFirma(grezzo: String, data: String): Int? {
         val radice = runCatching { org.json.JSONTokener(grezzo).nextValue() }.getOrNull() ?: return null
         if (radice !is JSONObject && radice !is JSONArray) return null
