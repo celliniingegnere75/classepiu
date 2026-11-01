@@ -247,10 +247,15 @@ class ClasseViva(private val utente: String, private val password: String, priva
 
     /**
      * Stato del giorno come lo mostra il registro web (regclasse.php), in sola lettura: per ogni studente
-     * (stato, evento_ora) dove stato è "P" (presente), "X" (nessuna lezione), "A", "PS", "PV", ... Una "P" con evento_ora vuoto
-     * è la presenza predefinita del registro: nessun evento è stato registrato. Vuota se la pagina non è leggibile.
+     * (stato, evento_ora, giornoDiScuola) dove stato è "P" (presente), "X" (nessuna lezione), "A", "PS", "PV", ...
+     * Una "P" con evento_ora vuoto è la presenza predefinita del registro: nessun evento è stato registrato.
+     * giornoDiScuola distingue, per lo stesso "P" di default, un giorno senza scuola (es. sabato, sagoma "f_reg_festivo")
+     * da un giorno scolastico futuro in cui nessuno ha ancora firmato (sagoma "f_reg_scuola"): le API REST da sole
+     * non bastano, perché in entrambi i casi non restituiscono ancora ore di lezione. Vuota se la pagina non è leggibile.
      */
-    fun statiRegistroWeb(classeId: String, gruppo: String, giorno: String): Map<String, Pair<String, String>> {
+    data class StatoWeb(val stato: String, val eventoOra: String, val giornoDiScuola: Boolean)
+
+    fun statiRegistroWeb(classeId: String, gruppo: String, giorno: String): Map<String, StatoWeb> {
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
         val data = if (giorno.length == 8) "${giorno.substring(0, 4)}-${giorno.substring(4, 6)}-${giorno.substring(6, 8)}" else giorno
         val idClasse = if (gruppo.isNotBlank()) "" else classeId
@@ -259,12 +264,14 @@ class ClasseViva(private val utente: String, private val password: String, priva
         try {
             val (codice, html) = web.chiama(pagina)
             if (codice !in 200..299) return emptyMap()
-            val risultato = HashMap<String, Pair<String, String>>()
+            val risultato = HashMap<String, StatoWeb>()
             Regex("""<td[^>]*\bid="abullet_(\d+)"[^>]*>""").findAll(html).forEach { m ->
                 val tag = m.value
                 fun attributo(nome: String) = Regex("""\b$nome="([^"]*)"""").find(tag)?.groupValues?.get(1).orEmpty().trim()
                 val stato = attributo("stato").uppercase()
-                if (stato.isNotEmpty()) risultato[m.groupValues[1]] = stato to attributo("evento_ora")
+                val classi = Regex("""\bclass="([^"]*)"""").find(tag)?.groupValues?.get(1).orEmpty()
+                val giornoDiScuola = !classi.contains("f_reg_festivo")
+                if (stato.isNotEmpty()) risultato[m.groupValues[1]] = StatoWeb(stato, attributo("evento_ora"), giornoDiScuola)
             }
             return risultato
         } finally {

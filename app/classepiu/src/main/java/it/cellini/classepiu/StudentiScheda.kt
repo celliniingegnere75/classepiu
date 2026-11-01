@@ -307,11 +307,15 @@ class StudentiScheda : Scheda() {
         lavoro?.cancel()
         datiGiorno = null
         val giorno = formatoApi.format(selezionato.time)
+        // Domenica, e sabato con «settimana fino a sabato» spenta: niente scuola, anche se il registro web mostra «P» di default.
+        val giornoSettimana = selezionato.get(Calendar.DAY_OF_WEEK)
+        val giornoSenzaScuola = giornoSettimana == Calendar.SUNDAY ||
+            (giornoSettimana == Calendar.SATURDAY && !Impostazioni(requireContext()).sabato)
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
             // questa seconda lettura, separata dalle API REST, non è riuscita (es. login web fallito).
-            val statiWeb: kotlinx.coroutines.Deferred<Result<Map<String, Pair<String, String>>>>? = if (libroDocente) {
+            val statiWeb: kotlinx.coroutines.Deferred<Result<Map<String, ClasseViva.StatoWeb>>>? = if (libroDocente) {
                 async(Dispatchers.IO) {
                     runCatching { client.statiRegistroWeb(classeId, gruppo, giorno) }
                 }
@@ -369,16 +373,19 @@ class StudentiScheda : Scheda() {
                 val oggi = formatoApi.format(java.util.Date())
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
-                        val (statoWeb, oraEvento) = web[al.id] ?: continue
+                        val esito = web[al.id] ?: continue
+                        val (statoWeb, oraEvento, giornoDiScuola) = esito
                         val valoreAttuale = this[al.id]?.valore ?: -1
                         when (statoWeb) {
                             "PS" -> if (valoreAttuale != 3) this[al.id] = StatoGiornaliero(3)
                             "PV" -> if (valoreAttuale != 4) this[al.id] = StatoGiornaliero(4)
                             "A" -> if (valoreAttuale != 2) this[al.id] = (this[al.id] ?: StatoGiornaliero(2)).copy(valore = 2)
                             "P" -> {
-                                // solo se risulta anche almeno un'ora di lezione quel giorno (lessons2/students):
-                                // altrimenti è il default di ClasseViva per un giorno senza scuola (es. sabato), non una presenza vera.
-                                if (valoreAttuale == -1 && statiOre.containsKey(al.id)) {
+                                // solo nei giorni di scuola: non festivo sul registro web (f_reg_festivo) e non domenica
+                                // o sabato senza scuola (impostazione «settimana fino a sabato»). Non si può usare la sola
+                                // presenza di ore nelle API REST: in un giorno scolastico futuro non ancora firmato
+                                // le API non hanno ancora ore, come in un giorno senza scuola.
+                                if (valoreAttuale == -1 && giornoDiScuola && !giornoSenzaScuola) {
                                     this[al.id] = StatoGiornaliero(0)
                                     // solo presenza predefinita (nessun evento) e mai per i giorni futuri
                                     if (oraEvento.isEmpty() && giorno <= oggi) daRegistrare += al.id
@@ -395,7 +402,7 @@ class StudentiScheda : Scheda() {
             val diagnosticoWeb = if (libroDocente) {
                 "\n\nREGISTRO WEB (stato, evento_ora): " + if (esitoWeb?.isSuccess == true) {
                     if (web.isEmpty()) "nessun alunno letto (pagina vuota o cambiata)"
-                    else web.entries.joinToString("; ") { (id, v) -> "$id=${v.first}/${v.second.ifEmpty { "-" }}" }
+                    else web.entries.joinToString("; ") { (id, v) -> "$id=${v.stato}/${v.eventoOra.ifEmpty { "-" }}/${if (v.giornoDiScuola) "scuola" else "festivo"}" }
                 } else "ERRORE: ${esitoWeb?.exceptionOrNull()?.message ?: "nessuna risposta"}"
             } else ""
             fun diagnostica(popup: String) = coppia?.let { (g, l) ->
