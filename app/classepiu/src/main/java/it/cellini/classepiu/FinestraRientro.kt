@@ -60,6 +60,7 @@ object FinestraRientro {
     private const val PREFERENZE_SWIPATE = "classepiu_notifiche_swippate"
     private const val PREFERENZE_CANCELLATE = "classepiu_notifiche_cancellate"
     private val formatoGiorno = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT)
+    private fun dataOdierna(): String = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
     private var scadenzaSwippateProgrammata: Runnable? = null
     private var superficieAttiva: FrameLayout? = null
     private var scorrimentoAttivo: ScrollView? = null
@@ -89,6 +90,8 @@ object FinestraRientro {
 
     /** Una notifica (scheda bianca estesa + striscia ridotta) con il suo controller. */
     private class Avviso(val lezione: Lezione, val notifica: NotificaPianificata, val scheda: FrameLayout) : GestoreNotifiche.Finestra {
+        // La notifica appartiene al giorno in cui è stata creata: se resta aperta oltre mezzanotte non può firmare il giorno nuovo.
+        val dataCreazione = FinestraRientro.dataOdierna()
         lateinit var controllo: ControlloNotificaRiducibile
         var applicaVerifica: (Result<EsitoFirma?>) -> Unit = {}
 
@@ -792,6 +795,10 @@ object FinestraRientro {
         firmaRapida.alpha = .5f
         // La finestra di scelta è separata; la gestione della notifica e l'invio restano qui.
         firmaOrdinaria.setOnClickListener {
+            if (avviso.dataCreazione != dataOdierna()) {
+                android.widget.Toast.makeText(activity, "firma consentita solo nella data odierna", android.widget.Toast.LENGTH_LONG).show()
+                return@setOnClickListener
+            }
             FinestraFirmaOrdinaria.mostra(
                 activity = activity,
                 lezione = lezione,
@@ -1077,6 +1084,11 @@ object FinestraRientro {
         activity: Activity, avviso: Avviso, lezione: Lezione, etichetta: TextView, materia: TextView, pulsante: View,
         scelta: SceltaFirma? = null
     ) {
+        // La firma rapida e quella ordinaria sono ammesse solo nel giorno di creazione della notifica, se coincide con oggi.
+        if (avviso.dataCreazione != dataOdierna()) {
+            android.widget.Toast.makeText(activity, "firma consentita solo nella data odierna", android.widget.Toast.LENGTH_LONG).show()
+            return
+        }
         // questa notifica resta aperta finché non si chiude con la X; le altre seguono i loro tempi
         gestore.interagita(avviso) // MODIFICA: registra anche la pressione di "firma rapida"
         gestore.trattieni(avviso)
@@ -1084,11 +1096,12 @@ object FinestraRientro {
         pulsante.alpha = .5f
         etichetta.text = "firmo…"
         etichetta.setTextColor(0xFF777777.toInt())
-        val data = java.text.SimpleDateFormat("yyyyMMdd", java.util.Locale.ROOT).format(java.util.Date())
+        val data = avviso.dataCreazione
         val log = StringBuilder("${if (scelta == null) "firma rapida" else "firma ordinaria"} classePiù ${BuildConfig.VERSION_NAME}\n")
             .append("data $data, ora ${lezione.ora}, classe ${lezione.classe}, materia ${lezione.materia}\n\n")
         Thread {
             val esito = runCatching {
+                check(avviso.dataCreazione == dataOdierna()) { "firma consentita solo nella data odierna" }
                 val imp = Impostazioni(activity)
                 // compresenza e sostegno sul sito passano da un'altra finestra (regclasse_conpresenza.php, con le
                 // credenziali del secondo docente): finché non c'è una firma vera da copiare non si manda niente
@@ -1116,6 +1129,7 @@ object FinestraRientro {
                     "${lezione.classe} non è tra le tue classi"
                 }
                 val parti = classe.chiave.split("|", limit = 3)
+                check(avviso.dataCreazione == dataOdierna()) { "firma consentita solo nella data odierna" }
                 val (codice, risposta) = client.firmaRapida(parti.getOrElse(0) { "" }, parti.getOrElse(1) { "" }, lezione.materia, data, lezione.ora, log,
                     nomeClasse = parti.getOrNull(2)?.takeIf { it.isNotBlank() } ?: classe.nome,
                     educazioneCivica = civica, argomento = testoArgomento, tipoAttivita = tipoAttivita, compresenza = compresenza)
