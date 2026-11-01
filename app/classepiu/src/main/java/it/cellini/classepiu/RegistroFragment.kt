@@ -336,7 +336,7 @@ class RegistroFragment : Fragment() {
             }
 
             val appello = TextView(ctx).apply {
-                text = "libro studenti"
+                text = "libro del docente"
                 textSize = 14f
                 typeface = outfitBold
                 setTextColor(Color.WHITE)
