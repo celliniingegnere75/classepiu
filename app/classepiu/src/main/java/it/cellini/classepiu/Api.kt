@@ -204,6 +204,47 @@ class ClasseViva(private val utente: String, private val password: String, priva
         return r.codice to r.testo
     }
 
+    /**
+     * Cambia lo stato di un alunno dall'Appello del Libro del docente.
+     * La richiesta riproduce il modulo web INS_CAMBIASTATO verificato nella registrazione HAR.
+     */
+    fun cambiaStatoAppello(classeId: String, gruppo: String, studenteId: String, giorno: String, evento: String): Pair<Int, String> {
+        val nuovoEvento = evento.trim().uppercase()
+        if (nuovoEvento !in setOf("E", "A", "PS", "PV")) return 400 to "stato non valido: $evento"
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val data = if (giorno.length == 8) "${giorno.substring(0, 4)}-${giorno.substring(4, 6)}-${giorno.substring(6, 8)}" else giorno
+        val idClasse = if (gruppo.isNotBlank()) "" else classeId
+        val idGruppo = gruppo
+        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(idClasse)}&gruppo_id=${enc(idGruppo)}&data_start=$data&corsoextra=0"
+        val url = "https://web.spaggiari.eu/cvv/app/default/regclasse_io.php"
+        val web = sessioneWeb()
+        try {
+            val (codicePagina, html) = web.chiama(pagina)
+            if (codicePagina !in 200..299) return codicePagina to "registro presenze non leggibile: ${html.take(250)}"
+            val ora = java.text.SimpleDateFormat("HH:mm", java.util.Locale.ROOT).format(java.util.Date())
+            // I due selettori orari sono trasmessi anche per gli stati E/A/PS/PV, come nel modulo web.
+            val campi = listOf(
+                "evento_ora" to ora,
+                "data_start" to data,
+                "new_evento" to nuovoEvento,
+                "ora_entrata_ritardo" to "2",
+                "ora_uscita" to "1",
+                "studente_id" to studenteId,
+                "new_nota" to "",
+                "cbox_causale" to "",
+                "action" to "INS_CAMBIASTATO",
+                "cbox_ua" to "false",
+                "gruppo" to idGruppo
+            )
+            val corpo = campi.joinToString("&") { (k, v) -> "${enc(k)}=${enc(v)}" }
+            val (codice, risposta) = web.chiama(url, corpo, referer = pagina)
+            return if (codice in 200..299 && risposta.trim().equals("OK", true)) 200 to "OK"
+                else (if (codice in 200..299) 422 else codice) to risposta
+        } finally {
+            web.close()
+        }
+    }
+
     /** Materie assegnate al docente nella classe, anche se non hanno ancora voti. */
     fun materieMie(tipo: String, classeId: String): List<String> {
         assicuraLogin()
@@ -1113,7 +1154,7 @@ fun leggiStudenti(grezzo: String): List<Studente> {
 }
 
 /**
- * Stato di presenza per id studente: -1 nessuna lezione/nessun dato, 0 presente, 1 ritardo/uscita, 2 assente.
+ * Stato per id studente: -1 nessuno, 0 presente, 1 ritardo/uscita, 2 assente, 3 stage, 4 visita d'istruzione.
  * L'app ufficiale usa gli stati present, absent, late, shortLate, leaving, noLesson, presentInternship, presentEducationalTrip.
  */
 data class StatoGiornaliero(
@@ -1155,7 +1196,7 @@ private fun oraEvento(v: Any?, prefisso: String, livello: Int = 0): String? {
  * Stato di presenza per id studente. Per ABR1 conserva anche l'ora inserita dal docente,
  * se presente nella risposta di status2.
  */
-fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
+fun leggiStato(grezzo: String, valoreSenzaCodice: Int = 0): Map<String, StatoGiornaliero> {
     val radice = try { org.json.JSONTokener(grezzo).nextValue() } catch (e: Exception) { return emptyMap() }
     val a = trovaArrayGenerico(radice, listOf("students", "items", "data", "status", "pupils")) ?: return emptyMap()
 
@@ -1179,12 +1220,23 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
         val id = idDi(o)
         if (id.isEmpty()) continue
         val campi = mutableListOf<Pair<String, String>>().also { raccogli(o, it) }
-        val codici = campi.map { it.second.uppercase() }.filter { it.length == 4 && it[0].isLetter() }
-        if (codici.isEmpty()) { senzaCodice.add(id); continue }
+        val codici = campi.map { it.second.trim().uppercase() }.filter { it.length == 4 && it[0].isLetter() }
+        val statiDescrittivi = campi.filter { (chiave, _) ->
+            chiave.contains("status") || chiave.contains("event") || chiave.contains("code") ||
+                chiave == "desc" || chiave == "description"
+        }.map { it.second.trim().uppercase() }.filter { it.isNotEmpty() }
+        val statiBrevi = campi.map { it.second.trim().uppercase() }.filter { it == "PS" || it == "PV" }
+        val stati = (codici + statiDescrittivi + statiBrevi).distinct()
+        if (stati.isEmpty()) { senzaCodice.add(id); continue }
+        val inStage = stati.any { it == "PS" || it.startsWith("PS") || it.contains("PRESENTINTERNSHIP") || it.contains("INTERNSHIP") || it.contains("STAGE") }
+        val inGita = stati.any { it == "PV" || it.startsWith("PV") || it.contains("PRESENTEDUCATIONALTRIP") || it.contains("EDUCATIONALTRIP") || it.contains("GITA") || it.contains("VISITA D'ISTRUZIONE") }
         val valore = when {
-            codici.any { it.startsWith("ABA") || it.startsWith("HAB") } -> 2
+            inStage -> 3
+            inGita -> 4
+            codici.any { it.startsWith("ABA") || it.startsWith("HAB") } || stati.any { it == "A" || it.contains("ABSENT") || it.contains("ASSENT") } -> 2
             codici.any { it.startsWith("ABR") || it.startsWith("ABU") || it.startsWith("AB") } -> 1
-            codici.any { it.startsWith("AT") || it.startsWith("HAT") || it.startsWith("HPR") } -> 0
+            codici.any { it.startsWith("AT") || it.startsWith("HAT") || it.startsWith("HPR") } ||
+                stati.any { it == "E" || it == "P" || it.contains("PRESENT") || it.contains("PRESEN") } -> 0
             else -> -1
         }
         val isUscita = codici.any { it.startsWith("ABU") }
@@ -1210,8 +1262,8 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
         val precedente = m[id]
         m[id] = when {
             precedente == null -> nuovo
-            nuovo.valore == 2 -> nuovo
-            precedente.valore == 2 -> precedente
+            nuovo.valore in 2..4 -> nuovo
+            precedente.valore in 2..4 -> precedente
             nuovo.ritardoBreve != null || nuovo.uscita != null -> nuovo.copy(
                 ritardoBreve = nuovo.ritardoBreve ?: precedente.ritardoBreve,
                 isRitardoBreve = nuovo.isRitardoBreve || precedente.isRitardoBreve,
@@ -1226,8 +1278,7 @@ fun leggiStato(grezzo: String): Map<String, StatoGiornaliero> {
             )
         }
     }
-    val giornoDiLezione = m.isNotEmpty()
-    for (id in senzaCodice) m[id] = StatoGiornaliero(if (giornoDiLezione) 0 else -1)
+    for (id in senzaCodice) m[id] = StatoGiornaliero(valoreSenzaCodice)
     return m
 }
 

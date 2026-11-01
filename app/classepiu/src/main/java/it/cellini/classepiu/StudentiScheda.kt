@@ -41,6 +41,7 @@ class StudentiScheda : Scheda() {
     private var studenti: List<Studente> = emptyList()
     private val selezionato: Calendar get() = striscia.selezionato
     private var lavoro: Job? = null
+    private val cambiStatoInCorso = mutableSetOf<String>()
     private var tipo = ""
     private var classeId = ""
     private var nome = ""
@@ -54,6 +55,8 @@ class StudentiScheda : Scheda() {
     // Colori della scheda e degli indicatori.
     private val verdePresente = 0xFFE3F3E5.toInt()
     private val rosaAssente = 0xFFFBE3E7.toInt()
+    private val marroneStage = 0xFFE9D8C9.toInt()
+    private val ambraGita = 0xFFFFE7B8.toInt()
     private val verdeOra = 0xFF2EB82E.toInt()
     private val rosaOra = 0xFFE53935.toInt()
     private val gialloOra = 0xFFF2C200.toInt()
@@ -299,7 +302,9 @@ class StudentiScheda : Scheda() {
                 }
             }
             val coppia = r.getOrNull()
-            var stato = coppia?.first?.let { (c, t) -> if (c == 200) leggiStato(t) else emptyMap() } ?: emptyMap<String, StatoGiornaliero>()
+            var stato = coppia?.first?.let { (c, t) ->
+                if (c == 200) leggiStato(t, valoreSenzaCodice = if (libroDocente) -1 else 0) else emptyMap()
+            } ?: emptyMap<String, StatoGiornaliero>()
             // Lo stato giornaliero (status2) sembra tenere una sola annotazione per studente per giorno:
             // se ritardo breve e uscita anticipata capitano lo stesso giorno, la seconda registrata può
             // sovrascrivere la prima lì. Le presenze per ora (lessons2/students) sono invece indipendenti
@@ -323,8 +328,10 @@ class StudentiScheda : Scheda() {
             // Se lo stato giornaliero non ha alcun codice (nessuna annotazione registrata per la giornata, come
             // succede quando il docente firma solo le lezioni), ma le presenze per ora ci sono, lo studente
             // risulta presente: altrimenti il nome resta grigio anche se i pallini orari sono corretti.
-            stato = stato.mapValues { (id, valore) ->
-                if (valore.valore == -1 && statiOre.containsKey(id)) valore.copy(valore = 0) else valore
+            if (!libroDocente) {
+                stato = stato.mapValues { (id, valore) ->
+                    if (valore.valore == -1 && statiOre.containsKey(id)) valore.copy(valore = 0) else valore
+                }
             }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             fun diagnostica(popup: String) = coppia?.let { (g, l) ->
@@ -491,6 +498,102 @@ class StudentiScheda : Scheda() {
         }
     }
 
+
+    /** Sigla mostrata a destra del nome nell'Appello. -1 significa nessuno stato. */
+    private fun etichettaStatoAppello(valore: Int): String = when (valore) {
+        0, 1 -> "P"
+        2 -> "A"
+        3 -> "PS"
+        4 -> "PV"
+        else -> ""
+    }
+
+    private fun coloreRigaAppello(valore: Int): Int = when (valore) {
+        0, 1 -> verdePresente
+        2 -> rosaAssente
+        3 -> marroneStage
+        4 -> ambraGita
+        else -> 0xFFEEEEEE.toInt()
+    }
+
+    private fun coloreTestoBadgeAppello(valore: Int): Int = when (valore) {
+        2 -> 0xFF8A2638.toInt()
+        3 -> 0xFF68452D.toInt()
+        4 -> 0xFF795000.toInt()
+        else -> 0xFF24552D.toInt()
+    }
+
+    private fun sfondoBadgeAppello(valore: Int): GradientDrawable =
+        GradientDrawable().apply {
+            cornerRadius = dp(10).toFloat()
+            setColor(when (valore) {
+                0, 1 -> 0xFFC7E8CE.toInt()
+                2 -> 0xFFF4C4CC.toInt()
+                3 -> 0xFFDCC4AF.toInt()
+                4 -> 0xFFFFD783.toInt()
+                else -> Color.TRANSPARENT
+            })
+        }
+
+    /** Il ciclo destro e quello sinistro sono inversi; da nessuno stato si parte da A a destra e da E a sinistra. */
+    private fun prossimoStatoAppello(attuale: Int, direzione: Int): Int {
+        val sequenza = if (direzione > 0) listOf(2, 4, 3, 0) else listOf(0, 3, 4, 2)
+        val normalizzato = if (attuale == 1) 0 else attuale
+        val posizione = sequenza.indexOf(normalizzato)
+        return if (posizione < 0) sequenza.first() else sequenza[(posizione + 1) % sequenza.size]
+    }
+
+    private fun codiceEventoAppello(valore: Int): String? = when (valore) {
+        0, 1 -> "E"
+        2 -> "A"
+        3 -> "PS"
+        4 -> "PV"
+        else -> null
+    }
+
+    /** Scivolata breve, rientro elastico e comparsa a scatto della sigla con transizione del colore. */
+    private fun animaCambioStatoAppello(riga: View, badge: TextView, da: Int, a: Int, direzione: Int) {
+        val coloreDa = coloreRigaAppello(da)
+        val coloreA = coloreRigaAppello(a)
+        val sfondo = GradientDrawable().apply { setColor(coloreDa) }
+        riga.background = sfondo
+        android.animation.ValueAnimator.ofObject(android.animation.ArgbEvaluator(), coloreDa, coloreA).apply {
+            duration = 260
+            addUpdateListener { sfondo.setColor(it.animatedValue as Int) }
+            start()
+        }
+
+        val sigla = etichettaStatoAppello(a)
+        badge.animate().cancel()
+        if (sigla.isEmpty()) {
+            badge.animate().alpha(0f).scaleX(0.7f).scaleY(0.7f).setDuration(120).withEndAction {
+                badge.text = ""
+                badge.visibility = View.GONE
+                badge.alpha = 1f
+                badge.scaleX = 1f
+                badge.scaleY = 1f
+            }.start()
+        } else {
+            badge.visibility = View.VISIBLE
+            badge.text = sigla
+            badge.setTextColor(coloreTestoBadgeAppello(a))
+            badge.background = sfondoBadgeAppello(a)
+            badge.contentDescription = "Stato: $sigla"
+            badge.alpha = 0f
+            badge.scaleX = 0.72f
+            badge.scaleY = 0.72f
+            badge.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(280)
+                .setInterpolator(android.view.animation.OvershootInterpolator(1.25f)).start()
+        }
+
+        riga.animate().cancel()
+        riga.translationX = direzione * dp(18).toFloat()
+        riga.rotationY = direzione * 5f
+        riga.alpha = 0.78f
+        riga.animate().translationX(0f).rotationY(0f).alpha(1f).setDuration(280)
+            .setInterpolator(android.view.animation.OvershootInterpolator(0.85f)).start()
+    }
+
     /** Elenco «appello» del libro del docente (pulsante «libro del docente»). Parte come copia di [mostraAlunni], poi diverge. */
     private fun mostraAppello(stato: Map<String, StatoGiornaliero>, statiOre: Map<String, List<Int>> = emptyMap(), numeroOre: Int = 9, caricamento: Boolean, grezzo: Pair<Int, String>? = null) {
         lista.removeAllViews()
@@ -502,6 +605,8 @@ class StudentiScheda : Scheda() {
             val coloreAnagrafica = when {
                 caricamento -> 0xFFFCFCFC.toInt()
                 valore == 2 -> rosaAssente
+                valore == 3 -> marroneStage
+                valore == 4 -> ambraGita
                 valore == 0 || valore == 1 -> verdePresente
                 else -> 0xFFEEEEEE.toInt()
             }
@@ -516,23 +621,120 @@ class StudentiScheda : Scheda() {
                 clipToOutline = true
             }
 
+            val etichettaStato = etichettaStatoAppello(valore)
+            val rigaNome = LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding(dp(14), dp(9), dp(14), dp(9))
+                background = GradientDrawable().apply { setColor(coloreAnagrafica) }
+                minHeight = dp(46)
+            }
             val cellaNome = TextView(ctx).apply {
                 text = s.nome
                 textSize = 17f
                 typeface = outfitBold
                 setTextColor(0xFF111111.toInt())
                 gravity = Gravity.CENTER_VERTICAL
-                setPadding(dp(14), dp(11), dp(14), dp(11))
-                background = GradientDrawable().apply {
-                    setColor(coloreAnagrafica)
-                }
-                minHeight = dp(46)
+                setPadding(0, 0, dp(8), 0)
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
             }
-            scheda.addView(cellaNome, LinearLayout.LayoutParams(
+            rigaNome.addView(cellaNome, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+
+            val badgeStato = TextView(ctx).apply {
+                text = etichettaStato
+                textSize = 13f
+                typeface = outfitBold
+                gravity = Gravity.CENTER
+                setTextColor(coloreTestoBadgeAppello(valore))
+                setPadding(dp(9), 0, dp(9), 0)
+                minWidth = dp(if (etichettaStato.length > 1) 40 else 30)
+                minHeight = dp(28)
+                visibility = if (etichettaStato.isEmpty()) View.GONE else View.VISIBLE
+                background = sfondoBadgeAppello(valore)
+                contentDescription = etichettaStato.takeIf { it.isNotEmpty() }?.let { "Stato: $it" }
+            }
+            rigaNome.addView(badgeStato, LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28)))
+            scheda.addView(rigaNome, LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
             ))
+
+            // Lo swipe agisce esclusivamente sull'Appello del Libro del docente.
+            if (!caricamento && libroDocente) {
+                var valoreVisivo = valore
+                var inizioX = 0f
+                var inizioY = 0f
+                val sogliaMovimento = android.view.ViewConfiguration.get(ctx).scaledTouchSlop
+                rigaNome.setOnTouchListener { v, evento ->
+                    when (evento.actionMasked) {
+                        android.view.MotionEvent.ACTION_DOWN -> {
+                            inizioX = evento.x
+                            inizioY = evento.y
+                            true
+                        }
+                        android.view.MotionEvent.ACTION_MOVE -> {
+                            val dx = evento.x - inizioX
+                            val dy = evento.y - inizioY
+                            if (kotlin.math.abs(dx) > sogliaMovimento && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.15f) {
+                                v.parent?.requestDisallowInterceptTouchEvent(true)
+                                v.translationX = (dx * 0.12f).coerceIn(-dp(24).toFloat(), dp(24).toFloat())
+                            } else {
+                                v.parent?.requestDisallowInterceptTouchEvent(false)
+                            }
+                            true
+                        }
+                        android.view.MotionEvent.ACTION_UP -> {
+                            val dx = evento.x - inizioX
+                            val dy = evento.y - inizioY
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                            if (kotlin.math.abs(dx) >= dp(48) && kotlin.math.abs(dx) > kotlin.math.abs(dy) * 1.2f) {
+                                val direzione = if (dx > 0) 1 else -1
+                                v.performHapticFeedback(android.view.HapticFeedbackConstants.KEYBOARD_TAP)
+                                val precedente = datiGiorno?.stato?.get(s.id) ?: StatoGiornaliero(-1)
+                                val nuovoValore = prossimoStatoAppello(valoreVisivo, direzione)
+                                val codiceEvento = codiceEventoAppello(nuovoValore)
+                                if (codiceEvento != null && cambiStatoInCorso.add(s.id)) {
+                                    val giornoCambio = formatoApi.format(selezionato.time)
+                                    val nuovoStato = StatoGiornaliero(nuovoValore)
+                                    valoreVisivo = nuovoValore
+                                    datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to nuovoStato)) }
+                                    animaCambioStatoAppello(rigaNome, badgeStato, precedente.valore, nuovoValore, direzione)
+                                    lifecycleScope.launch {
+                                        val esito = withContext(Dispatchers.IO) {
+                                            runCatching { client.cambiaStatoAppello(classeId, gruppo, s.id, giornoCambio, codiceEvento) }
+                                        }
+                                        cambiStatoInCorso.remove(s.id)
+                                        val risposta = esito.getOrNull()
+                                        if (risposta != null && risposta.first == 200 && risposta.second.trim().equals("OK", true)) {
+                                            if (formatoApi.format(selezionato.time) == giornoCambio) caricaStato()
+                                        } else {
+                                            if (formatoApi.format(selezionato.time) == giornoCambio) {
+                                                valoreVisivo = precedente.valore
+                                                datiGiorno = datiGiorno?.let { d -> d.copy(stato = d.stato + (s.id to precedente)) }
+                                                animaCambioStatoAppello(rigaNome, badgeStato, nuovoValore, precedente.valore, -direzione)
+                                            }
+                                            val messaggio = risposta?.let { "ClasseViva non ha accettato il cambio stato (HTTP ${it.first}). ${it.second.take(120)}" }
+                                                ?: "Cambio stato non riuscito: ${esito.exceptionOrNull()?.message ?: "errore di rete"}"
+                                            view?.let { Snackbar.make(it, messaggio, Snackbar.LENGTH_LONG).show() }
+                                        }
+                                    }
+                                } else {
+                                    v.animate().translationX(0f).setDuration(120).start()
+                                }
+                            } else {
+                                v.animate().translationX(0f).setDuration(120).start()
+                            }
+                            true
+                        }
+                        android.view.MotionEvent.ACTION_CANCEL -> {
+                            v.parent?.requestDisallowInterceptTouchEvent(false)
+                            v.animate().translationX(0f).setDuration(120).start()
+                            true
+                        }
+                        else -> true
+                    }
+                }
+            }
 
             val cellaOre = LinearLayout(ctx).apply {
                 orientation = LinearLayout.HORIZONTAL
