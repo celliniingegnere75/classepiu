@@ -535,12 +535,14 @@ class StudentiScheda : Scheda() {
             })
         }
 
-    /** Il ciclo destro e quello sinistro sono inversi; da nessuno stato si parte da A a destra e da E a sinistra. */
+    /** Ciclo Appello: P -> A -> PS -> PV -> P. Lo swipe sinistro percorre il ciclo al contrario. */
     private fun prossimoStatoAppello(attuale: Int, direzione: Int): Int {
-        val sequenza = if (direzione > 0) listOf(2, 4, 3, 0) else listOf(0, 3, 4, 2)
-        val normalizzato = if (attuale == 1) 0 else attuale
+        val sequenza = listOf(0, 2, 3, 4) // P, A, PS, PV
+        val normalizzato = if (attuale == 1) 0 else attuale // il ritardo è visualizzato e trattato come P
         val posizione = sequenza.indexOf(normalizzato)
-        return if (posizione < 0) sequenza.first() else sequenza[(posizione + 1) % sequenza.size]
+        if (posizione < 0) return if (direzione > 0) 0 else 4
+        val passo = if (direzione > 0) 1 else -1
+        return sequenza[(posizione + passo + sequenza.size) % sequenza.size]
     }
 
     private fun codiceEventoAppello(valore: Int): String? = when (valore) {
