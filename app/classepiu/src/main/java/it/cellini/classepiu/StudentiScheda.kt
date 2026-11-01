@@ -245,25 +245,6 @@ class StudentiScheda : Scheda() {
     private fun appelloModificabile(studenteId: String) =
         !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() && studenteId !in appelloBloccati
 
-    /** Stati espliciti dell'API che significano X / no lezione e non devono mai essere modificabili. */
-    private fun studentiConNoLezioneApi(grezzo: String): Set<String> {
-        val radice = runCatching { JSONObject(grezzo) }.getOrNull() ?: return emptySet()
-        val elenco = radice.optJSONArray("students") ?: return emptySet()
-        val statiBloccanti = setOf("XG")
-        return buildSet {
-            for (i in 0 until elenco.length()) {
-                val alunno = elenco.optJSONObject(i) ?: continue
-                val id = alunno.opt("studentId")?.toString()?.takeIf { it.isNotBlank() } ?: continue
-                val codici = mutableListOf(alunno.optString("status").trim().uppercase(Locale.ROOT))
-                val lista = alunno.optJSONArray("statusList")
-                if (lista != null) for (j in 0 until lista.length()) {
-                    codici += lista.optJSONObject(j)?.optString("statusCode").orEmpty().trim().uppercase(Locale.ROOT)
-                }
-                if (codici.any { it in statiBloccanti }) add(id)
-            }
-        }
-    }
-
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
 
@@ -410,7 +391,7 @@ class StudentiScheda : Scheda() {
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
                 val oggi = dataOdierna()
-                val bloccati = studentiConNoLezioneApi(coppia?.first?.second.orEmpty()).toMutableSet()
+                val bloccati = mutableSetOf<String>()
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
                         val esito = web[al.id] ?: continue
@@ -431,8 +412,8 @@ class StudentiScheda : Scheda() {
                                     if (oraEvento.isEmpty() && giorno == oggi && !giornoSenzaScuola) daRegistrare += al.id
                                 }
                             }
-                            "X", "XG", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
-                                // X / XG / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
+                            "X", "NO LEZ", "NO_LEZ", "NOLESSON", "NO_LESSON" -> {
+                                // X / no lez.: sempre grigio e mai modificabile, anche se le API REST danno AT00
                                 if (valoreAttuale != -1) this[al.id] = StatoGiornaliero(-1)
                                 bloccati += al.id
                             }
