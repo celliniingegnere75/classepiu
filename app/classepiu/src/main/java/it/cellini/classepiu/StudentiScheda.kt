@@ -242,11 +242,27 @@ class StudentiScheda : Scheda() {
     private var appelloGiornoBloccato = false
     /** Alunni con X / no lez. sul registro web nel giorno selezionato: grigi e mai modificabili. */
     private var appelloBloccati: Set<String> = emptySet()
-    /** Stato letto dal registro web: senza una lettura positiva dell'alunno lo swipe resta disabilitato. */
-    private var appelloStatiWeb: Set<String> = emptySet()
     private fun appelloModificabile(studenteId: String) =
-        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() &&
-            studenteId in appelloStatiWeb && studenteId !in appelloBloccati
+        !appelloGiornoBloccato && formatoApi.format(selezionato.time) == dataOdierna() && studenteId !in appelloBloccati
+
+    /** Stati espliciti dell'API che significano X / no lezione e non devono mai essere modificabili. */
+    private fun studentiConNoLezioneApi(grezzo: String): Set<String> {
+        val radice = runCatching { JSONObject(grezzo) }.getOrNull() ?: return emptySet()
+        val elenco = radice.optJSONArray("students") ?: return emptySet()
+        val statiBloccanti = setOf("XG", "NN01")
+        return buildSet {
+            for (i in 0 until elenco.length()) {
+                val alunno = elenco.optJSONObject(i) ?: continue
+                val id = alunno.opt("studentId")?.toString()?.takeIf { it.isNotBlank() } ?: continue
+                val codici = mutableListOf(alunno.optString("status").trim().uppercase(Locale.ROOT))
+                val lista = alunno.optJSONArray("statusList")
+                if (lista != null) for (j in 0 until lista.length()) {
+                    codici += lista.optJSONObject(j)?.optString("statusCode").orEmpty().trim().uppercase(Locale.ROOT)
+                }
+                if (codici.any { it in statiBloccanti }) add(id)
+            }
+        }
+    }
 
     // Un solo client per tutta la scheda: l'archivio cifrato si apre una volta e il token si riusa.
     private val client by lazy { Impostazioni(requireContext().applicationContext).client() }
@@ -335,7 +351,6 @@ class StudentiScheda : Scheda() {
         // Si può modificare l'appello esclusivamente per oggi: i giorni passati e futuri sono sempre in sola lettura.
         appelloGiornoBloccato = giorno != oggiSelezionato || giornoSenzaScuola
         appelloBloccati = emptySet()
-        appelloStatiWeb = emptySet()
         lavoro = lifecycleScope.launch {
             // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
             // Il risultato grezzo (non solo la mappa) serve per il diagnostico: così si vede sul telefono se e perché
@@ -395,9 +410,8 @@ class StudentiScheda : Scheda() {
             val esitoWeb = statiWeb?.await()
             val web = esitoWeb?.getOrNull().orEmpty()
             if (libroDocente) {
-                appelloStatiWeb = web.keys
                 val oggi = dataOdierna()
-                val bloccati = mutableSetOf<String>()
+                val bloccati = studentiConNoLezioneApi(coppia?.first?.second.orEmpty()).toMutableSet()
                 stato = stato.toMutableMap().apply {
                     for (al in studenti) {
                         val esito = web[al.id] ?: continue
