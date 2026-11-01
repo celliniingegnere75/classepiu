@@ -245,6 +245,33 @@ class ClasseViva(private val utente: String, private val password: String, priva
         }
     }
 
+    /**
+     * Stato del giorno come lo mostra il registro web (regclasse.php), in sola lettura: per ogni studente
+     * (stato, evento_ora) dove stato è "P" (presente), "X" (nessuna lezione), "A", "PS", "PV", ... Una "P" con evento_ora vuoto
+     * è la presenza predefinita del registro: nessun evento è stato registrato. Vuota se la pagina non è leggibile.
+     */
+    fun statiRegistroWeb(classeId: String, gruppo: String, giorno: String): Map<String, Pair<String, String>> {
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8")
+        val data = if (giorno.length == 8) "${giorno.substring(0, 4)}-${giorno.substring(4, 6)}-${giorno.substring(6, 8)}" else giorno
+        val idClasse = if (gruppo.isNotBlank()) "" else classeId
+        val pagina = "https://web.spaggiari.eu/cvv/app/default/regclasse.php?classe_id=${enc(idClasse)}&gruppo_id=${enc(gruppo)}&data_start=$data&corsoextra=0"
+        val web = sessioneWeb()
+        try {
+            val (codice, html) = web.chiama(pagina)
+            if (codice !in 200..299) return emptyMap()
+            val risultato = HashMap<String, Pair<String, String>>()
+            Regex("""<td[^>]*\bid="abullet_(\d+)"[^>]*>""").findAll(html).forEach { m ->
+                val tag = m.value
+                fun attributo(nome: String) = Regex("""\b$nome="([^"]*)"""").find(tag)?.groupValues?.get(1).orEmpty().trim()
+                val stato = attributo("stato").uppercase()
+                if (stato.isNotEmpty()) risultato[m.groupValues[1]] = stato to attributo("evento_ora")
+            }
+            return risultato
+        } finally {
+            web.close()
+        }
+    }
+
     /** Materie assegnate al docente nella classe, anche se non hanno ancora voti. */
     fun materieMie(tipo: String, classeId: String): List<String> {
         assicuraLogin()

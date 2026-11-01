@@ -56,6 +56,8 @@ class StudentiScheda : Scheda() {
         var callbackEsito: ((Boolean, String?, StatoGiornaliero) -> Unit)? = null
     )
     private val cambiAppelloPendenti = mutableMapOf<String, CambioAppelloPending>()
+    /** Le scritture dell'Appello non si interrompono se la scheda viene chiusa: usano un scope che sopravvive al fragment. */
+    private val scopeSalvataggio = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + Dispatchers.Main.immediate)
     private var tipo = ""
     private var classeId = ""
     private var nome = ""
@@ -105,6 +107,7 @@ class StudentiScheda : Scheda() {
         // Linguette della scheda classe, sempre visibili sotto la data: cambia solo il pannello sotto di loro.
         val linguette = LinguetteView(ctx, outfitRegular, nomiLinguette(), 0, colorePannello) { pos ->
             val i = idLinguette()[pos]
+            salvaSubitoAppello()
             linguettaAttiva = i
             mostraLinguetta()
             // tornando agli alunni il giorno può essere cambiato: si rileggono i dati
@@ -112,6 +115,7 @@ class StudentiScheda : Scheda() {
         }
 
         val giorni = StrisciaGiorni(ctx) {
+            salvaSubitoAppello()
             if (linguettaAttiva == 0) {
                 caricaStato()
                 ridisegna()
@@ -304,6 +308,10 @@ class StudentiScheda : Scheda() {
         datiGiorno = null
         val giorno = formatoApi.format(selezionato.time)
         lavoro = lifecycleScope.launch {
+            // Appello: lo stato come lo vede il registro web (P predefinita oppure X / no lez.), letto in parallelo alle API REST.
+            val statiWeb = if (libroDocente) async(Dispatchers.IO) {
+                runCatching { client.statiRegistroWeb(classeId, gruppo, giorno) }.getOrDefault(emptyMap())
+            } else null
             val r = withContext(Dispatchers.IO) {
                 runCatching {
                     // Le due letture sono indipendenti: eseguirle in parallelo evita di sommare
@@ -347,6 +355,22 @@ class StudentiScheda : Scheda() {
                     if (valore.valore == -1 && statiOre.containsKey(id)) valore.copy(valore = 0) else valore
                 }
             }
+            // Come ClasseViva: l'alunno senza stato è subito presente, e viene registrato così. Con X / no lez. resta grigio.
+            val daRegistrare = mutableListOf<String>()
+            if (libroDocente) {
+                val web = statiWeb?.await().orEmpty()
+                val oggi = formatoApi.format(java.util.Date())
+                stato = stato.toMutableMap().apply {
+                    for (al in studenti) {
+                        if ((this[al.id]?.valore ?: -1) != -1) continue
+                        val (statoWeb, oraEvento) = web[al.id] ?: continue
+                        if (statoWeb != "P") continue // X / no lez. (o altro): resta grigio
+                        this[al.id] = StatoGiornaliero(0)
+                        // solo presenza predefinita (nessun evento) e mai per i giorni futuri
+                        if (oraEvento.isEmpty() && giorno <= oggi) daRegistrare += al.id
+                    }
+                }
+            }
             val numeroOre = coppia?.second?.let { (c, t) -> if (c == 200) leggiNumeroOre(t) else 9 } ?: 9
             fun diagnostica(popup: String) = coppia?.let { (g, l) ->
                 (g.first to "STATO GIORNALIERO HTTP ${g.first}\n${g.second}\n\nLEZIONI E PRESENZE PER ORA HTTP ${l.first}\n${l.second}$popup")
@@ -354,6 +378,7 @@ class StudentiScheda : Scheda() {
             // Presenze e pallini si vedono subito; gli orari di Rb/U dal registro web arrivano dopo.
             datiGiorno = DatiGiorno(stato, statiOre, numeroOre, diagnostica(""))
             ridisegna()
+            daRegistrare.forEach { registraPresenteIniziale(it, giorno) }
 
             // Per ABR1 (e per ABU0 se manca l'ora) l'API REST non restituisce l'ora: la leggiamo dal popup web
             // in sola lettura. Il popup ha un campo orario per il ritardo e uno per l'uscita (distinti
@@ -549,12 +574,12 @@ class StudentiScheda : Scheda() {
             })
         }
 
-    /** Ciclo Appello: P -> A -> PS -> PV -> P. Lo swipe sinistro percorre il ciclo al contrario. */
+    /** Ciclo Appello: P -> A -> PS -> PV -> P. Lo swipe sinistro percorre il ciclo al contrario. Da grigio (X / no lez.) il primo swipe dà P. */
     private fun prossimoStatoAppello(attuale: Int, direzione: Int): Int {
         val sequenza = listOf(0, 2, 3, 4) // P, A, PS, PV
         val normalizzato = if (attuale == 1) 0 else attuale // il ritardo è visualizzato e trattato come P
         val posizione = sequenza.indexOf(normalizzato)
-        if (posizione < 0) return if (direzione > 0) 0 else 4
+        if (posizione < 0) return 0 // grigio (X / no lez.): il primo swipe, in entrambe le direzioni, porta a P
         val passo = if (direzione > 0) 1 else -1
         return sequenza[(posizione + passo + sequenza.size) % sequenza.size]
     }
@@ -630,11 +655,44 @@ class StudentiScheda : Scheda() {
         cambio.timerScaduto = false
         cambio.callbackEsito = callback
         cambio.timer?.cancel()
-        cambio.timer = lifecycleScope.launch {
+        cambio.timer = scopeSalvataggio.launch {
             delay(5_000)
             cambio.timerScaduto = true
             if (!cambio.invioInCorso) inviaCambioAppello(cambio)
         }
+    }
+
+    /** Presenza predefinita mostrata subito: viene registrata (evento «E») senza attendere, una sola volta per studente e giorno. */
+    private fun registraPresenteIniziale(studenteId: String, giorno: String) {
+        val chiave = "$giorno|$studenteId"
+        if (cambiAppelloPendenti.containsKey(chiave)) return
+        val cambio = CambioAppelloPending(chiave, studenteId, giorno, StatoGiornaliero(-1), 0, timerScaduto = true)
+        cambio.callbackEsito = { confermato, messaggio, _ ->
+            if (!confermato) {
+                view?.let { Snackbar.make(it, messaggio ?: "registrazione della presenza non riuscita", Snackbar.LENGTH_LONG).show() }
+            }
+        }
+        cambiAppelloPendenti[chiave] = cambio
+        scopeSalvataggio.launch { inviaCambioAppello(cambio) }
+    }
+
+    /** Cambio di pagina, di scheda o di giorno: le modifiche in attesa vengono salvate subito, senza aspettare i 5 secondi. */
+    private fun salvaSubitoAppello() {
+        cambiAppelloPendenti.values.toList().forEach { cambio ->
+            cambio.timer?.cancel()
+            cambio.timerScaduto = true
+            if (!cambio.invioInCorso) scopeSalvataggio.launch { inviaCambioAppello(cambio) }
+        }
+    }
+
+    override fun onStop() {
+        salvaSubitoAppello()
+        super.onStop()
+    }
+
+    override fun onDestroyView() {
+        salvaSubitoAppello()
+        super.onDestroyView()
     }
 
     /**
