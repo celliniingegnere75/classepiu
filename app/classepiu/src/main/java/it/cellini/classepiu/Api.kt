@@ -666,6 +666,18 @@ class ClasseViva(private val utente: String, private val password: String, priva
         altri: FirmaLezione.CampiFirma = FirmaLezione.CampiFirma()
     ): Pair<Int, String> {
         assicuraLogin()
+        val (codiceClasse, firmeGrezze) = lezioniClasseGrezze(tipo, classeId, data)
+        log.append("GET lessons2/students/$tipo/$classeId/$data -> HTTP $codiceClasse\n")
+        if (codiceClasse != 200) {
+            return codiceClasse to "non riesco a controllare tutte le firme della classe: firma non inviata (HTTP $codiceClasse)"
+        }
+        val firmeEsistenti = FirmaLezione.firmeClasseNelleOre(firmeGrezze, data, ora, numeroOre)
+            ?: return 422 to "risposta delle firme della classe non leggibile: firma non inviata"
+        if (firmeEsistenti.isNotEmpty()) {
+            val descrizione = firmeEsistenti.entries.joinToString { "${it.key}ª ora (${it.value})" }
+            log.append("firma non inviata: già presente nella classe: $descrizione\n")
+            return 409 to "ora già firmata nella classe (anche da un altro docente): $descrizione. firma non inviata."
+        }
         val m = http("GET", "$BASE/teachers/$id/subjects/list/${tipo.ifEmpty { "ordinary" }}/$classeId")
         log.append("GET subjects/list/$tipo/$classeId -> HTTP ${m.codice}\n${m.testo.take(2000)}\n\n")
         if (m.codice != 200) return m.codice to "materie non disponibili: ${m.testo.take(200)}"
