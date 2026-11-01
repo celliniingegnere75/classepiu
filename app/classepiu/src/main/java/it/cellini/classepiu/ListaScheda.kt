@@ -236,12 +236,27 @@ class ListaScheda : Scheda() {
         orientation = LinearLayout.VERTICAL
         setPadding(0, dp(8), 0, dp(4))
         if (cosa == "lezioni") {
-            addView(TextView(ctx).apply { text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt()) })
+            addView(LinearLayout(ctx).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                addView(TextView(ctx).apply {
+                    text = v.titolo; textSize = 16f; setTypeface(typeface, Typeface.BOLD); setTextColor(0xFF111111.toInt())
+                }, LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f))
+                // La X è presente solo sulle firme del docente corrente.
+                if (v.mia) addView(TextView(ctx).apply {
+                    text = "✕"; textSize = 18f; gravity = Gravity.CENTER; setTextColor(0xFF666666.toInt())
+                    setPadding(dp(12), dp(2), dp(2), dp(2))
+                    contentDescription = "cancella firma"
+                    setOnClickListener { cancellaFirma(v) }
+                }, LinearLayout.LayoutParams(dp(36), dp(36)))
+            })
             if (v.tipo.isNotEmpty()) addView(TextView(ctx).apply { text = v.tipo; textSize = 12f; setTypeface(typeface, Typeface.BOLD); setTextColor(colore); setPadding(0, dp(2), 0, 0) })
             addView(TextView(ctx).apply { text = v.testo; textSize = 14f; setTextColor(0xFF222222.toInt()); setPadding(0, dp(4), 0, 0) })
-            // solo la mia firma si può modificare
+            // Solo la mia firma si può modificare.
             if (v.mia) {
-                addView(TextView(ctx).apply { text = "tocca per modificare la firma"; textSize = 12f; setTextColor(azzurro); setPadding(0, dp(6), 0, 0) })
+                addView(TextView(ctx).apply {
+                    text = "modifica firma"; textSize = 12f; setTextColor(0xFF287FA8.toInt()); setPadding(0, dp(6), 0, 0)
+                })
                 setOnClickListener { modificaFirma(v) }
             }
             return@apply
@@ -330,6 +345,41 @@ class ListaScheda : Scheda() {
             }
         }
         lista.addView(copiaRisposta())
+    }
+
+    /** Conferma e cancellazione della firma sul registro web (flusso DEL del portale ClasseViva). */
+    private fun cancellaFirma(v: Voce) {
+        val ctx = requireContext()
+        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+            .setTitle("cancellare la firma?")
+            .setMessage("${v.titolo}\n${formatta(v.data)}\n\nLa firma verrà cancellata dal registro ClasseViva.")
+            .setNegativeButton("annulla", null)
+            .setPositiveButton("cancella") { _, _ ->
+                lifecycleScope.launch {
+                    val esito = withContext(Dispatchers.IO) {
+                        runCatching { Impostazioni(ctx).client().cancellaFirmaWeb(v.grezzo) }
+                    }
+                    val (codice, risposta) = esito.getOrElse {
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                            .setTitle("cancellazione non riuscita").setMessage(it.message ?: "errore sconosciuto")
+                            .setPositiveButton("chiudi", null).show()
+                        return@launch
+                    }
+                    if (codice in 200..299) {
+                        android.widget.Toast.makeText(ctx, "firma cancellata da ClasseViva", android.widget.Toast.LENGTH_SHORT).show()
+                        carica()
+                    } else {
+                        com.google.android.material.dialog.MaterialAlertDialogBuilder(ctx)
+                            .setTitle("ClasseViva non ha cancellato la firma (HTTP $codice)")
+                            .setMessage(risposta.take(700))
+                            .setNegativeButton("chiudi", null)
+                            .setPositiveButton("copia risposta") { _, _ ->
+                                ctx.getSystemService(android.content.ClipboardManager::class.java)
+                                    .setPrimaryClip(android.content.ClipData.newPlainText("cancellazione firma", "HTTP $codice\n$risposta\n\nFirma originale:\n${v.grezzo}"))
+                            }.show()
+                    }
+                }
+            }.show()
     }
 
     /** Finestra per cambiare argomento e tipo della mia lezione; salva subito su classeviva e ricarica il giorno. */
